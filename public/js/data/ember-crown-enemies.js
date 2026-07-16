@@ -276,4 +276,3 @@ export const emberCrownEnemyById = Object.freeze(
 
 export const EMBER_CROWN_ENEMY_BY_ID = emberCrownEnemyById;
 export const emberCrownEnemies = EMBER_CROWN_ENEMIES;
-
