@@ -115,6 +115,19 @@ Heroku runs the production asset build once during its build phase. The root `Pr
 
 The commands in this section are operator instructions. Repository preparation does not create an app, change config or DNS, add a Git remote, commit, push, or deploy anything.
 
+### Current repository and app identity
+
+The GitHub repository is `FelipeBudinich/swipe-rpg`, while the expected existing Heroku app is `swipe-jpg`; do not rename either or infer that their names should match. The supplied deployed hostname is exactly `swipe-jpg-639e96dc89c7.herokuapp.com`. Before any Heroku configuration change, verify the app, its current domains, and the existing allowlist with these read-only commands:
+
+```sh
+APP=swipe-jpg
+heroku apps:info -a "$APP"
+heroku domains -a "$APP"
+heroku config:get ALLOWED_HOSTS -a "$APP"
+```
+
+Confirm that the app identity is `swipe-jpg` and that `heroku domains` reports `swipe-jpg-639e96dc89c7.herokuapp.com`. If either value differs, stop and report the discrepancy; do not guess a hostname or make a configuration change.
+
 ### Preflight
 
 From a clean checkout, run the checks in this order:
@@ -137,7 +150,8 @@ Replace `<app-name>` with the intended Heroku app name. Run these commands only 
 ```sh
 heroku login
 heroku create <app-name> --stack heroku-26
-heroku config:set ALLOWED_HOSTS=<app-name>.herokuapp.com -a <app-name>
+heroku domains -a <app-name>
+heroku config:set ALLOWED_HOSTS=<exact-host-reported-by-heroku> -a <app-name>
 heroku features:enable http-router-no-log-query -a <app-name>
 git push heroku main
 heroku ps:scale web=1 -a <app-name>
@@ -145,6 +159,8 @@ heroku ps -a <app-name>
 heroku logs --tail -a <app-name>
 heroku open -a <app-name>
 ```
+
+Copy the default hostname exactly from `heroku domains`; do not derive it from the app name. Current Heroku default domains can use generated forms such as `<app-name>-<identifier>.herokuapp.com` or `<app-name>-<identifier>.<dns-zone>.herokuapp.com`. Set `ALLOWED_HOSTS` to hostname values only, without a URL scheme, port, path, or wildcard. If `heroku domains` reports a hostname different from an expected deployed address, stop and resolve the discrepancy instead of guessing or configuring `<app-name>.herokuapp.com`.
 
 The query-redaction feature is optional but recommended because Heroku router logs are separate from the application's deliberately minimal logs. Application logs should contain only startup, shutdown, fatal process failures, and unexpected server errors—never query strings, request bodies or headers, authorization values, cookies, environment variables, save data, or `localStorage` data. Review both build and runtime logs for accidental secrets before considering the release verified.
 
@@ -155,6 +171,7 @@ Use the HTTPS hostname shown by Heroku:
 ```sh
 curl --fail --silent --show-error https://<app-host>/healthz
 curl --head https://<app-host>/
+curl --head https://<app-host>/js/main.js
 curl --head https://<app-host>/assets/app.css
 ```
 
@@ -178,10 +195,10 @@ heroku domains:add www.example.com -a <app-name>
 heroku domains -a <app-name>
 heroku certs:auto:enable -a <app-name>
 heroku certs:auto -a <app-name>
-heroku config:set ALLOWED_HOSTS=<app-name>.herokuapp.com,www.example.com -a <app-name>
+heroku config:set ALLOWED_HOSTS=<exact-host-reported-by-heroku>,www.example.com -a <app-name>
 ```
 
-Wait until Heroku Automated Certificate Management reports a valid certificate, then access and test the custom domain over HTTPS. Add every served custom hostname to `ALLOWED_HOSTS` as a comma-separated exact hostname; do not use `X-Forwarded-Host` for validation. Verify HSTS only after HTTPS works correctly. Do not automatically add `includeSubDomains` unless every relevant subdomain supports HTTPS, and do not enable HSTS preload automatically.
+Wait until Heroku Automated Certificate Management reports a valid certificate, then access and test the custom domain over HTTPS. Compose `ALLOWED_HOSTS` from the exact default hostname copied from `heroku domains` plus every explicitly served custom hostname, as comma-separated exact values. Never use `*.herokuapp.com` or any other wildcard, and do not use `X-Forwarded-Host` for validation. Verify HSTS only after HTTPS works correctly. Do not automatically add `includeSubDomains` unless every relevant subdomain supports HTTPS, and do not enable HSTS preload automatically.
 
 The application does not treat `X-Forwarded-Proto` as a security boundary or implement a forwarded-header-based redirect. If strict HTTPS is ever required on the very first request, enforce it at a trusted edge and validate that configuration separately.
 

@@ -89,6 +89,19 @@ export function createSwipeController({
     onPreview(null, 0);
   };
 
+  const releaseCommittedCard = () => {
+    if (!committing) return;
+    committing = false;
+    if (card.dataset.swipeState === "committing") {
+      resetToCenter();
+      return;
+    }
+    pointerId = null;
+    clearVariables();
+    card.dataset.previewDirection = "none";
+    onPreview(null, 0);
+  };
+
   const commit = async (direction) => {
     if (destroyed || committing || isInputLocked()) return false;
     if (direction !== "left" && direction !== "right") return false;
@@ -114,10 +127,15 @@ export function createSwipeController({
     onPreview(direction, 1);
 
     await waitForExit(card);
-    if (destroyed) return false;
+    if (destroyed || !committing) {
+      committing = false;
+      return false;
+    }
     try {
-      await onCommit(direction);
-      return true;
+      const result = await onCommit(direction);
+      if (destroyed) return false;
+      releaseCommittedCard();
+      return result !== false;
     } catch (error) {
       committing = false;
       resetToCenter();
@@ -204,6 +222,8 @@ export function createSwipeController({
     },
     destroy() {
       destroyed = true;
+      releaseCommittedCard();
+      pointerId = null;
       if (frameId) globalThis.cancelAnimationFrame(frameId);
       card.removeEventListener("pointerdown", onPointerDown);
       card.removeEventListener("pointermove", onPointerMove);

@@ -22,6 +22,10 @@ import { clearState, loadState, saveState } from "./storage.js";
 import { createDebugCheckpointControls } from "./ui/debug-checkpoint-ui.js";
 import { createFeedbackController, diffHud, hudSnapshot } from "./ui/feedback.js";
 import { createInventoryDrawer } from "./ui/inventory-drawer.js";
+import {
+  isActiveCommitResolutionBlocked as activeCommitResolutionIsBlocked,
+  isNewInputBlocked as newInputIsBlocked,
+} from "./ui/interaction-lock.js";
 import { createRenderer } from "./ui/render.js";
 import { isStoryTransitionActive } from "./ui/story-transition.js";
 import { createSwipeController } from "./ui/swipe-controller.js";
@@ -111,20 +115,29 @@ let drawerPaused = false;
 let drawerController;
 let swipeController;
 let commitFocusTarget = null;
+let cardEntryGeneration = 0;
 
-function isBlocked() {
-  return (
-    inputLocked ||
-    drawerPaused ||
-    isStoryTransitionActive(state) ||
-    ["gameOver", "victory"].includes(state.mode) ||
-    swipeController?.isCommitting === true ||
-    Boolean(document.getElementById("confirm-dialog")?.open)
-  );
+function interactionLockState() {
+  return {
+    inputLocked,
+    controllerCommitting: swipeController?.isCommitting === true,
+    drawerPaused,
+    storyTransitionActive: isStoryTransitionActive(state),
+    terminalActive: ["gameOver", "victory"].includes(state.mode),
+    confirmationOpen: Boolean(document.getElementById("confirm-dialog")?.open),
+  };
+}
+
+function isNewInputBlocked() {
+  return newInputIsBlocked(interactionLockState());
+}
+
+function isActiveCommitResolutionBlocked() {
+  return activeCommitResolutionIsBlocked(interactionLockState());
 }
 
 function updateControlLocks() {
-  const blocked = isBlocked();
+  const blocked = isNewInputBlocked();
   elements.leftButton.disabled = blocked || currentCard?.left?.disabled === true;
   elements.rightButton.disabled = blocked || currentCard?.right?.disabled === true;
   document.getElementById("inventory-open").disabled = blocked;
@@ -146,6 +159,10 @@ function beginCommitLock() {
 function restoreCommitFocus() {
   const target = commitFocusTarget;
   commitFocusTarget = null;
+  if (elements.card.hidden || elements.card.hasAttribute("inert")) {
+    renderer.focusPrimarySurface();
+    return;
+  }
   if (!target?.isConnected) return;
   if (target instanceof HTMLButtonElement && target.disabled) elements.card.focus();
   else target.focus();
@@ -161,9 +178,15 @@ function renderAll({ announceEntry = false } = {}) {
   updateControlLocks();
 
   if (announceEntry) {
+    const generation = ++cardEntryGeneration;
     elements.card.dataset.swipeState = "entering";
     globalThis.setTimeout(() => {
-      if (elements.card.dataset.swipeState === "entering") elements.card.dataset.swipeState = "idle";
+      if (
+        generation === cardEntryGeneration &&
+        elements.card.dataset.swipeState === "entering"
+      ) {
+        elements.card.dataset.swipeState = "idle";
+      }
     }, 200);
   }
 }
@@ -194,20 +217,39 @@ async function prepareNextCard() {
 }
 
 async function commitChoice(direction) {
-  if (isBlocked()) return;
+  if (isActiveCommitResolutionBlocked()) return false;
   inputLocked = true;
-  updateControlLocks();
-  const previousState = state;
-  const beforeHud = hudSnapshot(state);
 
   try {
+    updateControlLocks();
+    const previousState = state;
+    const beforeHud = hudSnapshot(state);
     const resolution = Engine.resolveChoice(state, direction, undefined, {
       expectedToken: currentCard?.resolutionToken,
     });
-    if (resolution.ignored) return;
+    if (resolution.ignored) return false;
 
     state = resolution.state;
     currentCard = resolution.card;
+    if (
+      !currentCard &&
+      !isStoryTransitionActive(state) &&
+      !["gameOver", "victory"].includes(state.mode)
+    ) {
+      console.error(
+        "The engine resolved a choice without producing a card or a valid special surface; attempting one recovery.",
+      );
+      const recovered = Engine.getNextCard(state);
+      state = recovered.state;
+      currentCard = recovered.card;
+      if (
+        !currentCard &&
+        !isStoryTransitionActive(state) &&
+        !["gameOver", "victory"].includes(state.mode)
+      ) {
+        throw new Error("The engine could not recover a successor card or special surface.");
+      }
+    }
     const terminalRestart = ["gameOver", "victory"].includes(previousState.mode);
     const computedChanges = terminalRestart ? {} : diffHud(beforeHud, hudSnapshot(state));
     const changes = terminalRestart ? {} : { ...computedChanges, ...(resolution.changes ?? {}) };
@@ -220,10 +262,12 @@ async function commitChoice(direction) {
       changes,
       feedbackKind(changes, state.mode, resolution.feedbackTone),
     );
+    return true;
   } finally {
     inputLocked = false;
+    const preserveEntering = elements.card.dataset.swipeState === "entering";
     swipeController.resetForNextCard();
-    elements.card.dataset.swipeState = "entering";
+    if (preserveEntering) elements.card.dataset.swipeState = "entering";
     updateControlLocks();
     restoreCommitFocus();
   }
@@ -231,7 +275,7 @@ async function commitChoice(direction) {
 
 swipeController = createSwipeController({
   card: elements.card,
-  isInputLocked: isBlocked,
+  isInputLocked: isNewInputBlocked,
   canCommit: (direction) => Boolean(currentCard?.[direction]) && currentCard[direction].disabled !== true,
   onBlocked: (direction) => {
     const choice = currentCard?.[direction];
@@ -264,11 +308,16 @@ drawerController = createInventoryDrawer({
   },
 });
 
-elements.leftButton.addEventListener("click", () => void swipeController.commit("left"));
-elements.rightButton.addEventListener("click", () => void swipeController.commit("right"));
+function commitNewChoice(direction) {
+  if (isNewInputBlocked()) return;
+  void swipeController.commit(direction);
+}
+
+elements.leftButton.addEventListener("click", () => commitNewChoice("left"));
+elements.rightButton.addEventListener("click", () => commitNewChoice("right"));
 
 document.addEventListener("keydown", (event) => {
-  if (event.defaultPrevented || event.repeat || isBlocked()) return;
+  if (event.defaultPrevented || event.repeat || isNewInputBlocked()) return;
   const target = event.target;
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
   const key = event.key.toLowerCase();
@@ -279,7 +328,7 @@ document.addEventListener("keydown", (event) => {
       : null;
   if (!direction) return;
   event.preventDefault();
-  void swipeController.commit(direction);
+  commitNewChoice(direction);
 });
 
 document.getElementById("inventory-content").addEventListener("click", async (event) => {
