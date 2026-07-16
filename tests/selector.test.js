@@ -8,6 +8,7 @@ import {
   getEligibleCards,
   selectExplorationCard,
 } from "../public/js/game/selector.js";
+import { isEncounterAllowedByPolicy } from "../public/js/game/story/story-selector.js";
 
 const choice = { label: "Go", resultText: "Gone.", effects: [] };
 const card = (id, overrides = {}) => ({
@@ -18,6 +19,13 @@ const card = (id, overrides = {}) => ({
   oncePerRun: false,
   requirements: [],
   tags: ["peaceful"],
+  story: {
+    arcIds: ["ember-crown"],
+    beatWeights: { funAndGames: 1 },
+    role: "ambient",
+    completionTags: [],
+    countsTowardStory: true,
+  },
   left: choice,
   right: choice,
   ...overrides,
@@ -61,7 +69,7 @@ test("no eligible storylet yields the deterministic safe fallback without consum
   assert.equal(result.state.rngState, state.rngState);
 });
 
-test("encounters cannot be the first world card and are forced after five peaceful cards", () => {
+test("story world count blocks a first-card encounter and encounter policy remains authoritative", () => {
   const encounter = card("fight", { category: "encounter", tags: ["encounter"], baseWeight: 0.001 });
   const peaceful = card("rest", { baseWeight: 1000 });
   const first = selectExplorationCard(createInitialState({ seed: 7 }), [encounter, peaceful]);
@@ -70,11 +78,32 @@ test("encounters cannot be the first world card and are forced after five peacef
   let paced = createInitialState({ seed: 7 });
   paced = {
     ...paced,
-    journeyStep: 5,
     decisionCount: 5,
+    story: {
+      ...paced.story,
+      currentBeatId: "funAndGames",
+      currentBeatIndex: 7,
+      cardsResolvedInBeat: 5,
+      totalWorldCardsResolved: 5,
+    },
     run: { ...paced.run, turnsSinceEncounter: 5 },
   };
   assert.equal(selectExplorationCard(paced, [encounter, peaceful]).card.id, "fight");
+
+  assert.equal(
+    isEncounterAllowedByPolicy(paced, encounter, {
+      id: "darkNightOfTheSoul",
+      encounterPolicy: { mode: "none" },
+    }),
+    false,
+  );
+  assert.equal(
+    isEncounterAllowedByPolicy(paced, encounter, {
+      id: "funAndGames",
+      encounterPolicy: { mode: "random", minimumCardsBeforeEncounter: 1 },
+    }),
+    true,
+  );
 });
 
 test("low HP recovery and active-flag cards receive bounded pacing boosts", () => {

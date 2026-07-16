@@ -4,11 +4,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { cards } from "../public/js/data/cards.js";
-import { enemies } from "../public/js/data/enemies.js";
+import { EMBER_CROWN_ARC } from "../public/js/data/arcs/ember-crown.js";
+import { EMBER_CROWN_CARDS as cards } from "../public/js/data/cards/ember-crown-cards.js";
+import { EMBER_CROWN_ENEMIES as enemies } from "../public/js/data/ember-crown-enemies.js";
 import { items } from "../public/js/data/items.js";
-import { getEligibleCards, isEncounterCard } from "../public/js/game/selector.js";
+import { cardHasAvailableChoice, requirementsMet } from "../public/js/game/requirements.js";
 import { createInitialState } from "../public/js/game/state.js";
+import {
+  getEligibleStoryCards,
+  isStoryEncounterCard,
+} from "../public/js/game/story/story-selector.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -39,10 +44,13 @@ function assertImmutableDataOnly(value, path = "content") {
   }
 }
 
-test("authored content meets the vertical-slice breadth and identity constraints", () => {
-  assert.ok(cards.filter((card) => card.baseWeight > 0).length >= 30);
-  assert.equal(enemies.filter((enemy) => !enemy.isBoss).length, 6);
-  assert.equal(enemies.filter((enemy) => enemy.isBoss).length, 1);
+test("The Ember Crown content meets the complete arc breadth and identity constraints", () => {
+  assert.equal(EMBER_CROWN_ARC.title, "The Ember Crown");
+  assert.ok(cards.length >= 45 && cards.length <= 60);
+  assert.ok(cards.filter((card) => Object.keys(card.story.beatWeights).length > 1).length >= 10);
+  assert.ok(enemies.filter((enemy) => !enemy.isBoss && !enemy.isMidboss && !enemy.isFinalBoss).length >= 6);
+  assert.equal(enemies.filter((enemy) => enemy.isMidboss).length, 1);
+  assert.equal(enemies.filter((enemy) => enemy.isFinalBoss).length, 1);
   assert.ok(items.filter((item) => item.type === "equipment").length >= 12);
   assert.deepEqual(
     new Set(items.filter((item) => item.type === "equipment").map((item) => item.slot)),
@@ -56,55 +64,51 @@ test("authored content meets the vertical-slice breadth and identity constraints
   assert.ok(uniqueIds(items));
 });
 
-test("content exercises every required declarative requirement and effect family", () => {
+test("content exercises the story-specific declarative requirements and effects", () => {
   const requirementTypes = nestedTypes(cards, "requirements");
   const effectTypes = nestedTypes(cards, "effects");
 
   for (const type of [
-    "minLevel",
-    "maxLevel",
-    "minHpPercent",
-    "maxHpPercent",
     "minMp",
     "minGold",
-    "journeyStep",
-    "flagEquals",
-    "flagAbsent",
-    "equipmentSlot",
     "itemOwned",
-    "enemyDefeated",
-    "cardNotResolved",
-    "mode",
+    "specificEnemyDefeated",
+    "storyFactEquals",
+    "storyFactExists",
   ]) {
     assert.ok(requirementTypes.has(type), `missing requirement content: ${type}`);
   }
 
   for (const type of [
-    "modifyHp",
     "modifyMp",
     "modifyGold",
     "addXp",
     "heal",
-    "healPercent",
     "restoreMp",
-    "setFlag",
-    "clearFlag",
-    "startEncounter",
+    "setStoryFact",
+    "incrementStoryCounter",
+    "startStoryEncounter",
     "addItem",
-    "removeItem",
-    "queueCard",
-    "modifyJourneyStep",
-    "recordDiscovery",
-    "setRunStat",
+    "removeSpecificNonKeyItem",
+    "queueBeatCard",
+    "applyBoundedHpLoss",
+    "setFinalPlan",
+    "selectEnding",
   ]) {
     assert.ok(effectTypes.has(type), `missing effect content: ${type}`);
   }
+
+  assert.equal(requirementTypes.has("journeyStep"), false);
+  assert.equal(effectTypes.has("modifyJourneyStep"), false);
+  assert.equal(effectTypes.has("advanceBeat"), false);
+  assert.ok(cards.every((card) => typeof card.story.countsTowardStory === "boolean"));
 });
 
 test("content definitions are deeply immutable data with no callbacks", () => {
   assertImmutableDataOnly(cards, "cards");
   assertImmutableDataOnly(enemies, "enemies");
   assertImmutableDataOnly(items, "items");
+  assertImmutableDataOnly(EMBER_CROWN_ARC, "arc");
 });
 
 test("every authored art reference resolves to a local SVG", () => {
@@ -124,17 +128,17 @@ test("every authored art reference resolves to a local SVG", () => {
   }
 });
 
-test("five peaceful cards still force an eligible encounter for a late level-one run", () => {
-  const base = createInitialState({ seed: 2 });
-  const state = {
-    ...base,
-    journeyStep: 18,
-    decisionCount: 18,
-    run: { ...base.run, turnsSinceEncounter: 5 },
-  };
-  const eligible = getEligibleCards(state, cards, { items });
+test("Opening Image deterministically exposes its required first card and no encounter", () => {
+  const state = createInitialState({ seed: 2 });
+  const beat = EMBER_CROWN_ARC.beats[0];
+  const eligible = getEligibleStoryCards(state, cards, beat, {
+    evaluateRequirements: requirementsMet,
+    cardHasAvailableChoice,
+    context: { items },
+    enemies,
+  });
 
-  assert.ok(eligible.length > 0);
-  assert.ok(eligible.every(isEncounterCard));
-  assert.ok(eligible.some((card) => card.id === "encounter-prism-wisp"));
+  assert.deepEqual(eligible.map(({ id }) => id), ["opening-hearthvale-oath"]);
+  assert.equal(eligible.some(isStoryEncounterCard), false);
+  assert.equal(beat.encounterPolicy.mode, "none");
 });

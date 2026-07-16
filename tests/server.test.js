@@ -120,7 +120,7 @@ test("GET / serves index.html and HEAD returns identical metadata without a body
   const head = await send(server, "/?ignored=yes", { method: "HEAD" });
 
   assert.equal(page.status, 200);
-  assert.match(page.body, /Lumenwake/);
+  assert.match(page.body, /The Ember Crown/);
   assert.match(page.headers["content-type"], /^text\/html; charset=utf-8$/u);
   assert.equal(head.status, 200);
   assert.equal(head.body, "");
@@ -473,7 +473,7 @@ test("malformed HTTP is handled through clientError without stack traces", async
     "GET / HTTP/1.1\r\nConnection: close\r\n\r\n",
   );
   assert.match(missingHost, /^HTTP\/1\.1 400 Bad Request\r\n/u);
-  assert.doesNotMatch(missingHost, /Lumenwake/u);
+  assert.doesNotMatch(missingHost, /The Ember Crown/u);
 });
 
 test("CONNECT receives one generic hardened 405 instead of opening a tunnel", async (t) => {

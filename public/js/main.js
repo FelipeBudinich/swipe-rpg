@@ -1,15 +1,29 @@
-import { CARDS } from "./data/cards.js";
-import { ENEMIES, ENEMY_BY_ID } from "./data/enemies.js";
+import { EMBER_CROWN_ARC } from "./data/arcs/ember-crown.js";
+import {
+  EMBER_CROWN_CARDS,
+} from "./data/cards/ember-crown-cards.js";
+import {
+  EMBER_CROWN_ENEMIES,
+  EMBER_CROWN_ENEMY_BY_ID,
+} from "./data/ember-crown-enemies.js";
 import { ITEMS, ITEM_BY_ID } from "./data/items.js";
 import * as Engine from "./game/engine.js";
 import { resourceChanges } from "./game/effects.js";
 import { getDerivedStats } from "./game/equipment.js";
 import { xpThreshold } from "./game/progression.js";
 import { normalizeState } from "./game/state.js";
+import {
+  createStoryCheckpoint,
+  getCheckpointIdForBeat,
+  restoreStoryCheckpoint,
+} from "./game/story/story-checkpoints.js";
+import { validateArcDefinition } from "./game/story/arc-validator.js";
 import { clearState, loadState, saveState } from "./storage.js";
+import { createDebugCheckpointControls } from "./ui/debug-checkpoint-ui.js";
 import { createFeedbackController, diffHud, hudSnapshot } from "./ui/feedback.js";
 import { createInventoryDrawer } from "./ui/inventory-drawer.js";
 import { createRenderer } from "./ui/render.js";
+import { isStoryTransitionActive } from "./ui/story-transition.js";
 import { createSwipeController } from "./ui/swipe-controller.js";
 
 function randomSeed() {
@@ -46,14 +60,31 @@ function normalizeLookup(lookup) {
 }
 
 const itemById = normalizeLookup(ITEM_BY_ID);
-const enemyById = normalizeLookup(ENEMY_BY_ID);
+const enemyById = normalizeLookup(EMBER_CROWN_ENEMY_BY_ID);
+const arcById = { [EMBER_CROWN_ARC.id]: EMBER_CROWN_ARC };
+const localDevelopmentHost = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(
+  globalThis.location.hostname,
+);
+if (localDevelopmentHost) {
+  validateArcDefinition(EMBER_CROWN_ARC, EMBER_CROWN_CARDS, {
+    enemies: EMBER_CROWN_ENEMIES,
+    items: ITEMS,
+    enforceContentCount: true,
+  });
+}
 const allowedArtIds = new Set([
   "player",
-  ...CARDS.map(({ artId }) => artId),
-  ...ENEMIES.map(({ artId }) => artId),
+  ...EMBER_CROWN_CARDS.map(({ artId }) => artId),
+  ...EMBER_CROWN_ENEMIES.map(({ artId }) => artId),
   ...ITEMS.map(({ artId }) => artId),
 ].filter((artId) => typeof artId === "string"));
-const renderer = createRenderer({ itemById, enemyById, allowedArtIds });
+const renderer = createRenderer({
+  itemById,
+  enemyById,
+  allowedArtIds,
+  arcById,
+  calculateStoryProgress: Engine.calculateStoryProgress,
+});
 const { elements } = renderer;
 
 const feedback = createFeedbackController({
@@ -85,6 +116,8 @@ function isBlocked() {
   return (
     inputLocked ||
     drawerPaused ||
+    isStoryTransitionActive(state) ||
+    ["gameOver", "victory"].includes(state.mode) ||
     swipeController?.isCommitting === true ||
     Boolean(document.getElementById("confirm-dialog")?.open)
   );
@@ -161,7 +194,7 @@ async function prepareNextCard() {
 }
 
 async function commitChoice(direction) {
-  if (inputLocked || drawerPaused) return;
+  if (isBlocked()) return;
   inputLocked = true;
   updateControlLocks();
   const previousState = state;
@@ -183,7 +216,7 @@ async function commitChoice(direction) {
     showModeFeedback(previousState, state);
     await prepareNextCard();
     feedback.show(
-      resolution.resultText || resolution.resolvedCard?.resultText || "The Prism Road answers your choice.",
+      resolution.resultText || resolution.resolvedCard?.resultText || "The Ember Crown answers your choice.",
       changes,
       feedbackKind(changes, state.mode, resolution.feedbackTone),
     );
@@ -358,10 +391,87 @@ async function beginFreshRun({ resetMeta = false } = {}) {
   feedback.clear();
   swipeController.resetForNextCard();
   renderAll({ announceEntry: true });
+  renderer.focusPrimarySurface();
 }
+
+async function dismissCurrentTransition() {
+  if (inputLocked || !isStoryTransitionActive(state)) return;
+  inputLocked = true;
+  updateControlLocks();
+  try {
+    const next = Engine.dismissStoryTransition(state);
+    state = next.state;
+    currentCard = next.card;
+    saveState(state);
+    swipeController.resetForNextCard();
+    renderAll({ announceEntry: true });
+    renderer.focusPrimarySurface();
+  } finally {
+    inputLocked = false;
+    updateControlLocks();
+  }
+}
+
+async function restartFromTerminal() {
+  if (inputLocked || !["gameOver", "victory"].includes(state.mode)) return;
+  inputLocked = true;
+  updateControlLocks();
+  try {
+    const restarted = Engine.restartGame(state, { seed: randomSeed() });
+    state = restarted.state;
+    currentCard = restarted.card;
+    saveState(state);
+    drawerController.close();
+    feedback.clear();
+    swipeController.resetForNextCard();
+    renderAll({ announceEntry: true });
+    renderer.focusPrimarySurface();
+  } finally {
+    inputLocked = false;
+    updateControlLocks();
+  }
+}
+
+const DEBUG_CHECKPOINT_KEY_PREFIX = "jrpg-story-checkpoint-v1:";
+const debugCheckpoints = createDebugCheckpointControls({
+  onSave(checkpointId) {
+    if (getCheckpointIdForBeat(state.story?.currentBeatId) !== checkpointId) {
+      throw new RangeError("Select the checkpoint matching the current story beat.");
+    }
+    const checkpoint = createStoryCheckpoint(state, checkpointId);
+    globalThis.localStorage.setItem(
+      `${DEBUG_CHECKPOINT_KEY_PREFIX}${checkpointId}`,
+      JSON.stringify(checkpoint),
+    );
+  },
+  onRestore(checkpointId) {
+    const serialized = globalThis.localStorage.getItem(
+      `${DEBUG_CHECKPOINT_KEY_PREFIX}${checkpointId}`,
+    );
+    if (!serialized) throw new RangeError("That local checkpoint has not been saved.");
+    const checkpoint = JSON.parse(serialized);
+    const restored = restoreStoryCheckpoint(checkpoint, state);
+    const normalized = normalizeState(restored, {
+      seed: restored.runSeed,
+      arcId: EMBER_CROWN_ARC.id,
+    });
+    const next = Engine.getNextCard(normalized);
+    state = next.state;
+    currentCard = next.card;
+    saveState(state);
+    drawerController.close();
+    feedback.clear();
+    swipeController.resetForNextCard();
+    renderAll({ announceEntry: true });
+    renderer.focusPrimarySurface();
+  },
+});
 
 document.getElementById("new-run").addEventListener("click", () => void beginFreshRun());
 document.getElementById("reset-data").addEventListener("click", () => void beginFreshRun({ resetMeta: true }));
+elements.transitionContinue.addEventListener("click", () => void dismissCurrentTransition());
+elements.terminalRestart.addEventListener("click", () => void restartFromTerminal());
 
 renderAll({ announceEntry: true });
 saveState(state);
+renderer.focusPrimarySurface();

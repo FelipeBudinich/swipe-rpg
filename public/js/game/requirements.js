@@ -12,6 +12,8 @@ export function evaluateRequirement(requirement, state, context = {}) {
 
   const player = state.player;
   const run = state.run;
+  const story = state.story ?? {};
+  const storyFacts = story.facts ?? {};
   const derived = context.derivedStats ?? getDerivedStats(state, context.items);
   const hpPercent = derived.maxHp > 0 ? player.hp / derived.maxHp : 0;
   const requiredPercent = (value) => {
@@ -48,18 +50,79 @@ export function evaluateRequirement(requirement, state, context = {}) {
     case "maxMp":
       return player.mp <= numberValue(requirement);
     case "minGold":
+    case "minimumGold":
       return player.gold >= numberValue(requirement);
     case "maxGold":
       return player.gold <= numberValue(requirement);
-    case "journeyStep": {
-      const min = Number.isFinite(Number(requirement.min)) ? Number(requirement.min) : -Infinity;
-      const max = Number.isFinite(Number(requirement.max)) ? Number(requirement.max) : Infinity;
-      return state.journeyStep >= min && state.journeyStep <= max;
+    case "currentArc":
+    case "currentArcId":
+    case "arcId":
+      return story.arcId === (requirement.arcId ?? requirement.id ?? requirement.value);
+    case "currentBeat":
+    case "currentBeatId":
+    case "beatId":
+      return story.currentBeatId === (requirement.beatId ?? requirement.id ?? requirement.value);
+    case "completedBeat":
+    case "beatCompleted":
+      return (story.completedBeatIds ?? []).includes(
+        requirement.beatId ?? requirement.id ?? requirement.value,
+      );
+    case "beatNotCompleted":
+      return !(story.completedBeatIds ?? []).includes(
+        requirement.beatId ?? requirement.id ?? requirement.value,
+      );
+    case "minimumCardsResolvedInBeat":
+    case "minCardsResolvedInBeat":
+    case "minCardsInBeat": {
+      const beatId = requirement.beatId ?? story.currentBeatId;
+      const actual =
+        beatId === story.currentBeatId
+          ? Number(story.cardsResolvedInBeat ?? 0)
+          : Number(story.cardsResolvedByBeat?.[beatId] ?? 0);
+      return actual >= numberValue(requirement);
     }
-    case "minJourneyStep":
-      return state.journeyStep >= numberValue(requirement);
-    case "maxJourneyStep":
-      return state.journeyStep <= numberValue(requirement);
+    case "minimumTotalWorldCards":
+    case "minTotalWorldCards":
+      return Number(story.totalWorldCardsResolved ?? 0) >= numberValue(requirement);
+    case "storyFactExists":
+      return Object.prototype.hasOwnProperty.call(
+        storyFacts,
+        requirement.key ?? requirement.fact ?? requirement.id,
+      );
+    case "storyFactAbsent":
+      return !Object.prototype.hasOwnProperty.call(
+        storyFacts,
+        requirement.key ?? requirement.fact ?? requirement.id,
+      );
+    case "storyFactEquals": {
+      const key = requirement.key ?? requirement.fact ?? requirement.id;
+      return storyFacts[key] === requirement.value;
+    }
+    case "storyCounterMinimum":
+    case "minimumStoryCounter": {
+      const key = requirement.key ?? requirement.counter ?? requirement.id;
+      return Number(storyFacts[key] ?? 0) >= numberValue(requirement);
+    }
+    case "storyTagResolved":
+      return (story.resolvedStoryTags ?? []).includes(
+        requirement.tag ?? requirement.storyTag ?? requirement.id ?? requirement.value,
+      );
+    case "anchorSelected": {
+      const beatId = requirement.beatId ?? story.currentBeatId;
+      const selected = story.selectedAnchorIdByBeat?.[beatId];
+      const expected = requirement.cardId ?? requirement.anchorId ?? requirement.id ?? requirement.value;
+      return expected === undefined ? Boolean(selected) : selected === expected;
+    }
+    case "anchorResolved": {
+      const expected = requirement.cardId ?? requirement.anchorId ?? requirement.id ?? requirement.value;
+      if (expected !== undefined) return (story.resolvedAnchorIds ?? []).includes(expected);
+      const selected = story.selectedAnchorIdByBeat?.[requirement.beatId ?? story.currentBeatId];
+      return Boolean(selected && (story.resolvedAnchorIds ?? []).includes(selected));
+    }
+    case "endingSelected": {
+      const expected = requirement.endingId ?? requirement.id ?? requirement.value;
+      return expected === undefined ? Boolean(story.endingId) : story.endingId === expected;
+    }
     case "flagEquals":
       return run.flags?.[requirement.flag ?? requirement.key] === requirement.value;
     case "flagAbsent":
@@ -78,7 +141,8 @@ export function evaluateRequirement(requirement, state, context = {}) {
         Object.values(player.equipment ?? {}).some((entry) => getItemId(entry) === target)
       );
     }
-    case "enemyDefeated": {
+    case "enemyDefeated":
+    case "specificEnemyDefeated": {
       const defeated = run.enemiesDefeated ?? {};
       const id = requirement.enemyId ?? requirement.id;
       return Array.isArray(defeated)
@@ -130,7 +194,7 @@ export function choiceIsAffordable(choice, state) {
 
   for (const effect of Array.isArray(choice?.effects) ? choice.effects : []) {
     if (!effect || typeof effect !== "object") continue;
-    const amount = Number(effect.amount) || 0;
+    const amount = Number(effect.amount ?? effect.value) || 0;
     if (effect.type === "modifyGold") {
       const hasExplicitFloor = Number.isFinite(Number(effect.floor));
       if (amount < 0 && !effect.allowDebt && !hasExplicitFloor && gold + amount < 0) return false;

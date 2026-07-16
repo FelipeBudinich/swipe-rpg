@@ -16,7 +16,6 @@ const enemy = {
   id: "test-fiend",
   name: "Test Fiend",
   minLevel: 1,
-  minJourneyStep: 0,
   maxHp: 12,
   attack: 7,
   defense: 2,
@@ -26,6 +25,7 @@ const enemy = {
   intentWeights: { attack: 2, opening: 2, charge: 2, hesitate: 2 },
   dropChance: 1,
   dropTable: [{ itemId: "test-drop", weight: 1 }],
+  story: { arcIds: ["ember-crown"], enemyTags: ["weak", "tutorial"] },
 };
 
 test("ordinary and technique damage always respect their minimums", () => {
@@ -67,23 +67,44 @@ test("a lethal player hit ends combat before enemy retaliation", () => {
   assert.deepEqual(resolved.state.run.forcedCardQueue, ["level-up", { cardId: "loot", itemId: "test-drop" }]);
 });
 
-test("a boss drop queues a reward card before victory", () => {
-  const boss = { ...enemy, id: "test-boss", name: "Test Boss", isBoss: true };
+test("final boss defeat records concrete facts without entering victory", () => {
+  const boss = {
+    ...enemy,
+    id: "test-final-boss",
+    name: "Test Final Boss",
+    isBoss: true,
+    isFinalBoss: true,
+    dropChance: 0,
+    dropTable: [],
+    story: {
+      arcIds: ["ember-crown"],
+      enemyTags: ["final-boss"],
+      onDefeatFacts: { malrecDefeated: true, cinderTitanSealed: true },
+    },
+  };
   let state = createInitialState({ seed: 111 });
   state = {
     ...state,
     mode: "combat",
-    encounter: { enemyId: boss.id, hp: 1, lastIntent: null, currentIntent: "attack", round: 1 },
+    story: { ...state.story, currentBeatId: "finale", currentBeatIndex: 13 },
+    encounter: {
+      enemyId: boss.id,
+      hp: 1,
+      lastIntent: null,
+      currentIntent: "attack",
+      round: 1,
+      originBeatId: "finale",
+      kind: "required",
+    },
   };
   const resolved = resolveCombatAction(state, "strike", [boss], []);
-  assert.equal(resolved.state.run.bossDefeated, false);
-  assert.equal(resolved.state.run.bossVictoryPending, true);
-  assert.equal(resolved.state.player.inventory.includes("test-drop"), false);
-  assert.ok(
-    resolved.state.run.forcedCardQueue.some(
-      (entry) => entry?.cardId === "loot" && entry?.itemId === "test-drop" && entry?.victoryAfter,
-    ),
-  );
+  assert.equal(resolved.enemyDefeated, true);
+  assert.equal(resolved.state.mode, "exploration");
+  assert.notEqual(resolved.state.mode, "victory");
+  assert.equal(resolved.state.story.facts.malrecDefeated, true);
+  assert.equal(resolved.state.story.facts.cinderTitanSealed, true);
+  assert.deepEqual(resolved.state.run.forcedCardQueue, ["level-up"]);
+  assert.equal(resolved.state.story.endingId, null);
 });
 
 test("combat rolls are deterministic and a repeated charge is prohibited", () => {
@@ -97,11 +118,29 @@ test("combat rolls are deterministic and a repeated charge is prohibited", () =>
   }
 });
 
-test("enemy selection respects level and journey depth", () => {
-  const late = { ...enemy, id: "late", minLevel: 3, minJourneyStep: 8 };
-  const early = { ...enemy, id: "early", minLevel: 1, minJourneyStep: 0 };
+test("enemy selection respects level and the current beat's allowed enemy tags", () => {
+  const elite = {
+    ...enemy,
+    id: "elite",
+    minLevel: 1,
+    story: { arcIds: ["ember-crown"], enemyTags: ["elite"] },
+  };
+  const weak = {
+    ...enemy,
+    id: "weak",
+    minLevel: 1,
+    story: { arcIds: ["ember-crown"], enemyTags: ["weak", "tutorial"] },
+  };
+  const overLevel = {
+    ...weak,
+    id: "over-level",
+    minLevel: 3,
+  };
   const state = createInitialState({ seed: 13 });
-  assert.equal(selectEnemy(state, [late, early]).enemy.id, "early");
+  const selected = selectEnemy(state, [elite, overLevel, weak], {
+    encounterPolicy: { allowedEnemyTags: ["weak", "tutorial"] },
+  });
+  assert.equal(selected.enemy.id, "weak");
 });
 
 test("incoming lethal damage transitions immediately to game over", () => {
@@ -116,4 +155,6 @@ test("incoming lethal damage transitions immediately to game over", () => {
   assert.equal(resolved.state.player.hp, 0);
   assert.equal(resolved.state.mode, "gameOver");
   assert.equal(resolved.state.encounter, null);
+  assert.equal(resolved.state.run.deathCause, enemy.id);
+  assert.equal(resolved.state.story.currentBeatId, "openingImage");
 });

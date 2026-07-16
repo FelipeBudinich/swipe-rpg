@@ -3,6 +3,7 @@ import { items as DEFAULT_ITEMS } from "../data/items.js";
 import { randomFloat, randomInt, weightedChoice } from "../rng.js";
 import { getDerivedStats } from "./equipment.js";
 import { grantXp } from "./progression.js";
+import { requirementsMet } from "./requirements.js";
 
 export const INTENTS = Object.freeze(["attack", "opening", "charge", "hesitate"]);
 
@@ -54,8 +55,8 @@ export function damageEstimate(attackerAttack, defenderDefense, multiplier = 1) 
   };
 }
 
-export function rollIntent(rngState, enemy, lastIntent = null) {
-  const weights = enemy?.intentWeights ?? { attack: 1 };
+export function rollIntent(rngState, enemy, lastIntent = null, options = {}) {
+  const weights = options.weights ?? enemy?.intentWeights ?? { attack: 1 };
   const entries = INTENTS.map((intent) => ({
     intent,
     // A charge can never directly follow another charge. This hard stop is
@@ -67,22 +68,71 @@ export function rollIntent(rngState, enemy, lastIntent = null) {
   return { intent: result.value?.intent ?? "attack", state: result.state };
 }
 
+/** Return the authored combat phase active at the supplied enemy HP. */
+export function getEnemyPhase(enemy, hp) {
+  const phases = Array.isArray(enemy?.phases) ? enemy.phases : [];
+  if (phases.length === 0) return null;
+  const percent = Number(enemy.maxHp) > 0 ? Number(hp) / Number(enemy.maxHp) : 0;
+  return (
+    phases.find((phase) =>
+      Number.isFinite(Number(phase.atOrBelowHpPercent))
+        ? percent <= Number(phase.atOrBelowHpPercent)
+        : Number.isFinite(Number(phase.aboveHpPercent))
+          ? percent > Number(phase.aboveHpPercent)
+          : false,
+    ) ?? phases[0]
+  );
+}
+
+function combatProfile(state, enemy, hp = state.encounter?.hp ?? enemy.maxHp) {
+  const phase = getEnemyPhase(enemy, hp);
+  let weights = { ...(phase?.intentWeights ?? enemy.intentWeights ?? { attack: 1 }) };
+  let attackModifier = Number(phase?.attackModifier ?? 0);
+  const labels = [];
+
+  const enragedThreshold = Number(enemy.intentProfile?.enragedBelowHpPercent);
+  if (
+    Number.isFinite(enragedThreshold) &&
+    Number(enemy.maxHp) > 0 &&
+    Number(hp) / Number(enemy.maxHp) <= enragedThreshold
+  ) {
+    weights = { ...(enemy.intentProfile?.enragedWeights ?? weights) };
+  }
+
+  for (const modifier of enemy.storyFactModifiers ?? []) {
+    if (!requirementsMet(modifier.requirements, state)) continue;
+    attackModifier += Number(modifier.attackModifier ?? 0);
+    weights.charge = Math.max(0, Number(weights.charge ?? 0) + Number(modifier.chargeWeightModifier ?? 0));
+    weights.opening = Math.max(0, Number(weights.opening ?? 0) + Number(modifier.openingWeightModifier ?? 0));
+    if (modifier.label) labels.push(modifier.label);
+  }
+  return { phase, weights, attackModifier, labels };
+}
+
 export function selectEnemy(state, enemyDefinitions = DEFAULT_ENEMIES, options = {}) {
   const definitions = Array.isArray(enemyDefinitions)
     ? enemyDefinitions
     : [...enemyMap(enemyDefinitions).values()];
   const bossOnly = Boolean(options.boss);
   const level = state.player.level;
-  const step = state.journeyStep;
+  const arcId = options.arcId ?? state.story?.arcId;
+  const policy = options.encounterPolicy ?? options.policy;
+  const allowedTags = new Set(options.allowedEnemyTags ?? policy?.allowedEnemyTags ?? []);
 
   let eligible = definitions.filter((enemy) => {
-    if (bossOnly !== Boolean(enemy.isBoss)) return false;
-    if (Number(enemy.minLevel ?? 1) > level) return false;
-    if (Number.isFinite(Number(enemy.maxLevel)) && level > Number(enemy.maxLevel)) return false;
-    if (Number(enemy.minJourneyStep ?? 0) > step && !bossOnly) return false;
-    if (Number.isFinite(Number(enemy.maxJourneyStep)) && step > Number(enemy.maxJourneyStep)) {
+    if (options.enemyId && enemy.id !== options.enemyId) return false;
+    if (options.midboss && !enemy.isMidboss) return false;
+    if (options.finalBoss && !enemy.isFinalBoss) return false;
+    if (!options.midboss && !options.finalBoss && bossOnly !== Boolean(enemy.isBoss)) return false;
+    if (!bossOnly && !options.midboss && !options.finalBoss && (enemy.isMidboss || enemy.isFinalBoss)) {
       return false;
     }
+    if (Number(enemy.minLevel ?? 1) > level) return false;
+    if (Number.isFinite(Number(enemy.maxLevel)) && level > Number(enemy.maxLevel)) return false;
+    const enemyArcIds = enemy.story?.arcIds;
+    if (Array.isArray(enemyArcIds) && arcId && !enemyArcIds.includes(arcId)) return false;
+    const enemyTags = enemy.story?.enemyTags ?? [];
+    if (allowedTags.size > 0 && !enemyTags.some((tag) => allowedTags.has(tag))) return false;
     return true;
   });
 
@@ -90,15 +140,19 @@ export function selectEnemy(state, enemyDefinitions = DEFAULT_ENEMIES, options =
   // regular enemy (or the configured boss) deterministically.
   if (eligible.length === 0) {
     eligible = definitions
-      .filter((enemy) => bossOnly === Boolean(enemy.isBoss))
+      .filter((enemy) => {
+        if (options.enemyId) return enemy.id === options.enemyId;
+        if (options.midboss) return Boolean(enemy.isMidboss);
+        if (options.finalBoss) return Boolean(enemy.isFinalBoss);
+        return bossOnly === Boolean(enemy.isBoss) && !(enemy.isMidboss || enemy.isFinalBoss);
+      })
       .sort((a, b) => Number(a.minLevel ?? 1) - Number(b.minLevel ?? 1));
   }
   if (eligible.length === 0) return { state, enemy: null };
 
   const weighted = eligible.map((enemy) => {
     const levelDistance = Math.abs(level - Number(enemy.minLevel ?? level));
-    const depthFit = step >= Number(enemy.minJourneyStep ?? 0) ? 1 : 0.2;
-    return { enemy, weight: Number(enemy.baseWeight ?? 5) * depthFit / (1 + levelDistance * 0.35) };
+    return { enemy, weight: Number(enemy.baseWeight ?? 5) / (1 + levelDistance * 0.35) };
   });
   const selected = weightedChoice(state.rngState, weighted);
   return {
@@ -108,7 +162,12 @@ export function selectEnemy(state, enemyDefinitions = DEFAULT_ENEMIES, options =
 }
 
 /** Begin combat and roll the first visible intent. */
-export function beginEncounter(state, enemyOrId = null, enemyDefinitions = DEFAULT_ENEMIES) {
+export function beginEncounter(
+  state,
+  enemyOrId = null,
+  enemyDefinitions = DEFAULT_ENEMIES,
+  options = {},
+) {
   const definitions = enemyMap(enemyDefinitions);
   let working = state;
   let enemy =
@@ -117,21 +176,30 @@ export function beginEncounter(state, enemyOrId = null, enemyDefinitions = DEFAU
       : definitions.get(enemyOrId) ?? null;
 
   if (!enemy) {
-    const selected = selectEnemy(working, enemyDefinitions);
+    const selected = selectEnemy(working, enemyDefinitions, options);
     working = selected.state;
     enemy = selected.enemy;
   }
   if (!enemy) return state;
 
   let intent;
+  const profile = combatProfile(working, enemy, enemy.maxHp);
   if (working.run.flags?.ambushOpening) {
     intent = { intent: "opening", state: working.rngState };
+  } else if (enemy.intentProfile?.openingMove) {
+    intent = { intent: enemy.intentProfile.openingMove, state: working.rngState };
   } else {
-    intent = rollIntent(working.rngState, enemy);
+    intent = rollIntent(working.rngState, enemy, null, { weights: profile.weights });
   }
 
   const flags = { ...(working.run.flags ?? {}) };
   delete flags.ambushOpening;
+  const originBeatId = options.originBeatId ?? working.story?.currentBeatId ?? null;
+  const kind = options.kind ?? (enemy.isBoss ? "required" : "random");
+  const randomEncountersByBeat = { ...(working.run.randomEncountersByBeat ?? {}) };
+  if (kind === "random" && originBeatId) {
+    randomEncountersByBeat[originBeatId] = Number(randomEncountersByBeat[originBeatId] ?? 0) + 1;
+  }
   return {
     ...working,
     rngState: intent.state,
@@ -142,10 +210,14 @@ export function beginEncounter(state, enemyOrId = null, enemyDefinitions = DEFAU
       lastIntent: null,
       currentIntent: intent.intent,
       round: 1,
+      originBeatId,
+      kind,
+      phase: profile.phase ? Math.max(1, (enemy.phases ?? []).indexOf(profile.phase) + 1) : 1,
     },
     run: {
       ...working.run,
       flags,
+      randomEncountersByBeat,
     },
   };
 }
@@ -248,22 +320,27 @@ export function getCombatCard(
   const enemy = getEnemy(state, enemyDefinitions);
   const actions = combatActions(state, enemyDefinitions, itemDefinitions);
   if (!enemy || !actions) return null;
+  const profile = combatProfile(state, enemy);
+  const phaseName = profile.phase?.id
+    ? profile.phase.id.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : null;
   return {
     id: `combat:${enemy.id}:${state.encounter.round}`,
     category: "combat",
     speaker: enemy.name,
-    title: `${state.encounter.currentIntent[0].toUpperCase()}${state.encounter.currentIntent.slice(1)}`,
-    text: INTENT_TEXT[state.encounter.currentIntent] ?? INTENT_TEXT.attack,
+    title: `${phaseName ? `${phaseName} · ` : ""}${state.encounter.currentIntent[0].toUpperCase()}${state.encounter.currentIntent.slice(1)}`,
+    text: `${profile.phase?.announcement ? `${profile.phase.announcement} ` : ""}${INTENT_TEXT[state.encounter.currentIntent] ?? INTENT_TEXT.attack}`,
     artId: enemy.artId,
-    advanceJourney: false,
+    story: { countsTowardStory: false },
     enemyIntent: state.encounter.currentIntent,
     left: { ...actions.left, resultText: "" },
     right: { ...actions.right, resultText: "" },
   };
 }
 
-function enemyIncomingDamage(rngState, enemy, defense, intent) {
-  const attack = intent === "charge" ? Math.floor(enemy.attack * 1.5) : enemy.attack;
+function enemyIncomingDamage(rngState, enemy, defense, intent, attackModifier = 0) {
+  const baseAttack = Math.max(0, Number(enemy.attack) + Number(attackModifier));
+  const attack = intent === "charge" ? Math.floor(baseAttack * 1.5) : baseAttack;
   const roll = ordinaryDamage(rngState, attack, defense);
   return roll;
 }
@@ -297,9 +374,9 @@ function finishEnemy(state, enemy) {
     queue.push({
       cardId: "loot",
       itemId: drop.itemId,
-      ...(enemy.isBoss ? { victoryAfter: true } : {}),
     });
   }
+  const defeatFacts = enemy.story?.onDefeatFacts ?? {};
   const rewarded = {
     ...working,
     player: { ...working.player, gold: working.player.gold + goldRoll.value },
@@ -310,6 +387,10 @@ function finishEnemy(state, enemy) {
       ...rewarded,
       mode: "exploration",
       encounter: null,
+      story: {
+        ...rewarded.story,
+        facts: { ...(rewarded.story?.facts ?? {}), ...defeatFacts },
+      },
       run: {
         ...rewarded.run,
         forcedCardQueue: queue,
@@ -318,8 +399,6 @@ function finishEnemy(state, enemy) {
         enemiesDefeated: defeated,
         goldEarned: Number(rewarded.run.goldEarned ?? 0) + goldRoll.value,
         itemsFound: Number(rewarded.run.itemsFound ?? 0) + (drop.itemId ? 1 : 0),
-        bossVictoryPending: Boolean(enemy.isBoss && drop.itemId),
-        bossDefeated: Boolean(rewarded.run.bossDefeated || (enemy.isBoss && !drop.itemId)),
       },
       meta: {
         ...rewarded.meta,
@@ -401,6 +480,11 @@ export function resolveCombatAction(
   }
 
   const intent = state.encounter.currentIntent;
+  const previousPhase = state.encounter.phase ?? 1;
+  const activeProfile = combatProfile(state, enemy, enemyHp);
+  const activePhase = activeProfile.phase
+    ? Math.max(1, (enemy.phases ?? []).indexOf(activeProfile.phase) + 1)
+    : 1;
   let incomingMultiplier = 1;
   let canRetaliate = intent !== "opening";
 
@@ -416,7 +500,13 @@ export function resolveCombatAction(
   if (intent === "hesitate") incomingMultiplier *= 0.35;
 
   if (canRetaliate) {
-    const incoming = enemyIncomingDamage(rngState, enemy, stats.defense, intent);
+    const incoming = enemyIncomingDamage(
+      rngState,
+      enemy,
+      stats.defense,
+      intent,
+      activeProfile.attackModifier,
+    );
     rngState = incoming.state;
     enemyDamage = Math.max(1, Math.floor(incoming.damage * incomingMultiplier));
     playerHp = Math.max(0, playerHp - enemyDamage);
@@ -430,7 +520,12 @@ export function resolveCombatAction(
   };
 
   if (playerHp <= 0) {
-    working = { ...working, mode: "gameOver", encounter: null };
+    working = {
+      ...working,
+      mode: "gameOver",
+      encounter: null,
+      run: { ...working.run, deathCause: enemy.id },
+    };
     return {
       state: working,
       action,
@@ -442,7 +537,7 @@ export function resolveCombatAction(
     };
   }
 
-  const nextIntent = rollIntent(rngState, enemy, intent);
+  const nextIntent = rollIntent(rngState, enemy, intent, { weights: activeProfile.weights });
   working = {
     ...working,
     rngState: nextIntent.state,
@@ -451,6 +546,7 @@ export function resolveCombatAction(
       lastIntent: intent,
       currentIntent: nextIntent.intent,
       round: working.encounter.round + 1,
+      phase: activePhase,
     },
   };
 
@@ -460,6 +556,11 @@ export function resolveCombatAction(
     : enemyDamage > 0
       ? ` You take ${enemyDamage} damage.`
       : " The enemy cannot answer.";
+  const phaseText =
+    activePhase !== previousPhase && activeProfile.phase?.announcement
+      ? ` ${activeProfile.phase.announcement}`
+      : "";
+  const modifierText = activeProfile.labels.length > 0 ? ` ${activeProfile.labels.join(" ")}` : "";
   return {
     state: working,
     action,
@@ -467,7 +568,7 @@ export function resolveCombatAction(
     enemyDamage,
     enemyDefeated: false,
     evaded,
-    resultText: `${actionText}${incomingText}`,
+    resultText: `${actionText}${incomingText}${phaseText}${modifierText}`,
   };
 }
 

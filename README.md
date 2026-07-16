@@ -1,6 +1,6 @@
-# Lumenwake: The Prism Road
+# The Ember Crown
 
-Lumenwake is an original, mobile-first JRPG roguelite played through one recurring decision: drag, swipe, click, or press a key to choose the left or right response. A complete run crosses the moonlit Prism Road, builds a small equipment loadout, survives deterministic turn-based encounters, and culminates in a mandatory boss near journey step 20.
+The Ember Crown is an original, mobile-first JRPG roguelite played through one recurring decision: drag, swipe, click, or press a key to choose the left or right response. A complete run follows a reusable 15-beat Save the Cat arc, builds a compact equipment loadout, survives deterministic turn-based encounters, defeats the Iron Wyvern and the two-phase crown-bound Malrec, and resolves one of exactly two authored endings.
 
 The project is intentionally small and local. It uses static HTML, browser-native ES modules, DOM/SVG presentation, locally compiled Tailwind CSS, `localStorage`, and a static server made only with Node's standard library. It has no UI framework, router, game engine, database, API, runtime CDN, or runtime network dependency.
 
@@ -9,9 +9,12 @@ The project is intentionally small and local. It uses static HTML, browser-nativ
 - `server.js` — dependency-free, traversal- and symlink-safe static server with GET/HEAD support, an allowlisted MIME map, conditional caching, strict browser security headers, host validation, a health endpoint, and graceful shutdown.
 - `src/input.css` — Tailwind import plus the small authored layer needed for swipe transforms, feedback, safe areas, and reduced motion.
 - `public/index.html` — semantic application shell and accessible live regions.
-- `public/js/data/` — immutable cards, enemies, and items. Content contains declarative requirements and effects, never executable callbacks.
-- `public/js/game/` — deterministic state, selection, effects, progression, equipment, and combat rules with no DOM dependency.
-- `public/js/ui/` — rendering, feedback, inventory drawer, and Pointer Events swipe control.
+- `public/js/data/arcs/` — immutable arc structure, beat budgets, anchors, forced sequences, and ending definitions.
+- `public/js/data/cards/` — immutable, arc-scoped story cards with declarative requirements and effects, never executable callbacks.
+- `public/js/data/ember-crown-enemies.js` and `public/js/data/items.js` — immutable combat and equipment content.
+- `public/js/game/story/` — reusable validation, pacing, anchor selection, checkpoints, and beat-completion rules with no DOM dependency.
+- `public/js/game/` — deterministic state, selection, effects, progression, equipment, and combat integration.
+- `public/js/ui/` — rendering, beat interstitials, local checkpoint controls, inventory drawer, feedback, and Pointer Events swipe control.
 - `public/js/rng.js` — serializable 32-bit pseudo-random generator used by all game randomness.
 - `public/js/storage.js` — defensive, versioned local save persistence.
 - `tests/` — Node built-in test-runner coverage for the pure rules and persistence.
@@ -55,31 +58,39 @@ The choice labels, costs, likely effects, enemy HP, and current enemy intent rem
 
 ## Content schemas
 
-Exploration storylets use data shaped like:
+Story cards use the existing concise choice schema plus explicit arc metadata:
 
 ```js
 {
   id, category, speaker, title, text, artId,
   baseWeight, cooldown, oncePerRun, tags,
   requirements: [{ type, ...parameters }],
+  story: {
+    arcIds: ["ember-crown"],
+    beatWeights: { setup: 0.8, funAndGames: 1.2 },
+    role: "ambient",
+    completionTags: [],
+    countsTowardStory: true
+  },
   left:  { label, resultText, effects: [{ type, ...parameters }] },
   right: { label, resultText, effects: [{ type, ...parameters }] }
 }
 ```
 
-Enemies define identity, level range, HP, attack, defense, XP and gold rewards, weighted intents, drops, and local art. Items define a slot or consumable type, rarity, sell value, modifiers/effects, and local art.
+Enemies define identity, level and beat eligibility, HP, attack, defense, XP and gold rewards, weighted intents, drops, and local art. Items define a slot or consumable type, rarity, sell value, modifiers/effects, and local art. See [`docs/story-arcs.md`](docs/story-arcs.md) for the complete arc, beat, anchor, persistence, checkpoint, and ending contracts.
 
 ### Add a card
 
-1. Add a unique object to `public/js/data/cards.js`.
+1. Add a unique object to the appropriate arc-scoped module, such as `public/js/data/cards/ember-crown-cards.js`.
 2. Reuse supported declarative requirement and effect types from `requirements.js` and `effects.js`; never put a function in content.
-3. Give repeatable cards a cooldown and sensible weight. Use `oncePerRun` for discoveries and `queueCard` for authored continuations.
-4. Point `artId` at a local file in `public/assets/art/`.
-5. Run `npm test` and play far enough to exercise its eligibility and both choices.
+3. Declare positive `story.beatWeights`, whether the card counts toward the story budget, and an explicit role. Give repeatable cards a cooldown and sensible base weight.
+4. Use persisted anchor families for conditional mandatory moments and beat-local queues for authored continuations; never advance a beat directly from card content.
+5. Point `artId` at a local file in `public/assets/art/`.
+6. Run `npm test`, `npm run audit:runs`, and play far enough to exercise eligibility and both choices.
 
 ### Add an enemy
 
-1. Add the enemy definition in `public/js/data/enemies.js` with a unique ID, level/depth eligibility, stats, intent weights, reward range, and drop table.
+1. Add the enemy definition in the arc's enemy module, such as `public/js/data/ember-crown-enemies.js`, with a unique ID, level/beat eligibility, stats, intent weights, reward range, and drop table.
 2. Add or reuse an encounter-introduction storylet; its choice starts the enemy through a declarative `startEncounter` effect.
 3. Add a local SVG silhouette and tests for any new combat mechanic.
 
@@ -92,7 +103,7 @@ Enemies define identity, level range, HP, attack, defense, XP and gold rewards, 
 
 ## Save behavior
 
-The active run is saved under `jrpg-swipe-save-v1` after every committed card and inventory action. Defensive normalization recovers old, incomplete, or corrupted values without preventing startup. Reload resumes the exact active card and deterministic random stream. Death and victory preserve the discovery codex and best-run records; **New Run** resets only run progress, while **Reset All Data** removes both run and meta progress after confirmation.
+The active run uses save schema version 2 under the existing `jrpg-swipe-save-v1` key and is persisted after every committed card and inventory action. Story state includes the current beat, per-beat and total counted decisions, facts, tags, counters, persisted anchor selections, resolved anchors, interstitial state, selected ending, and completion markers. Reload resumes the exact active card and deterministic random stream. Version 1 saves retain compatible meta progress but begin a fresh Ember Crown run at Opening Image; deprecated linear progress is never guessed into a beat. Death and victory preserve the discovery codex and best-run records; **New Run** resets only run progress, while **Reset All Data** removes both run and meta progress after confirmation.
 
 The save is browser-controlled `localStorage`, not authoritative server state. A player can inspect or modify it. That is acceptable for this single-player MVP, but scores, inventory, levels, drops, gold, equipment, and progression are not tamper-proof and must not be trusted for competitive rankings, trading, purchases, subscriptions, rewards with monetary value, multiplayer state, or server-side entitlements. The application has no accounts, authentication, cookies, server-side saves, database, or state-changing HTTP endpoint.
 
@@ -187,9 +198,10 @@ Do not guess the release identifier. After rollback, repeat the process, log, cu
 
 ## Known MVP limitations
 
-- One region, one boss, and one local save slot.
+- One shipped arc and one local save slot; the engine and schema support additional authored arcs.
 - Discoveries persist as records but do not yet provide a separate full-screen codex browser.
 - Inventory is deliberately compact and has no sorting or stacking controls.
-- Balance targets an 8–12 minute run, but individual duration varies with reading speed and combat choices.
+- Arc pacing targets 35 counted world decisions, with hard bounds of 30–40; combat, rewards, interstitials, and reading time add to the total session length.
+- Combat balance is deliberately demanding and still needs broader human playtesting; the Iron Wyvern is the main difficulty spike in deterministic audit runs.
 - Local save data is device- and browser-specific and is not synchronized.
 - Local save data is player-controlled and this phase does not provide anti-cheat.

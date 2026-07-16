@@ -14,6 +14,15 @@ const amountOf = (effect) => {
   return Number.isFinite(amount) ? amount : 0;
 };
 
+const ENDING_TITLES = Object.freeze({
+  "crown-of-dawn": "Crown of Dawn",
+  "unbound-flame": "The Unbound Flame",
+});
+
+function updateStory(state, updater) {
+  return { ...state, story: updater(state.story ?? {}) };
+}
+
 /** Execute one declarative effect and return a new state. */
 export function applyEffect(state, effect, context = {}) {
   if (!effect || typeof effect !== "object") return state;
@@ -95,8 +104,95 @@ export function applyEffect(state, effect, context = {}) {
       delete flags[effect.flag ?? effect.key];
       return { ...state, run: { ...state.run, flags } };
     }
+    case "setStoryFact": {
+      const key = effect.key ?? effect.fact;
+      if (!key) return state;
+      return updateStory(state, (story) => ({
+        ...story,
+        facts: {
+          ...(story.facts ?? {}),
+          [key]: Object.prototype.hasOwnProperty.call(effect, "value") ? effect.value : true,
+        },
+      }));
+    }
+    case "clearStoryFact": {
+      const key = effect.key ?? effect.fact;
+      if (!key) return state;
+      return updateStory(state, (story) => {
+        const facts = { ...(story.facts ?? {}) };
+        delete facts[key];
+        return { ...story, facts };
+      });
+    }
+    case "incrementStoryCounter": {
+      const key = effect.key ?? effect.counter;
+      if (!key) return state;
+      const increment = Number(effect.amount ?? effect.value ?? 1);
+      return updateStory(state, (story) => ({
+        ...story,
+        facts: {
+          ...(story.facts ?? {}),
+          [key]: Number(story.facts?.[key] ?? 0) + (Number.isFinite(increment) ? increment : 1),
+        },
+      }));
+    }
+    case "recordStoryTag": {
+      const tag = effect.tag ?? effect.storyTag ?? effect.value;
+      if (!tag) return state;
+      return updateStory(state, (story) => ({
+        ...story,
+        resolvedStoryTags: unique(story.resolvedStoryTags ?? [], tag),
+      }));
+    }
+    case "selectEnding":
+    case "selectFinalEnding": {
+      const endingId = effect.endingId ?? effect.id ?? effect.value;
+      if (!endingId) return state;
+      const endingTitle =
+        effect.endingTitle ?? effect.title ?? ENDING_TITLES[endingId] ?? String(endingId);
+      const newlyDiscovered = !(state.meta?.discoveredEndingIds ?? []).includes(endingId);
+      return {
+        ...updateStory(state, (story) => ({
+          ...story,
+          endingId,
+          endingTitle,
+          ...(effect.summary ? { endingSummary: effect.summary } : {}),
+        })),
+        run: { ...state.run, newEndingDiscovered: newlyDiscovered },
+        meta: {
+          ...state.meta,
+          discoveredEndingIds: unique(state.meta?.discoveredEndingIds ?? [], endingId),
+        },
+      };
+    }
+    case "setFinalPlan": {
+      const finalPlan = effect.plan ?? effect.value;
+      if (!finalPlan) return state;
+      return updateStory(state, (story) => ({
+        ...story,
+        facts: { ...(story.facts ?? {}), finalPlan },
+      }));
+    }
     case "startEncounter":
-      return beginEncounter(state, effect.enemyId ?? null, context.enemies);
+      return beginEncounter(state, effect.enemyId ?? null, context.enemies, {
+        originBeatId: state.story?.currentBeatId,
+        kind: effect.kind ?? "random",
+      });
+    case "startStoryEncounter":
+      return beginEncounter(state, effect.enemyId ?? null, context.enemies, {
+        originBeatId:
+          effect.originBeatId ?? effect.originatingBeatId ?? effect.beatId ?? state.story?.currentBeatId,
+        ...(effect.kind || effect.encounterKind || effect.required || context.currentCard?.story?.role === "anchor"
+          ? {
+              kind:
+                effect.kind ??
+                effect.encounterKind ??
+                (effect.required || context.currentCard?.story?.role === "anchor"
+                  ? "required"
+                  : undefined),
+            }
+          : {}),
+      });
     case "addItem": {
       const itemId = effect.itemId ?? effect.id;
       if (!itemId) return state;
@@ -117,6 +213,13 @@ export function applyEffect(state, effect, context = {}) {
         effect.itemId ?? effect.id,
         Math.max(1, Math.trunc(effect.count ?? 1)),
       );
+    case "removeDeclaredNonKeyItem":
+    case "removeSpecificNonKeyItem": {
+      const itemId = effect.itemId ?? effect.id;
+      const item = items.find?.((entry) => entry.id === itemId) ?? items.get?.(itemId);
+      if (!itemId || !item || item.keyItem || item.questCritical || item.type === "key") return state;
+      return removeInventoryItem(state, itemId, Math.max(1, Math.trunc(effect.count ?? 1)));
+    }
     case "queueCard":
       return {
         ...state,
@@ -130,8 +233,41 @@ export function applyEffect(state, effect, context = {}) {
           ],
         },
       };
-    case "modifyJourneyStep":
-      return { ...state, journeyStep: Math.max(0, state.journeyStep + Math.trunc(amount)) };
+    case "queueBeatCard": {
+      const cardId = effect.cardId ?? effect.id;
+      if (!cardId) return state;
+      return {
+        ...state,
+        run: {
+          ...state.run,
+          forcedCardQueue: [
+            ...(state.run.forcedCardQueue ?? []),
+            {
+              cardId,
+              originBeatId:
+                effect.originBeatId ??
+                effect.originatingBeatId ??
+                effect.beatId ??
+                state.story?.currentBeatId,
+              beatLocal: true,
+            },
+          ],
+        },
+      };
+    }
+    case "boundedHpLoss":
+    case "applyBoundedHpLoss": {
+      const loss = Math.abs(Number(effect.amount ?? effect.value ?? effect.damage ?? 0));
+      const floor = Math.max(1, Number(effect.minimumHp ?? effect.minimumFloor ?? effect.floor ?? 1));
+      if (!Number.isFinite(loss)) return state;
+      return {
+        ...state,
+        player: {
+          ...state.player,
+          hp: Math.min(state.player.hp, Math.max(floor, state.player.hp - loss)),
+        },
+      };
+    }
     case "recordDiscovery": {
       const kind = effect.kind ?? effect.discoveryType ?? "card";
       const id = effect.discoveryId ?? effect.id ?? effect.itemId ?? effect.enemyId;
@@ -220,7 +356,6 @@ export function resourceChanges(before, after, itemDefinitions = DEFAULT_ITEMS) 
     gold: after.player.gold - before.player.gold,
     xp: after.player.xp - before.player.xp,
     level: after.player.level - before.player.level,
-    journeyStep: after.journeyStep - before.journeyStep,
     attack: afterStats.attack - beforeStats.attack,
     defense: afterStats.defense - beforeStats.defense,
     maxHp: afterStats.maxHp - beforeStats.maxHp,

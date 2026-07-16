@@ -1,8 +1,9 @@
-import { cards, cardById, fallbackCard } from "../data/cards.js";
-import { enemies } from "../data/enemies.js";
+import { EMBER_CROWN_ARC } from "../data/arcs/ember-crown.js";
+import { EMBER_CROWN_CARDS } from "../data/cards/ember-crown-cards.js";
+import { EMBER_CROWN_ENEMIES } from "../data/ember-crown-enemies.js";
 import { items } from "../data/items.js";
 import { normalizeSeed } from "../rng.js";
-import { beginEncounter, getCombatCard, resolveCombatChoice } from "./combat.js";
+import { getCombatCard, resolveCombatChoice } from "./combat.js";
 import { applyEffects, resourceChanges } from "./effects.js";
 import {
   addInventoryItem,
@@ -15,39 +16,84 @@ import {
 } from "./equipment.js";
 import { applyLevelUpChoice } from "./progression.js";
 import { cardHasAvailableChoice, choiceIsAvailable, requirementsMet } from "./requirements.js";
-import { selectExplorationCard } from "./selector.js";
-import { BOSS_JOURNEY_STEP, createInitialState } from "./state.js";
+import {
+  advanceBeat,
+  calculateStoryProgress,
+  calculateStoryProgressPercent,
+  canAdvanceBeat,
+  dismissBeatInterstitial,
+  getCurrentArc,
+  getCurrentBeat,
+  recordStoryCardResolution,
+  selectAnchorVariant,
+} from "./story/arc-engine.js";
+import { getBeatBudget } from "./story/beat-progress.js";
+import {
+  getEligibleStoryCards,
+  selectStoryCard,
+} from "./story/story-selector.js";
+import { createInitialState } from "./state.js";
 
-export const DEFAULT_CONTENT = Object.freeze({ cards, cardById, fallbackCard, enemies, items });
+const SAFE_STORY_FALLBACK = Object.freeze({
+  id: "story-safe-fallback",
+  category: "story",
+  speaker: "The Storykeeper",
+  title: "A Road Through the Ash",
+  text: "The Warden finds the one remaining path and carries the pursuit forward.",
+  artId: "scene-road",
+  baseWeight: 0,
+  cooldown: 0,
+  oncePerRun: false,
+  requirements: [],
+  tags: ["fallback"],
+  safeStoryFallback: true,
+  story: {
+    arcIds: ["ember-crown"],
+    beatWeights: Object.fromEntries(EMBER_CROWN_ARC.beats.map(({ id }) => [id, 1])),
+    role: "completion",
+    completionTags: [],
+    countsTowardStory: true,
+  },
+  left: {
+    label: "Take the remaining road",
+    resultText: "The pursuit continues along the last open road.",
+    effects: [],
+  },
+  right: {
+    label: "Mark the way behind",
+    resultText: "You leave a clear sign, then continue the pursuit.",
+    effects: [],
+  },
+});
 
-const TERMINAL_CARDS = Object.freeze({
-  death: {
+export const TERMINAL_CARDS = Object.freeze({
+  death: Object.freeze({
     id: "death",
     category: "gameOver",
-    speaker: "The Last Lantern",
-    title: "Your Light Goes Out",
-    text: "The road keeps the names and relics you discovered.",
-    advanceJourney: false,
-    left: { label: "Walk a new road", resultText: "A new lantern kindles.", effects: [] },
-    right: { label: "Retry this road", resultText: "The same stars return.", effects: [] },
-  },
-  victory: {
+    speaker: "The Last Ember",
+    title: "The Ember Fades",
+    text: "The road remembers how far the Warden carried the flame.",
+    story: { countsTowardStory: false },
+    left: { label: "Begin a new arc", resultText: "A new ember catches.", effects: [] },
+    right: { label: "Retry this seed", resultText: "The same sparks return.", effects: [] },
+  }),
+  victory: Object.freeze({
     id: "victory",
     category: "victory",
-    speaker: "The Open Gate",
-    title: "Dawn Beyond the Ruins",
-    text: "The final gate opens and the caravan crosses into dawn.",
-    advanceJourney: false,
-    left: { label: "Begin another journey", resultText: "A new road waits.", effects: [] },
-    right: { label: "Trace the same stars", resultText: "The old stars return.", effects: [] },
-  },
-  levelUp: {
+    speaker: "Hearthvale",
+    title: "The Story Is Complete",
+    text: "The final image settles into the memory of the valley.",
+    story: { countsTowardStory: false },
+    left: { label: "Begin another arc", resultText: "Another fire waits.", effects: [] },
+    right: { label: "Replay this seed", resultText: "The known stars return.", effects: [] },
+  }),
+  levelUp: Object.freeze({
     id: "level-up",
     category: "levelUp",
-    speaker: "The Road Within",
+    speaker: "The Fire Within",
     title: "Choose What Grows",
     text: "Hard-won experience gathers into a new shape.",
-    advanceJourney: false,
+    story: { countsTowardStory: false },
     left: {
       label: "Vigor",
       resultText: "Your stance roots deeper.",
@@ -68,35 +114,55 @@ const TERMINAL_CARDS = Object.freeze({
       ],
       effects: [],
     },
-  },
-  bossIntro: {
-    id: "boss-intro",
-    category: "encounter",
-    speaker: "The Last Gate",
-    title: "The Gatekeeper",
-    text: "A great shadow bars the road. It cannot be left behind.",
-    advanceJourney: false,
-    left: { label: "Steady your breath", resultText: "You face the gatekeeper.", effects: [] },
-    right: { label: "Raise your blade", resultText: "You face the gatekeeper.", effects: [] },
-  },
+  }),
 });
 
+const defaultCardById = Object.freeze(
+  Object.fromEntries(EMBER_CROWN_CARDS.map((card) => [card.id, card])),
+);
+
+export const DEFAULT_CONTENT = Object.freeze({
+  cards: EMBER_CROWN_CARDS,
+  cardById: defaultCardById,
+  fallbackCard: SAFE_STORY_FALLBACK,
+  enemies: EMBER_CROWN_ENEMIES,
+  items,
+  arcs: [EMBER_CROWN_ARC],
+  arcById: Object.freeze({ [EMBER_CROWN_ARC.id]: EMBER_CROWN_ARC }),
+});
+
+function normalizeCollection(value, fallback) {
+  if (value instanceof Map) return [...value.values()];
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object" && typeof value.id === "string") return [value];
+  if (value && typeof value === "object") return Object.values(value);
+  return fallback;
+}
+
 function normalizeContent(content = DEFAULT_CONTENT) {
-  const contentCards = content.cards ?? content.CARDS ?? cards;
-  const contentEnemies = content.enemies ?? content.ENEMIES ?? enemies;
-  const contentItems = content.items ?? content.ITEMS ?? items;
+  const contentCards = normalizeCollection(content.cards ?? content.CARDS, DEFAULT_CONTENT.cards);
+  const contentEnemies = normalizeCollection(
+    content.enemies ?? content.ENEMIES,
+    DEFAULT_CONTENT.enemies,
+  );
+  const contentItems = normalizeCollection(content.items ?? content.ITEMS, DEFAULT_CONTENT.items);
+  const arcs = normalizeCollection(
+    content.arcs ?? content.arcById ?? content.arc,
+    DEFAULT_CONTENT.arcs,
+  );
   const suppliedCardMap = content.cardById ?? content.CARD_BY_ID;
-  const map =
+  const cardMap =
     suppliedCardMap instanceof Map
       ? Object.fromEntries(suppliedCardMap)
       : suppliedCardMap ?? Object.fromEntries(contentCards.map((card) => [card.id, card]));
   return {
     cards: contentCards,
-    cardById: map,
-    fallbackCard:
-      content.fallbackCard ?? contentCards.find((card) => card.tags?.includes("fallback")) ?? fallbackCard,
+    cardById: cardMap,
+    fallbackCard: content.fallbackCard ?? SAFE_STORY_FALLBACK,
     enemies: contentEnemies,
     items: contentItems,
+    arcs,
+    arcById: Object.fromEntries(arcs.map((arc) => [arc.id, arc])),
   };
 }
 
@@ -106,22 +172,19 @@ function normalizeDirection(direction) {
   return null;
 }
 
-function addUnique(list, id) {
-  return list.includes(id) ? list : [...list, id];
+function addUnique(list, value) {
+  return list.includes(value) ? list : [...list, value];
 }
 
 function isPlayableCard(card) {
   const validChoice = (choice) =>
     Boolean(
       choice &&
-      typeof choice.label === "string" &&
-      (choice.effects === undefined || Array.isArray(choice.effects))
+        typeof choice.label === "string" &&
+        (choice.effects === undefined || Array.isArray(choice.effects)),
     );
   return Boolean(
-    card &&
-    typeof card.id === "string" &&
-    validChoice(card.left) &&
-    validChoice(card.right)
+    card && typeof card.id === "string" && validChoice(card.left) && validChoice(card.right),
   );
 }
 
@@ -136,18 +199,17 @@ function withModeForCard(state, card) {
 }
 
 function putCurrentCard(state, card, source) {
-  const token = `${state.decisionCount}:${card.id}`;
   const withMode = withModeForCard(state, card);
   return {
     ...withMode,
     currentCardId: card.id,
     currentCardData: card,
-    currentCardToken: token,
+    currentCardToken: `${state.decisionCount}:${card.id}`,
     currentCardSource: source,
   };
 }
 
-function clearCurrentCard(state, resolvedToken) {
+function clearCurrentCard(state, resolvedToken = null) {
   return {
     ...state,
     currentCardId: null,
@@ -177,43 +239,94 @@ function decorateCard(card, state, content) {
   };
 }
 
-function recordTerminal(state, terminal) {
-  const isDeath = terminal === "death";
-  const marker = isDeath ? "deathRecorded" : "victoryRecorded";
-  const counter = isDeath ? "deathCount" : "victoryCount";
-  if (state.run[marker]) {
-    return { ...state, mode: isDeath ? "gameOver" : "victory", encounter: null };
-  }
+function countDefeated(enemiesDefeated) {
+  return Object.values(enemiesDefeated ?? {}).reduce(
+    (total, count) => total + Math.max(0, Number(count) || 0),
+    0,
+  );
+}
+
+function updateMetaProgress(state, content) {
+  const arc = getCurrentArc(state, content.arcs);
+  const beatIndex = Math.max(0, Number(state.story?.currentBeatIndex ?? 0));
   return {
     ...state,
-    mode: isDeath ? "gameOver" : "victory",
-    encounter: null,
-    run: { ...state.run, [marker]: true },
     meta: {
       ...state.meta,
-      [counter]: Number(state.meta[counter] ?? 0) + 1,
       bestLevel: Math.max(Number(state.meta.bestLevel ?? 1), state.player.level),
-      bestJourneyStep: Math.max(Number(state.meta.bestJourneyStep ?? 0), state.journeyStep),
+      furthestBeatIndex: Math.max(Number(state.meta.furthestBeatIndex ?? 0), beatIndex),
+      furthestBeatId:
+        beatIndex >= Number(state.meta.furthestBeatIndex ?? 0)
+          ? state.story?.currentBeatId ?? state.meta.furthestBeatId
+          : state.meta.furthestBeatId,
+      bestStoryProgress: Math.max(
+        Number(state.meta.bestStoryProgress ?? 0),
+        arc ? calculateStoryProgressPercent(state, arc) : 0,
+      ),
+      bestWorldCardsResolved: Math.max(
+        Number(state.meta.bestWorldCardsResolved ?? 0),
+        Number(state.story?.totalWorldCardsResolved ?? 0),
+      ),
     },
   };
 }
 
-function buildLootCard(item, { victoryAfter = false } = {}) {
+function recordTerminal(state, terminal, content) {
+  const death = terminal === "death";
+  const marker = death ? "deathRecorded" : "victoryRecorded";
+  const counter = death ? "deathCount" : "victoryCount";
+  let working = updateMetaProgress(state, content);
+  if (!working.run[marker]) {
+    working = {
+      ...working,
+      run: {
+        ...working.run,
+        [marker]: true,
+        ...(death && !working.run.deathCause ? { deathCause: "The Warden fell in battle." } : {}),
+        finalRunRecord: {
+          beatId: working.story?.currentBeatId ?? null,
+          beatIndex: working.story?.currentBeatIndex ?? 0,
+          level: working.player.level,
+          worldCardsResolved: working.story?.totalWorldCardsResolved ?? 0,
+          enemiesDefeated: countDefeated(working.run.enemiesDefeated),
+          cause: death ? working.run.deathCause ?? "The Warden fell in battle." : null,
+        },
+      },
+      story: death
+        ? { ...working.story, status: "failed", pendingInterstitialBeatId: null }
+        : working.story,
+      meta: {
+        ...working.meta,
+        [counter]: Number(working.meta[counter] ?? 0) + 1,
+        ...(!death
+          ? {
+              completedArcIds: addUnique(
+                working.meta.completedArcIds ?? [],
+                working.story?.arcId,
+              ),
+            }
+          : {}),
+      },
+    };
+  }
+  return { ...working, mode: death ? "gameOver" : "victory", encounter: null };
+}
+
+function buildLootCard(item) {
   const equipment = item?.type === "equipment";
   return {
     id: `loot:${item?.id ?? "unknown"}`,
     category: "loot",
     speaker: "Victory Spoils",
     title: item?.name ?? "Unknown Relic",
-    text: item?.description ?? "Something gleams among the fallen fragments.",
+    text: item?.description ?? "Something gleams among the cooling ash.",
     artId: item?.artId ?? "item-unknown",
     itemId: item?.id ?? null,
-    victoryAfter,
-    advanceJourney: false,
+    story: { countsTowardStory: false },
     left: equipment
       ? {
           label: `Sell · +${item.sellValue ?? 0} gold`,
-          resultText: `The relic joins a passing trader's pack for ${item.sellValue ?? 0} gold.`,
+          resultText: `The relic is traded for ${item.sellValue ?? 0} gold.`,
           preview: [{ resource: "gold", delta: item.sellValue ?? 0 }],
           effects: [],
         }
@@ -221,8 +334,6 @@ function buildLootCard(item, { victoryAfter = false } = {}) {
           label: "Use now",
           resultText: `${item?.name ?? "The item"} is used at once.`,
           preview: [],
-          // Loot resolution owns execution, but exposing the declarative
-          // effects lets the renderer announce exact HP/MP/XP tradeoffs.
           effects: item?.useEffects ?? item?.effects ?? [],
         },
     right: {
@@ -234,156 +345,336 @@ function buildLootCard(item, { victoryAfter = false } = {}) {
   };
 }
 
-function cardFromQueueEntry(entry, content) {
+function queueCard(entry, content) {
   if (isPlayableCard(entry?.card)) return entry.card;
   const cardId = typeof entry === "string" ? entry : entry?.cardId ?? entry?.id;
-  if (cardId === "loot") {
-    return buildLootCard(createItemMap(content.items).get(entry.itemId), {
-      victoryAfter: entry.victoryAfter === true,
-    });
+  if (cardId === "loot") return buildLootCard(createItemMap(content.items).get(entry.itemId));
+  if (cardId === "level-up") return TERMINAL_CARDS.levelUp;
+  return content.cardById[cardId] ?? TERMINAL_CARDS[cardId] ?? null;
+}
+
+function withQueueOrigin(card, entry) {
+  if (!card || !entry || typeof entry !== "object" || !entry.originBeatId) return card;
+  return {
+    ...card,
+    originBeatId: entry.originBeatId,
+    story: { ...(card.story ?? {}), originBeatId: entry.originBeatId },
+  };
+}
+
+function isRewardEntry(entry, content) {
+  const card = queueCard(entry, content);
+  return Boolean(card && ["loot", "levelUp"].includes(card.category));
+}
+
+function takeQueueEntry(state, content, predicate = () => true) {
+  const queue = [...(state.run.forcedCardQueue ?? [])];
+  const index = queue.findIndex((entry) => predicate(entry, content));
+  if (index < 0) return { state, entry: null };
+  const [entry] = queue.splice(index, 1);
+  return { state: { ...state, run: { ...state.run, forcedCardQueue: queue } }, entry };
+}
+
+function presentQueueEntry(state, entry, content, source) {
+  const card = withQueueOrigin(queueCard(entry, content), entry);
+  if (!isPlayableCard(card)) return null;
+  const candidateState = withModeForCard(state, card);
+  if (
+    !requirementsMet(card.requirements, candidateState, { items: content.items }) ||
+    !cardHasAvailableChoice(card, candidateState, { items: content.items })
+  ) {
+    return null;
   }
-  return (
-    content.cardById[cardId] ??
-    (cardId === "level-up" ? TERMINAL_CARDS.levelUp : null) ??
-    (cardId === "boss-intro" ? TERMINAL_CARDS.bossIntro : null)
-  );
+  const presented = putCurrentCard(state, card, source);
+  return { state: presented, card: getCurrentCard(presented, content), source };
 }
 
 export function getCurrentCard(state, contentInput = DEFAULT_CONTENT) {
   if (!state?.currentCardId) return null;
   const content = normalizeContent(contentInput);
-  let card;
+  let card = null;
   if (state.currentCardId.startsWith("combat:") && state.encounter) {
     card = getCombatCard(state, content.enemies, content.items);
   } else if (state.currentCardId.startsWith("loot:")) {
     const itemId = state.currentCardData?.itemId ?? state.currentCardId.slice(5);
-    card = state.currentCardData ?? buildLootCard(createItemMap(content.items).get(itemId), {
-      victoryAfter: state.run.bossVictoryPending === true,
-    });
+    card = state.currentCardData ?? buildLootCard(createItemMap(content.items).get(itemId));
   } else {
-    const savedCard = isPlayableCard(state.currentCardData) && state.currentCardData.id === state.currentCardId
-      ? state.currentCardData
-      : null;
-    card = savedCard ?? content.cardById[state.currentCardId] ?? TERMINAL_CARDS[state.currentCardId];
+    const saved =
+      isPlayableCard(state.currentCardData) && state.currentCardData.id === state.currentCardId
+        ? state.currentCardData
+        : null;
+    card =
+      saved ??
+      content.cardById[state.currentCardId] ??
+      (state.currentCardId === "level-up" ? TERMINAL_CARDS.levelUp : null) ??
+      TERMINAL_CARDS[state.currentCardId];
   }
   return isPlayableCard(card) ? decorateCard(card, state, content) : null;
 }
 
-/**
- * Produce the next card using the documented priority. The function is
- * idempotent while a non-terminal current card is awaiting resolution.
- */
-export function getNextCard(state, contentInput = DEFAULT_CONTENT) {
-  const content = normalizeContent(contentInput);
-  let working = clampPlayerResources(state, content.items);
+function currentCardIsUsable(state, card, content) {
+  return Boolean(
+    card &&
+      state.currentCardToken !== state.lastResolvedToken &&
+      requirementsMet(card.requirements, state, { items: content.items }) &&
+      cardHasAvailableChoice(card, state, { items: content.items }),
+  );
+}
 
-  // Terminal rules outrank even a card that was previously on screen.
+function recordStoryPresentation(state, card) {
+  const turn = Number(state.story?.totalWorldCardsResolved ?? state.decisionCount ?? 0);
+  return {
+    ...state,
+    run: {
+      ...state.run,
+      recentCardIds: [...(state.run.recentCardIds ?? []), card.id].slice(-4),
+      lastSeenTurnByCardId: {
+        ...(state.run.lastSeenTurnByCardId ?? {}),
+        [card.id]: turn,
+      },
+    },
+  };
+}
+
+function anchorCardIds(beat) {
+  return [
+    ...(beat?.anchor?.variants ?? []).map(({ cardId }) => cardId),
+    beat?.anchor?.fallbackCardId,
+  ].filter((id) => typeof id === "string");
+}
+
+function shouldSurfaceAnchor(state, beat, content, ordinaryCandidates) {
+  if (!beat?.anchor) return false;
+  const selected = state.story.selectedAnchorIdByBeat?.[beat.id];
+  if (selected && !(state.story.resolvedAnchorIds ?? []).includes(selected)) return true;
+  if (selected) return false;
+
+  const resolved = Number(state.story.cardsResolvedInBeat ?? 0);
+  const configuredMinimum = Number(beat.anchor.minimumCardsBeforeAnchor);
+  if (Number.isFinite(configuredMinimum)) {
+    return resolved >= Math.max(0, configuredMinimum);
+  }
+  const requiredFirst = anchorCardIds(beat).some((id) => {
+    const story = content.cardById[id]?.story;
+    return story?.requiredAsFirstCard === true || story?.requiredFirst === true;
+  });
+  if ((requiredFirst || beat.anchor.requiredAsFirstCard === true) && resolved === 0) return true;
+  if (ordinaryCandidates.length === 0) return true;
+
+  // The anchor itself can satisfy the last minimum slot. This reserves one
+  // target slot for an authored aftermath/resolution card when the beat has one.
+  const budget = getBeatBudget(beat);
+  return resolved >= Math.max(0, budget.minimum - 1);
+}
+
+function prepareAnchor(state, arc, beat, content) {
+  const selected = selectAnchorVariant(state, arc, beat, {
+    evaluateRequirements: requirementsMet,
+    context: { items: content.items },
+  });
+  const card = content.cardById[selected.cardId];
+  if (
+    !isPlayableCard(card) ||
+    !requirementsMet(card.requirements, selected.state, { items: content.items }) ||
+    !cardHasAvailableChoice(card, selected.state, { items: content.items })
+  ) {
+    return null;
+  }
+  const recorded = recordStoryPresentation(selected.state, card);
+  const presented = putCurrentCard(recorded, card, "anchor");
+  return { state: presented, card: getCurrentCard(presented, content), source: "anchor" };
+}
+
+function prepareStoryCard(state, content) {
+  const arc = getCurrentArc(state, content.arcs);
+  const beat = getCurrentBeat(state, arc);
+  if (!arc || !beat) return null;
+  const selectorOptions = {
+    evaluateRequirements: requirementsMet,
+    cardHasAvailableChoice,
+    context: { items: content.items },
+    enemies: content.enemies,
+  };
+  if (Number(state.story.cardsResolvedInBeat ?? 0) === 0) {
+    const requiredEntry = (beat.completionCardIds ?? [])
+      .map((id) => content.cardById[id])
+      .find(
+        (card) =>
+          card?.story?.role === "entry" &&
+          requirementsMet(card.requirements, state, { items: content.items }) &&
+          cardHasAvailableChoice(card, state, { items: content.items }),
+      );
+    if (requiredEntry) {
+      const recorded = recordStoryPresentation(state, requiredEntry);
+      const presented = putCurrentCard(recorded, requiredEntry, "entry");
+      return { state: presented, card: getCurrentCard(presented, content), source: "entry" };
+    }
+  }
+  const ordinaryCandidates = getEligibleStoryCards(
+    state,
+    content.cards,
+    beat,
+    selectorOptions,
+  );
+  if (shouldSurfaceAnchor(state, beat, content, ordinaryCandidates)) {
+    const anchor = prepareAnchor(state, arc, beat, content);
+    if (anchor) return anchor;
+  }
+
+  const selected = selectStoryCard(state, content.cards, beat, selectorOptions);
+  if (selected.card) {
+    const presented = putCurrentCard(selected.state, selected.card, selected.source);
+    return {
+      state: presented,
+      card: getCurrentCard(presented, content),
+      source: selected.source,
+    };
+  }
+
+  if (beat.anchor) {
+    const anchor = prepareAnchor(state, arc, beat, content);
+    if (anchor) return anchor;
+  }
+  const fallback = { ...content.fallbackCard, safeStoryFallback: true };
+  const recorded = recordStoryPresentation(state, fallback);
+  const presented = putCurrentCard(recorded, fallback, "safe-fallback");
+  return {
+    state: presented,
+    card: getCurrentCard(presented, content),
+    source: "safe-fallback",
+  };
+}
+
+/** Resolve central next-state priority without consuming a player decision. */
+export function getNextCard(inputState, contentInput = DEFAULT_CONTENT) {
+  const content = normalizeContent(contentInput);
+  let working = clampPlayerResources(inputState, content.items);
+
   if (working.player.hp <= 0) {
-    working = recordTerminal(working, "death");
-    const card = content.cardById.death ?? TERMINAL_CARDS.death;
-    if (
-      working.currentCardId !== card.id ||
-      working.currentCardToken === working.lastResolvedToken
-    ) {
-      working = putCurrentCard(clearCurrentCard(working, null), card, "death");
+    working = recordTerminal(working, "death", content);
+    const card = TERMINAL_CARDS.death;
+    if (working.currentCardId !== card.id || working.currentCardToken === working.lastResolvedToken) {
+      working = putCurrentCard(clearCurrentCard(working), card, "death");
     }
     return { state: working, card: getCurrentCard(working, content), source: "death" };
   }
-  if (working.run.bossDefeated) {
-    working = recordTerminal(working, "victory");
-    const card = content.cardById.victory ?? TERMINAL_CARDS.victory;
-    if (
-      working.currentCardId !== card.id ||
-      working.currentCardToken === working.lastResolvedToken
-    ) {
-      working = putCurrentCard(clearCurrentCard(working, null), card, "victory");
+
+  let current = getCurrentCard(working, content);
+  if (
+    working.story?.pendingInterstitialBeatId &&
+    current &&
+    !["combat", "loot", "levelUp"].includes(current.category)
+  ) {
+    working = clearCurrentCard(working);
+    current = null;
+  }
+  if (currentCardIsUsable(working, current, content)) {
+    return { state: working, card: current, source: working.currentCardSource ?? "current" };
+  }
+  if (current) working = clearCurrentCard(working);
+
+  if (working.encounter) {
+    const combatCard = getCombatCard(working, content.enemies, content.items);
+    if (combatCard) {
+      working = putCurrentCard({ ...working, mode: "combat" }, combatCard, "combat");
+      return { state: working, card: getCurrentCard(working, content), source: "combat" };
+    }
+    working = { ...working, encounter: null, mode: "exploration" };
+  }
+
+  // Reward and level-up entries may have been appended behind a beat-local
+  // aftermath; pull them forward without disturbing the relative reward order.
+  while ((working.run.forcedCardQueue ?? []).some((entry) => isRewardEntry(entry, content))) {
+    const taken = takeQueueEntry(working, content, isRewardEntry);
+    working = taken.state;
+    const presented = presentQueueEntry(working, taken.entry, content, "reward");
+    if (presented) return presented;
+  }
+
+  if (working.story?.completed === true || working.story?.status === "completed") {
+    working = recordTerminal(working, "victory", content);
+    const card = TERMINAL_CARDS.victory;
+    if (working.currentCardId !== card.id || working.currentCardToken === working.lastResolvedToken) {
+      working = putCurrentCard(clearCurrentCard(working), card, "victory");
     }
     return { state: working, card: getCurrentCard(working, content), source: "victory" };
   }
 
-  const current = getCurrentCard(working, content);
-  if (
-    current &&
-    working.currentCardToken !== working.lastResolvedToken &&
-    requirementsMet(current.requirements, working, { items: content.items }) &&
-    cardHasAvailableChoice(current, working, { items: content.items })
-  ) {
-    return { state: working, card: current, source: working.currentCardSource ?? "current" };
+  if (working.story?.pendingInterstitialBeatId) {
+    return {
+      state: { ...working, mode: "storyTransition" },
+      card: null,
+      source: "story-transition",
+    };
   }
-  if (current) working = clearCurrentCard(working, null);
 
-  // Invalid stale queue entries are discarded without consuming a decision or
-  // random number, allowing the next valid forced card to proceed.
   while ((working.run.forcedCardQueue ?? []).length > 0) {
-    const [entry, ...rest] = working.run.forcedCardQueue;
-    working = { ...working, run: { ...working.run, forcedCardQueue: rest } };
-    const forced = cardFromQueueEntry(entry, content);
-    if (!forced) continue;
-    const forcedModeState = withModeForCard(working, forced);
+    const taken = takeQueueEntry(working, content);
+    working = taken.state;
+    const entry = taken.entry;
     if (
-      !requirementsMet(forced.requirements, forcedModeState, { items: content.items }) ||
-      !cardHasAvailableChoice(forced, forcedModeState, { items: content.items })
+      entry &&
+      typeof entry === "object" &&
+      entry.beatLocal === true &&
+      entry.originBeatId !== working.story?.currentBeatId
     ) {
       continue;
     }
-    working = putCurrentCard(working, forced, "forced");
-    return { state: working, card: getCurrentCard(working, content), source: "forced" };
+    const presented = presentQueueEntry(working, entry, content, "forced");
+    if (presented) return presented;
   }
 
-  // A corrupted save must not replay the boss forever if its pending reward
-  // card disappeared. Normal runs clear this marker when that loot resolves.
-  if (working.run.bossVictoryPending) {
-    working = {
-      ...working,
-      run: { ...working.run, bossVictoryPending: false, bossDefeated: true },
-    };
-    return getNextCard(working, content);
+  const arc = getCurrentArc(working, content.arcs);
+  const beat = getCurrentBeat(working, arc);
+  if (
+    arc &&
+    beat &&
+    canAdvanceBeat(working, beat, {
+      evaluateRequirements: requirementsMet,
+      context: { items: content.items },
+    })
+  ) {
+    const advanced = advanceBeat(working, arc, {
+      evaluateRequirements: requirementsMet,
+      context: { items: content.items },
+    });
+    if (advanced !== working) return getNextCard(updateMetaProgress(advanced, content), content);
   }
 
-  if (working.encounter) {
-    working = { ...working, mode: "combat" };
-    const combatCard = getCombatCard(working, content.enemies, content.items);
-    if (combatCard) {
-      working = putCurrentCard(working, combatCard, "combat");
-      return { state: working, card: getCurrentCard(working, content), source: "combat" };
-    }
-    // Removed or corrupted enemy IDs must not leave a ghost encounter that
-    // suppresses world pacing forever.
-    working = { ...working, encounter: null, mode: "exploration" };
-  }
-
-  if (working.journeyStep >= BOSS_JOURNEY_STEP && !working.run.bossDefeated) {
-    working = { ...working, mode: "exploration", run: { ...working.run, bossQueued: true } };
-    const bossIntro = content.cardById["boss-intro"] ?? TERMINAL_CARDS.bossIntro;
-    working = putCurrentCard(working, bossIntro, "boss");
-    return { state: working, card: getCurrentCard(working, content), source: "boss" };
-  }
-
-  working = { ...working, mode: "exploration" };
-  const selected = selectExplorationCard(working, content.cards, {
-    fallbackCard: content.fallbackCard,
-    items: content.items,
-  });
-  working = putCurrentCard(selected.state, selected.card, selected.source);
-  return { state: working, card: getCurrentCard(working, content), source: selected.source };
+  const prepared = prepareStoryCard({ ...working, mode: "exploration" }, content);
+  if (prepared) return prepared;
+  const fallback = putCurrentCard(working, SAFE_STORY_FALLBACK, "safe-fallback");
+  return { state: fallback, card: getCurrentCard(fallback, content), source: "safe-fallback" };
 }
 
 export function createGame(options = {}) {
   const content = normalizeContent(options.content ?? DEFAULT_CONTENT);
-  return getNextCard(createInitialState({ seed: options.seed, meta: options.meta }), content);
+  const arcId = options.arcId ?? content.arcs[0]?.id ?? EMBER_CROWN_ARC.id;
+  return getNextCard(
+    createInitialState({ seed: options.seed, meta: options.meta, arcId }),
+    content,
+  );
 }
 
 export const newGame = createGame;
 
 export function restartGame(state, options = {}) {
-  const seed = normalizeSeed(options.seed ?? `${Date.now()}:${state.runSeed}:${state.decisionCount}`);
-  return createGame({ seed, meta: state.meta, content: options.content ?? DEFAULT_CONTENT });
+  const seed = normalizeSeed(
+    options.seed ?? `${Date.now()}:${state.runSeed}:${state.decisionCount}`,
+  );
+  return createGame({
+    seed,
+    meta: state.meta,
+    arcId: options.arcId ?? state.story?.arcId,
+    content: options.content ?? DEFAULT_CONTENT,
+  });
 }
 
 function resolveLoot(state, card, direction, content) {
   const item = createItemMap(content.items).get(card.itemId);
-  if (!item) return { state, resultText: "The strange object crumbles before it can be claimed." };
-
+  if (!item) {
+    return { state, resultText: "The strange object crumbles before it can be claimed." };
+  }
   if (direction === "left" && item.type === "equipment") {
     const value = Math.max(0, Number(item.sellValue ?? 0));
     return {
@@ -398,27 +689,22 @@ function resolveLoot(state, card, direction, content) {
       resultText: card.left.resultText,
     };
   }
-
   if (direction === "left" && item.type === "consumable") {
     return {
       state: applyEffects(state, item.useEffects ?? item.effects, content),
       resultText: card.left.resultText,
     };
   }
-
-  return {
-    state: addInventoryItem(state, item.id),
-    resultText: card.right.resultText,
-  };
+  return { state: addInventoryItem(state, item.id), resultText: card.right.resultText };
 }
 
 function markResolved(state, card) {
-  const isDynamic = card.id.startsWith("combat:") || card.id.startsWith("loot:");
+  const dynamic = card.id.startsWith("combat:") || card.id.startsWith("loot:");
   return {
     ...state,
     run: {
       ...state.run,
-      resolvedCardIds: isDynamic
+      resolvedCardIds: dynamic
         ? state.run.resolvedCardIds ?? []
         : addUnique(state.run.resolvedCardIds ?? [], card.id),
       resolvedOnceCards: card.oncePerRun
@@ -427,25 +713,19 @@ function markResolved(state, card) {
     },
     meta: {
       ...state.meta,
-      discoveredCardIds: isDynamic
+      discoveredCardIds: dynamic
         ? state.meta.discoveredCardIds ?? []
         : addUnique(state.meta.discoveredCardIds ?? [], card.id),
     },
   };
 }
 
-function shouldAdvanceJourney(card, mode) {
-  if (mode !== "exploration") return false;
-  if (["boss-intro", "death", "victory", "level-up"].includes(card.id)) return false;
-  return card.advanceJourney !== false && card.advancesJourney !== false;
-}
-
-function feedbackTone({ after, before, resolvedCard, combatResult }) {
+function feedbackTone({ after, before, card, combat }) {
   if (after.mode === "gameOver") return "death";
-  if (after.mode === "victory" || after.run.bossDefeated) return "victory";
-  if (resolvedCard.category === "levelUp") return "level-up";
-  if (resolvedCard.category === "loot") return "loot";
-  if (combatResult?.enemyDefeated) return "reward";
+  if (after.mode === "victory" || after.story?.completed) return "victory";
+  if (card.category === "levelUp") return "level-up";
+  if (card.category === "loot") return "loot";
+  if (combat?.enemyDefeated) return "reward";
   if (after.player.hp < before.player.hp) return "danger";
   return "neutral";
 }
@@ -465,7 +745,7 @@ function splitContentAndOptions(contentInput, options) {
   return { content: normalizeContent(contentInput ?? DEFAULT_CONTENT), options: options ?? {} };
 }
 
-/** Atomically resolve one visible card and immediately prepare its successor. */
+/** Atomically resolve one binary decision and prepare its deterministic successor. */
 export function resolveChoice(
   inputState,
   inputDirection,
@@ -508,7 +788,6 @@ export function resolveChoice(
       changes: {},
     };
   }
-
   const choice = current[direction];
   if (!choice || !choiceIsAvailable(choice, prepared, { items: content.items })) {
     return {
@@ -522,32 +801,27 @@ export function resolveChoice(
 
   const before = prepared;
   const resolvedMode = prepared.mode;
-
-  // Death/victory cards restart while preserving meta discovery. Right repeats
-  // the run seed; left creates a fresh seed unless a test/UI supplies one.
   if (["gameOver", "victory"].includes(resolvedMode)) {
     const selectedSeed =
       options.seed ??
       (direction === "right"
         ? prepared.runSeed
-        : normalizeSeed(`${Date.now()}:${prepared.runSeed}:${prepared.meta.deathCount}:${prepared.meta.victoryCount}`));
+        : normalizeSeed(
+            `${Date.now()}:${prepared.runSeed}:${prepared.meta.deathCount}:${prepared.meta.victoryCount}`,
+          ));
     const restarted = restartGame(prepared, { seed: selectedSeed, content });
     return {
       ...restarted,
       resolvedCard: current,
       resultText: choice.resultText,
-      changes: resourceChanges(before, restarted.state, content.items),
+      changes: {},
       feedbackTone: resolvedMode === "victory" ? "victory" : "death",
     };
   }
 
   let working = clearCurrentCard(prepared, token);
   working = { ...working, decisionCount: working.decisionCount + 1 };
-  if (shouldAdvanceJourney(current, resolvedMode)) {
-    working = { ...working, journeyStep: working.journeyStep + 1 };
-  }
   working = markResolved(working, current);
-
   let resultText = choice.resultText ?? "";
   let combatResult = null;
 
@@ -558,50 +832,38 @@ export function resolveChoice(
   } else if (resolvedMode === "levelUp" || current.id === "level-up") {
     working = applyLevelUpChoice(working, direction, content.items);
   } else if (resolvedMode === "loot" || current.category === "loot") {
-    const lootResult = resolveLoot(working, current, direction, content);
-    working = lootResult.state;
-    resultText = lootResult.resultText;
-    if (current.victoryAfter === true) {
-      working = {
-        ...working,
-        run: {
-          ...working.run,
-          bossVictoryPending: false,
-          bossDefeated: true,
-        },
-      };
-    }
+    const loot = resolveLoot(working, current, direction, content);
+    working = loot.state;
+    resultText = loot.resultText;
   } else {
-    working = applyEffects(working, choice.effects, content);
-
-    if (current.id === "boss-intro" && !working.encounter && !working.run.bossDefeated) {
-      const boss = content.enemies.find((enemy) => enemy.isBoss) ?? content.enemies.find((enemy) => enemy.id === "ashen-wyrm");
-      working = beginEncounter(working, boss, content.enemies);
-    }
-
-    if (current.category === "encounter" || working.encounter) {
-      working = { ...working, run: { ...working.run, turnsSinceEncounter: 0 } };
+    working = applyEffects(working, choice.effects, { ...content, currentCard: current });
+    working = recordStoryCardResolution(working, current, choice);
+    if (current.safeStoryFallback) {
+      const arc = getCurrentArc(working, content.arcs);
+      const beat = getCurrentBeat(working, arc);
+      const atMaximum =
+        beat && Number(working.story.cardsResolvedInBeat ?? 0) >= getBeatBudget(beat).maximum;
+      if (arc && atMaximum) working = advanceBeat(working, arc, { force: true });
     } else {
-      working = {
-        ...working,
-        run: {
-          ...working.run,
-          turnsSinceEncounter: Number(working.run.turnsSinceEncounter ?? 0) + 1,
-        },
-      };
+      const arc = getCurrentArc(working, content.arcs);
+      const beat = getCurrentBeat(working, arc);
+      if (
+        arc &&
+        beat &&
+        canAdvanceBeat(working, beat, {
+          evaluateRequirements: requirementsMet,
+          context: { items: content.items },
+        })
+      ) {
+        working = advanceBeat(working, arc, {
+          evaluateRequirements: requirementsMet,
+          context: { items: content.items },
+        });
+      }
     }
   }
 
-  working = clampPlayerResources(working, content.items);
-  working = {
-    ...working,
-    meta: {
-      ...working.meta,
-      bestLevel: Math.max(Number(working.meta.bestLevel ?? 1), working.player.level),
-      bestJourneyStep: Math.max(Number(working.meta.bestJourneyStep ?? 0), working.journeyStep),
-    },
-  };
-
+  working = updateMetaProgress(clampPlayerResources(working, content.items), content);
   const next = getNextCard(working, content);
   return {
     state: next.state,
@@ -609,12 +871,19 @@ export function resolveChoice(
     resolvedCard: current,
     resultText,
     changes: resourceChanges(before, next.state, content.items),
-    feedbackTone: feedbackTone({ after: next.state, before, resolvedCard: current, combatResult }),
+    feedbackTone: feedbackTone({ after: next.state, before, card: current, combat: combatResult }),
     combat: combatResult,
   };
 }
 
-/** Inventory mutations use the same pure result shape as card resolution. */
+export function dismissStoryTransition(state, contentInput = DEFAULT_CONTENT) {
+  const content = normalizeContent(contentInput);
+  const dismissed = updateMetaProgress(dismissBeatInterstitial(state), content);
+  return getNextCard(dismissed, content);
+}
+
+export const dismissInterstitial = dismissStoryTransition;
+
 export function equipInventoryItem(state, itemId, contentInput = DEFAULT_CONTENT) {
   const content = normalizeContent(contentInput);
   const nextState = equipItem(state, itemId, content.items);
@@ -629,7 +898,7 @@ export function useInventoryItem(state, itemId, contentInput = DEFAULT_CONTENT) 
   const content = normalizeContent(contentInput);
   const item = findItem(itemId, content.items);
   if (
-    ["gameOver", "victory"].includes(state.mode) ||
+    ["gameOver", "victory", "storyTransition"].includes(state.mode) ||
     !item ||
     item.type !== "consumable" ||
     !inventoryHasItem(state, itemId)
@@ -642,16 +911,13 @@ export function useInventoryItem(state, itemId, contentInput = DEFAULT_CONTENT) 
       resultText: "That item cannot be used.",
     };
   }
+
   const withoutItem = removeInventoryItem(state, itemId, 1);
   let nextState = applyEffects(withoutItem, item.useEffects ?? item.effects, content);
   const newlyForced =
     (nextState.run.forcedCardQueue?.length ?? 0) >
     (state.run.forcedCardQueue?.length ?? 0);
-
   if (nextState.player.hp <= 0 || newlyForced) {
-    // A world card interrupted by an inventory-triggered level-up returns
-    // immediately after the new forced cards; no decision or journey step is
-    // consumed. Combat cards are derived again from the unchanged encounter.
     if (nextState.player.hp > 0 && nextState.currentCardData && nextState.mode !== "combat") {
       nextState = {
         ...nextState,
@@ -664,10 +930,9 @@ export function useInventoryItem(state, itemId, contentInput = DEFAULT_CONTENT) 
         },
       };
     }
-    nextState = clearCurrentCard(nextState, null);
+    nextState = clearCurrentCard(nextState);
   }
-
-  const prepared = getNextCard(nextState, content);
+  const prepared = getNextCard(updateMetaProgress(nextState, content), content);
   return {
     state: prepared.state,
     card: prepared.card,
@@ -676,3 +941,5 @@ export function useInventoryItem(state, itemId, contentInput = DEFAULT_CONTENT) 
     resultText: `${item.name} takes effect.`,
   };
 }
+
+export { calculateStoryProgress, calculateStoryProgressPercent };

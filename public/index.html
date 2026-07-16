@@ -3,17 +3,17 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="description" content="Lumenwake: The Prism Road, a swipe-driven fantasy JRPG journey.">
+    <meta name="description" content="The Ember Crown, a swipe-driven heroic-fantasy JRPG story arc.">
     <meta name="theme-color" content="#07131d">
-    <title>Lumenwake: The Prism Road</title>
+    <title>The Ember Crown</title>
     <link rel="stylesheet" href="/assets/app.css">
     <script type="module" src="/js/main.js"></script>
   </head>
   <body class="min-h-full overflow-x-hidden bg-[#07131d] font-sans text-[#f4ead8] antialiased selection:bg-[#d8a94d] selection:text-[#07131d]">
     <a
-      href="#card"
+      href="#card-stack"
       class="fixed left-3 top-3 z-50 -translate-y-24 rounded-md bg-[#f4ead8] px-4 py-3 font-bold text-[#07131d] shadow-xl transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]"
-    >Skip to the current choice</a>
+    >Skip to the current story screen</a>
 
     <div
       id="app"
@@ -24,8 +24,8 @@
       <header id="player-hud" class="shrink-0 rounded-2xl border border-[#36505d] bg-[#102633]/95 p-2.5 shadow-lg" aria-label="Player status">
         <div class="mb-2 flex items-center justify-between gap-2">
           <div class="min-w-0">
-            <p class="truncate text-[0.65rem] font-bold uppercase tracking-[0.24em] text-[#79d4c5]">Lumenwake</p>
-            <h1 class="truncate text-sm font-black tracking-wide text-[#fff6e6]">The Prism Road</h1>
+            <p id="arc-kicker" class="truncate text-[0.65rem] font-bold uppercase tracking-[0.24em] text-[#79d4c5]">Story Arc</p>
+            <h1 id="arc-title" class="truncate text-sm font-black tracking-wide text-[#fff6e6]">The Ember Crown</h1>
           </div>
           <button
             id="inventory-open"
@@ -36,7 +36,7 @@
           >Pack</button>
         </div>
 
-        <dl class="grid grid-cols-3 gap-1.5 text-center">
+        <dl class="grid grid-cols-2 gap-1.5 text-center">
           <div class="rounded-lg bg-[#091923] px-1.5 py-1" data-resource="level">
             <dt class="text-[0.58rem] font-bold uppercase tracking-wider text-[#9bb3ba]">Level</dt>
             <dd id="hud-level" class="text-sm font-black tabular-nums text-[#fff6e6]">1</dd>
@@ -45,11 +45,22 @@
             <dt class="text-[0.58rem] font-bold uppercase tracking-wider text-[#9bb3ba]">Gold</dt>
             <dd class="text-sm font-black tabular-nums text-[#ffd77d]"><span id="hud-gold">10</span><span id="hud-gold-delta" class="resource-delta" aria-hidden="true"></span></dd>
           </div>
-          <div class="rounded-lg bg-[#091923] px-1.5 py-1" data-resource="journey">
-            <dt class="text-[0.58rem] font-bold uppercase tracking-wider text-[#9bb3ba]">Depth</dt>
-            <dd id="hud-journey" class="text-sm font-black tabular-nums text-[#fff6e6]">0 / 20</dd>
-          </div>
         </dl>
+
+        <section id="story-hud" class="mt-1.5 rounded-lg bg-[#091923] px-2 py-1.5" aria-labelledby="hud-beat-name">
+          <div class="mb-1 flex items-baseline justify-between gap-3">
+            <h2 id="hud-beat-name" class="min-w-0 truncate text-xs font-black text-[#fff6e6]">Opening Image</h2>
+            <p class="shrink-0 text-[0.62rem] font-black uppercase tracking-wider text-[#ffd77d]">Beat <span id="hud-beat-number" class="tabular-nums">1 / 15</span></p>
+          </div>
+          <progress
+            id="hud-story-progress"
+            class="resource-meter"
+            data-meter="story"
+            value="0"
+            max="100"
+            aria-label="Story progress: 0 percent"
+          >0 percent</progress>
+        </section>
 
         <div class="mt-1.5 grid grid-cols-2 gap-1.5">
           <section class="relative rounded-lg bg-[#091923] px-2 py-1.5" data-resource="hp" aria-label="Health">
@@ -103,8 +114,53 @@
           aria-atomic="true"
         ></p>
 
-        <section id="card-stack" class="relative flex min-h-0 flex-1 items-stretch justify-center" aria-label="Current decision">
-          <div class="pointer-events-none absolute inset-x-3 bottom-1 top-2 rounded-[1.4rem] border border-[#28434f] bg-[#102633] opacity-70 shadow-lg" aria-hidden="true"></div>
+        <section id="card-stack" class="relative flex min-h-0 flex-1 items-stretch justify-center" aria-label="Current decision" tabindex="-1">
+          <div id="card-backdrop" class="pointer-events-none absolute inset-x-3 bottom-1 top-2 rounded-[1.4rem] border border-[#28434f] bg-[#102633] opacity-70 shadow-lg" aria-hidden="true"></div>
+
+          <section
+            id="story-transition"
+            class="story-transition relative z-20 flex min-h-[clamp(18.25rem,47dvh,29rem)] w-full flex-col items-center justify-center overflow-hidden rounded-[1.4rem] border border-[#d8a94d]/80 bg-[#102633] px-6 py-8 text-center text-[#f4ead8] shadow-[0_16px_45px_rgba(0,0,0,0.42)]"
+            role="region"
+            aria-labelledby="story-transition-title"
+            aria-describedby="story-transition-sentence"
+            tabindex="-1"
+            hidden
+          >
+            <p id="story-transition-kicker" class="text-[0.65rem] font-black uppercase tracking-[0.24em] text-[#79d4c5]">A new chapter</p>
+            <p id="story-transition-beat" class="mt-4 text-xs font-black uppercase tracking-[0.18em] text-[#ffd77d]">Break into Two</p>
+            <h2 id="story-transition-title" class="mt-2 text-2xl font-black leading-tight text-[#fff6e6]">Beyond Hearthvale</h2>
+            <p id="story-transition-sentence" class="mt-4 max-w-sm text-sm font-semibold leading-relaxed text-[#b9cbd0]">The mountain road opens, and safety falls behind.</p>
+            <button
+              id="story-transition-continue"
+              type="button"
+              class="mt-7 min-h-12 min-w-36 rounded-xl border border-[#d8a94d] bg-[#3b3022] px-5 py-3 text-sm font-black text-[#fff1bb] shadow-md transition hover:bg-[#514027] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#102633] active:translate-y-px"
+            >Continue</button>
+          </section>
+
+          <section
+            id="terminal-summary"
+            class="terminal-summary relative z-20 flex min-h-[clamp(18.25rem,47dvh,29rem)] w-full flex-col overflow-y-auto rounded-[1.4rem] border border-[#567481] bg-[#102633] px-5 py-5 text-[#f4ead8] shadow-[0_16px_45px_rgba(0,0,0,0.42)]"
+            role="region"
+            aria-labelledby="terminal-title"
+            aria-describedby="terminal-copy"
+            tabindex="-1"
+            hidden
+          >
+            <p id="terminal-kicker" class="text-center text-[0.65rem] font-black uppercase tracking-[0.24em] text-[#79d4c5]">Arc complete</p>
+            <p id="terminal-arc-title" class="mt-2 text-center text-xs font-bold uppercase tracking-[0.14em] text-[#ffd77d]">The Ember Crown</p>
+            <h2 id="terminal-title" class="mt-1 text-center text-2xl font-black leading-tight text-[#fff6e6]">Crown of Dawn</h2>
+            <p id="terminal-copy" class="mt-2 text-center text-sm font-semibold leading-relaxed text-[#b9cbd0]">Hearthvale wakes beneath a gentler fire.</p>
+            <dl id="terminal-stats" class="mt-4 grid grid-cols-2 gap-2 text-center"></dl>
+            <section id="terminal-discoveries" class="mt-3 rounded-xl border border-[#36505d] bg-[#091923] p-3" aria-labelledby="terminal-discoveries-title" hidden>
+              <h3 id="terminal-discoveries-title" class="text-[0.62rem] font-black uppercase tracking-[0.16em] text-[#ffd77d]">New discoveries</h3>
+              <ul id="terminal-discovery-list" class="mt-1 grid gap-1 text-xs font-semibold text-[#b9cbd0]"></ul>
+            </section>
+            <button
+              id="terminal-restart"
+              type="button"
+              class="mt-auto min-h-12 rounded-xl border border-[#4e9b93] bg-[#123c40] px-5 py-3 text-sm font-black text-[#d8fff7] shadow-md transition hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#102633] active:translate-y-px"
+            >Begin Another Arc</button>
+          </section>
 
           <article
             id="card"
@@ -140,7 +196,7 @@
           </article>
         </section>
 
-        <div class="mt-2 grid shrink-0 grid-cols-2 gap-2" aria-label="Available choices">
+        <div id="choice-controls" class="mt-2 grid shrink-0 grid-cols-2 gap-2" aria-label="Available choices">
           <button
             id="choice-left"
             type="button"
@@ -162,7 +218,7 @@
             <span id="choice-right-detail" class="mt-0.5 block text-[0.62rem] font-bold leading-tight text-[#edc2be]"></span>
           </button>
         </div>
-        <p class="mt-1 shrink-0 text-center text-[0.6rem] font-semibold tracking-wide text-[#87a1aa]">Swipe the card or use either button. Your choice is final.</p>
+        <p id="choice-help" class="mt-1 shrink-0 text-center text-[0.6rem] font-semibold tracking-wide text-[#87a1aa]">Swipe the card or use either button. Your choice is final.</p>
       </main>
 
       <p id="card-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -216,6 +272,26 @@
               <button id="reset-data" type="button" class="min-h-11 rounded-xl border border-[#b66f72] bg-[#542f3b] px-3 py-2 text-xs font-black text-[#ffe9e1] hover:bg-[#6b3c48] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d]">Reset All Data</button>
             </div>
           </section>
+
+          <section
+            id="debug-checkpoints"
+            class="mt-5 rounded-xl border border-dashed border-[#d8a94d]/60 bg-[#201d26] p-3"
+            aria-labelledby="debug-checkpoints-heading"
+            hidden
+          >
+            <p class="text-[0.58rem] font-black uppercase tracking-[0.18em] text-[#d8a94d]">Local development only</p>
+            <h3 id="debug-checkpoints-heading" class="mt-1 text-sm font-black text-[#fff6e6]">Story checkpoints</h3>
+            <label for="debug-checkpoint-select" class="mt-3 block text-xs font-bold text-[#b9cbd0]">Named beat checkpoint</label>
+            <select
+              id="debug-checkpoint-select"
+              class="mt-1 min-h-11 w-full rounded-lg border border-[#567481] bg-[#091923] px-3 text-sm font-bold text-[#fff6e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]"
+            ></select>
+            <div class="mt-2 grid grid-cols-2 gap-2">
+              <button id="debug-checkpoint-save" type="button" class="min-h-11 rounded-lg border border-[#4e9b93] bg-[#123c40] px-2 text-xs font-black text-[#d8fff7] hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]">Save here</button>
+              <button id="debug-checkpoint-restore" type="button" class="min-h-11 rounded-lg border border-[#d8a94d]/80 bg-[#3b3022] px-2 text-xs font-black text-[#fff1bb] hover:bg-[#514027] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d]">Restore</button>
+            </div>
+            <p id="debug-checkpoint-status" class="mt-2 min-h-4 text-[0.65rem] font-semibold text-[#b9cbd0]" role="status" aria-live="polite"></p>
+          </section>
         </div>
       </div>
     </dialog>
@@ -232,7 +308,7 @@
     </dialog>
 
     <noscript>
-      <div class="fixed inset-x-4 top-4 z-50 mx-auto max-w-md rounded-xl border border-[#b66f72] bg-[#291d26] p-4 text-center font-bold text-[#ffe9e1] shadow-2xl">Lumenwake needs JavaScript enabled to begin a run.</div>
+      <div class="fixed inset-x-4 top-4 z-50 mx-auto max-w-md rounded-xl border border-[#b66f72] bg-[#291d26] p-4 text-center font-bold text-[#ffe9e1] shadow-2xl">The Ember Crown needs JavaScript enabled to begin an arc.</div>
     </noscript>
   </body>
 </html>

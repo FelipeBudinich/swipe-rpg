@@ -1,0 +1,200 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+import {
+  DEBUG_CHECKPOINTS,
+  isDebugCheckpointUiEnabled,
+} from "../public/js/ui/debug-checkpoint-ui.js";
+import {
+  deriveStoryHud,
+  deriveTerminalPresentation,
+  deriveTransitionPresentation,
+  isStoryTransitionActive,
+  STORY_BEAT_NAMES,
+} from "../public/js/ui/story-transition.js";
+
+const beatIds = [
+  "openingImage",
+  "themeStated",
+  "setup",
+  "catalyst",
+  "debate",
+  "breakIntoTwo",
+  "bStory",
+  "funAndGames",
+  "midpoint",
+  "badGuysCloseIn",
+  "allIsLost",
+  "darkNightOfTheSoul",
+  "breakIntoThree",
+  "finale",
+  "finalImage",
+];
+const targets = [1, 1, 4, 1, 3, 1, 2, 6, 2, 5, 1, 2, 1, 4, 1];
+const arc = {
+  id: "ember-crown",
+  title: "The Ember Crown",
+  beats: beatIds.map((id, index) => ({
+    id,
+    name: STORY_BEAT_NAMES[index],
+    budget: { target: targets[index] },
+    ...(id === "midpoint"
+      ? { interstitial: { subtitle: "The Iron Gate", text: "Steel wings bar the path to the Crown." } }
+      : {}),
+  })),
+  endings: [
+    { id: "crown-of-dawn", title: "Crown of Dawn" },
+    { id: "unbound-flame", title: "The Unbound Flame" },
+  ],
+};
+const arcById = { [arc.id]: arc };
+
+function storyState(overrides = {}) {
+  return {
+    mode: "exploration",
+    player: { level: 4, hp: 20, mp: 7, xp: 3, gold: 18 },
+    run: { enemiesDefeated: { ashWolf: 2, sentinel: 1 }, itemsFound: 4 },
+    story: {
+      arcId: arc.id,
+      status: "active",
+      currentBeatId: "funAndGames",
+      currentBeatIndex: 7,
+      cardsResolvedInBeat: 3,
+      totalWorldCardsResolved: 16,
+      completedBeatIds: beatIds.slice(0, 7),
+      pendingInterstitialBeatId: null,
+      endingId: null,
+      completed: false,
+      ...overrides,
+    },
+  };
+}
+
+test("story HUD shows exact beat identity and target-weighted narrative progress in every mode", () => {
+  const state = storyState();
+  const exploration = deriveStoryHud(state, { arcById });
+  const combat = deriveStoryHud({ ...state, mode: "combat" }, { arcById });
+
+  assert.equal(exploration.beatNumber, 8);
+  assert.equal(exploration.beatCount, 15);
+  assert.equal(exploration.beatName, "Fun and Games");
+  assert.equal(exploration.arcTitle, "The Ember Crown");
+  assert.ok(Math.abs(exploration.progressPercent - (16 / 35) * 100) < 0.001);
+  assert.deepEqual(combat, exploration);
+  assert.equal(Object.hasOwn(exploration, "journeyStep"), false);
+});
+
+test("story progress remains below complete until the Final Image resolves", () => {
+  const beforeFinalImage = storyState({
+    currentBeatId: "finalImage",
+    currentBeatIndex: 14,
+    cardsResolvedInBeat: 1,
+    completedBeatIds: beatIds.slice(0, 14),
+    totalWorldCardsResolved: 35,
+  });
+  const completed = storyState({
+    status: "completed",
+    completed: true,
+    currentBeatId: "finalImage",
+    currentBeatIndex: 14,
+    cardsResolvedInBeat: 1,
+    completedBeatIds: beatIds,
+    totalWorldCardsResolved: 35,
+  });
+
+  assert.equal(deriveStoryHud(beforeFinalImage, { arcById }).progressPercent, 99);
+  assert.equal(deriveStoryHud(completed, { arcById }).progressPercent, 100);
+});
+
+test("major-beat transition presentation uses canonical arc-authored copy", () => {
+  const state = storyState({
+    currentBeatId: "midpoint",
+    currentBeatIndex: 8,
+    pendingInterstitialBeatId: "midpoint",
+  });
+  state.mode = "storyTransition";
+
+  const transition = deriveTransitionPresentation(state, { arcById });
+  assert.deepEqual(transition, {
+    arcTitle: "The Ember Crown",
+    beatId: "midpoint",
+    beatName: "Midpoint",
+    beatNumber: 9,
+    subtitle: "The Iron Gate",
+    text: "Steel wings bar the path to the Crown.",
+    announcement: "Midpoint. The Iron Gate. Steel wings bar the path to the Crown.",
+  });
+  assert.equal(isStoryTransitionActive(state), true);
+  assert.equal(isStoryTransitionActive(storyState()), false);
+  assert.equal(deriveTransitionPresentation(storyState(), { arcById }), null);
+});
+
+test("victory presentation includes the ending and required run statistics", () => {
+  const state = storyState({
+    status: "completed",
+    completed: true,
+    currentBeatId: "finalImage",
+    currentBeatIndex: 14,
+    completedBeatIds: beatIds,
+    totalWorldCardsResolved: 35,
+    endingId: "crown-of-dawn",
+    endingTitle: "Crown of Dawn",
+    endingSummary: "The renewed wards warm every Hearthvale roof.",
+    newDiscoveries: [{ id: "iron-wyvern", name: "Iron Wyvern" }],
+  });
+  state.mode = "victory";
+  state.run.newEndingDiscovered = true;
+
+  const presentation = deriveTerminalPresentation(state, { arcById });
+  assert.equal(presentation.kind, "victory");
+  assert.equal(presentation.arcTitle, "The Ember Crown");
+  assert.equal(presentation.title, "Crown of Dawn");
+  assert.equal(presentation.restartLabel, "Begin Another Arc");
+  assert.deepEqual(
+    presentation.stats.map(({ label }) => label),
+    ["Final level", "World decisions", "Enemies defeated", "Items discovered", "Beat completion", "Story progress"],
+  );
+  assert.deepEqual(presentation.discoveries, ["Iron Wyvern", "Ending: Crown of Dawn"]);
+});
+
+test("death presentation names the reached beat, story progress, cause, and restart action", () => {
+  const state = storyState({ deathCause: "Malrec's cinder bolt" });
+  state.mode = "gameOver";
+  const presentation = deriveTerminalPresentation(state, { arcById });
+
+  assert.equal(presentation.kind, "death");
+  assert.equal(presentation.restartLabel, "Restart Arc");
+  assert.equal(presentation.copy, "Malrec's cinder bolt");
+  assert.equal(presentation.stats.find(({ label }) => label === "Beat reached").value, "8 / 15 · Fun and Games");
+  assert.equal(presentation.stats.find(({ label }) => label === "Final level").value, "4");
+  assert.equal(presentation.stats.find(({ label }) => label === "Cause of death").value, "Malrec's cinder bolt");
+});
+
+test("debug checkpoint controls require both a local host and explicit URL opt-in", () => {
+  assert.equal(isDebugCheckpointUiEnabled({ hostname: "localhost", search: "?debug-checkpoints=1" }), true);
+  assert.equal(isDebugCheckpointUiEnabled({ hostname: "127.0.0.1", search: "?debug-checkpoints=1" }), true);
+  assert.equal(isDebugCheckpointUiEnabled({ hostname: "game.example", search: "?debug-checkpoints=1" }), false);
+  assert.equal(isDebugCheckpointUiEnabled({ hostname: "localhost", search: "" }), false);
+  assert.equal(DEBUG_CHECKPOINTS.length, 15);
+  assert.equal(DEBUG_CHECKPOINTS[0].id, "01-opening-image");
+  assert.equal(DEBUG_CHECKPOINTS[14].id, "15-final-image");
+});
+
+test("document exposes story surfaces without the deprecated journey HUD", async () => {
+  const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  for (const id of [
+    "hud-beat-number",
+    "hud-beat-name",
+    "hud-story-progress",
+    "story-transition",
+    "story-transition-continue",
+    "terminal-summary",
+    "terminal-restart",
+    "debug-checkpoints",
+  ]) {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
+  assert.doesNotMatch(html, /hud-journey|>Depth</);
+  assert.doesNotMatch(html, /on(?:click|load|error|submit)=/i);
+});

@@ -20,6 +20,10 @@
   padding-left: max(0.5rem, env(safe-area-inset-left));
 }
 
+[hidden] {
+  display: none !important;
+}
+
 #card {
   transform: translate3d(var(--card-x), var(--card-y), 0) rotate(var(--card-rotation)) scale(var(--card-scale));
   transform-origin: 50% 88%;
@@ -95,6 +99,11 @@
 
 .resource-meter[data-meter="xp"] {
   --meter-color: #70c78e;
+}
+
+.resource-meter[data-meter="story"] {
+  --meter-color: #d8a94d;
+  height: 0.3rem;
 }
 
 .resource-meter[data-meter="enemy"] {
@@ -185,6 +194,48 @@
   animation: feedback-victory 620ms ease-out;
 }
 
+.story-transition {
+  isolation: isolate;
+  animation: story-transition-enter 420ms cubic-bezier(0.22, 0.82, 0.32, 1) both;
+}
+
+.story-transition::before,
+.story-transition::after {
+  position: absolute;
+  z-index: -1;
+  border-radius: 999px;
+  content: "";
+  pointer-events: none;
+}
+
+.story-transition::before {
+  top: -4rem;
+  right: -3rem;
+  width: 12rem;
+  height: 12rem;
+  background: rgb(216 169 77 / 14%);
+  box-shadow: 0 0 4rem rgb(216 169 77 / 20%);
+}
+
+.story-transition::after {
+  bottom: -5rem;
+  left: -4rem;
+  width: 14rem;
+  height: 14rem;
+  background: rgb(42 111 107 / 17%);
+  box-shadow: 0 0 4rem rgb(121 212 197 / 12%);
+}
+
+.terminal-summary[data-kind="victory"] {
+  border-color: rgb(216 169 77 / 80%);
+  background: linear-gradient(180deg, #172f39 0%, #102633 45%, #0c202b 100%);
+}
+
+.terminal-summary[data-kind="death"] {
+  border-color: rgb(182 95 101 / 75%);
+  background: linear-gradient(180deg, #2a2028 0%, #171e28 44%, #0c1822 100%);
+}
+
 .inventory-sheet,
 .confirm-sheet {
   max-width: none;
@@ -252,12 +303,44 @@
     margin-bottom: 0.25rem;
   }
 
+  #story-hud {
+    margin-top: 0.2rem;
+    padding-top: 0.2rem;
+    padding-bottom: 0.25rem;
+  }
+
+  #story-hud > div {
+    margin-bottom: 0.15rem;
+  }
+
   #player-hud h1 {
     display: none;
   }
 
   #card {
     min-height: 13.25rem !important;
+  }
+
+  .story-transition,
+  .terminal-summary {
+    min-height: 13.25rem !important;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .story-transition > p:nth-of-type(2) {
+    margin-top: 0.5rem;
+  }
+
+  .story-transition > h2,
+  .story-transition > p + p,
+  .terminal-summary > p,
+  .terminal-summary > h2 {
+    margin-top: 0.25rem;
+  }
+
+  .story-transition > button {
+    margin-top: 0.75rem;
   }
 
   #card header {
@@ -365,6 +448,16 @@
   40% {
     filter: drop-shadow(0 0 1.2rem #fff1bb) brightness(1.12);
     transform: translateY(-0.22rem) scale(1.008);
+  }
+}
+
+@keyframes story-transition-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.65rem) scale(0.985);
+  }
+  55% {
+    box-shadow: 0 0 1.8rem rgb(216 169 77 / 24%);
   }
 }
 

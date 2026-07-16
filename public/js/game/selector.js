@@ -88,7 +88,7 @@ export function effectiveWeight(card, state, context = {}) {
 
 export function getEligibleCards(state, cardDefinitions, context = {}) {
   const recent = new Set((state.run.recentCardIds ?? []).slice(-4));
-  const firstWorldCard = state.journeyStep === 0 && state.decisionCount === 0;
+  const firstWorldCard = Number(state.story?.totalWorldCardsResolved ?? 0) === 0;
 
   let eligible = (cardDefinitions ?? []).filter((card) => {
     if (!isSelectableStorylet(card)) return false;

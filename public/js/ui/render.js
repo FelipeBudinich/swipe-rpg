@@ -1,3 +1,9 @@
+import {
+  deriveStoryHud,
+  deriveTerminalPresentation,
+  deriveTransitionPresentation,
+} from "./story-transition.js";
+
 const RESOURCE_EFFECTS = {
   modifyHp: "hp",
   heal: "hp",
@@ -9,8 +15,8 @@ const RESOURCE_EFFECTS = {
   addGold: "gold",
   spendGold: "gold",
   addXp: "xp",
-  modifyJourney: "journey",
-  modifyJourneyStep: "journey",
+  boundedHpLoss: "hp",
+  applyBoundedHpLoss: "hp",
 };
 
 const RESOURCE_LABELS = {
@@ -18,7 +24,7 @@ const RESOURCE_LABELS = {
   mp: "MP",
   xp: "XP",
   gold: "gold",
-  journey: "journey depth",
+  story: "story progress",
   enemyHp: "enemy HP",
   defense: "defense",
   attack: "attack",
@@ -109,10 +115,16 @@ function effectSummary(effect) {
     case "addGold": return `+${Math.abs(amount)} gold`;
     case "spendGold": return `-${Math.abs(amount)} gold`;
     case "addXp": return `+${Math.abs(amount)} XP`;
+    case "boundedHpLoss":
+    case "applyBoundedHpLoss": return `-${Math.abs(amount)} HP, but not below ${Math.max(1, Number(effect.floor ?? effect.minimumHp ?? 1))}`;
     case "addItem": return "gain item";
     case "removeItem": return "lose item";
     case "startEncounter": return "combat risk";
+    case "startStoryEncounter": return "story encounter";
     case "queueCard": return "story continues";
+    case "queueStoryCard": return "story continues";
+    case "selectEnding":
+    case "selectFinalEnding": return "decide the Crown's fate";
     default: return "";
   }
 }
@@ -161,7 +173,7 @@ function cardResourceSummary(card) {
   ])];
   return affected.length
     ? `Choices may affect ${affected.map((resource) => RESOURCE_LABELS[resource] ?? resource).join(", ")}.`
-    : "Choices shape the journey.";
+    : "Choices shape the story.";
 }
 
 function createItemRow(item, action, equippedItem = null, allowedArtIds = new Set()) {
@@ -209,7 +221,13 @@ function createItemRow(item, action, equippedItem = null, allowedArtIds = new Se
   return row;
 }
 
-export function createRenderer({ itemById = {}, enemyById = {}, allowedArtIds = new Set() } = {}) {
+export function createRenderer({
+  itemById = {},
+  enemyById = {},
+  allowedArtIds = new Set(),
+  arcById = {},
+  calculateStoryProgress,
+} = {}) {
   const elements = {
     app: byId("app"),
     level: byId("hud-level"),
@@ -220,12 +238,17 @@ export function createRenderer({ itemById = {}, enemyById = {}, allowedArtIds = 
     mp: byId("hud-mp"),
     mpBar: byId("hud-mp-bar"),
     gold: byId("hud-gold"),
-    journey: byId("hud-journey"),
+    arcTitle: byId("arc-title"),
+    beatName: byId("hud-beat-name"),
+    beatNumber: byId("hud-beat-number"),
+    storyProgress: byId("hud-story-progress"),
     enemyHud: byId("enemy-hud"),
     enemyName: byId("enemy-name"),
     enemyHp: byId("enemy-hp"),
     enemyHpBar: byId("enemy-hp-bar"),
     enemyIntent: byId("enemy-intent"),
+    cardStack: byId("card-stack"),
+    cardBackdrop: byId("card-backdrop"),
     card: byId("card"),
     cardArt: byId("card-art"),
     speaker: byId("card-speaker"),
@@ -244,6 +267,22 @@ export function createRenderer({ itemById = {}, enemyById = {}, allowedArtIds = 
     leftDetail: byId("choice-left-detail"),
     rightDetail: byId("choice-right-detail"),
     cardLive: byId("card-live"),
+    choiceControls: byId("choice-controls"),
+    choiceHelp: byId("choice-help"),
+    transition: byId("story-transition"),
+    transitionBeat: byId("story-transition-beat"),
+    transitionTitle: byId("story-transition-title"),
+    transitionSentence: byId("story-transition-sentence"),
+    transitionContinue: byId("story-transition-continue"),
+    terminal: byId("terminal-summary"),
+    terminalKicker: byId("terminal-kicker"),
+    terminalArcTitle: byId("terminal-arc-title"),
+    terminalTitle: byId("terminal-title"),
+    terminalCopy: byId("terminal-copy"),
+    terminalStats: byId("terminal-stats"),
+    terminalDiscoveries: byId("terminal-discoveries"),
+    terminalDiscoveryList: byId("terminal-discovery-list"),
+    terminalRestart: byId("terminal-restart"),
     inventory: byId("inventory-content"),
     inventoryStats: document.getElementById("inventory-stats"),
     inventoryCount: document.getElementById("inventory-count"),
@@ -256,6 +295,7 @@ export function createRenderer({ itemById = {}, enemyById = {}, allowedArtIds = 
 
   let activeCard = null;
   let currentState = null;
+  let lastSpecialAnnouncement = null;
 
   const setChoice = (direction, choice) => {
     const button = direction === "left" ? elements.leftButton : elements.rightButton;
@@ -275,8 +315,8 @@ export function createRenderer({ itemById = {}, enemyById = {}, allowedArtIds = 
   const renderCard = (card) => {
     activeCard = card;
     const title = card?.title ?? "The road waits";
-    const text = card?.text ?? "Choose how the caravan proceeds.";
-    elements.speaker.textContent = card?.speaker ?? card?.source ?? "The Lumen Road";
+    const text = card?.text ?? "Choose how the Warden proceeds.";
+    elements.speaker.textContent = card?.speaker ?? card?.source ?? "The Ember Crown";
     elements.title.textContent = title;
     elements.title.hidden = !card?.title;
     elements.text.textContent = text;
@@ -294,19 +334,29 @@ export function createRenderer({ itemById = {}, enemyById = {}, allowedArtIds = 
     elements.cardLive.textContent = `${title}. ${text}. Left: ${card?.left?.label ?? "Continue"}. Right: ${card?.right?.label ?? "Continue"}.`;
   };
 
-  const renderHud = (state, derivedStats, xpNeeded) => {
+  const renderHud = (state, derivedStats, xpNeeded, storyProgress) => {
+    const progressCalculator = Number.isFinite(Number(storyProgress))
+      ? () => Number(storyProgress)
+      : calculateStoryProgress;
+    const storyHud = deriveStoryHud(state, { arcById, calculateStoryProgress: progressCalculator });
     elements.level.textContent = String(state.player.level);
     elements.xp.textContent = `${state.player.xp}/${xpNeeded}`;
     elements.hp.textContent = `${state.player.hp}/${derivedStats.maxHp}`;
     elements.mp.textContent = `${state.player.mp}/${derivedStats.maxMp}`;
     elements.gold.textContent = String(state.player.gold);
-    elements.journey.textContent = `${state.journeyStep}/20`;
+    elements.arcTitle.textContent = storyHud.arcTitle;
+    elements.beatName.textContent = storyHud.beatName;
+    elements.beatNumber.textContent = `${storyHud.beatNumber} / ${storyHud.beatCount}`;
     setBar(elements.xpBar, state.player.xp, xpNeeded);
     setBar(elements.hpBar, state.player.hp, derivedStats.maxHp);
     setBar(elements.mpBar, state.player.mp, derivedStats.maxMp);
+    setBar(elements.storyProgress, storyHud.progressPercent, 100);
+    elements.storyProgress.textContent = `${Math.round(storyHud.progressPercent)} percent`;
+    elements.storyProgress.setAttribute("aria-label", storyHud.progressLabel);
     elements.hpBar.setAttribute("aria-label", `HP ${state.player.hp} of ${derivedStats.maxHp}`);
     elements.mpBar.setAttribute("aria-label", `MP ${state.player.mp} of ${derivedStats.maxMp}`);
     elements.xpBar.setAttribute("aria-label", `XP ${state.player.xp} of ${xpNeeded}`);
+    return storyHud;
   };
 
   const renderEnemy = (state) => {
@@ -325,16 +375,126 @@ export function createRenderer({ itemById = {}, enemyById = {}, allowedArtIds = 
     elements.enemyHpBar.setAttribute("aria-label", `${elements.enemyName.textContent} HP ${encounter.hp} of ${maximum}`);
   };
 
+  const setInteractiveSurface = () => {
+    elements.card.hidden = false;
+    elements.cardBackdrop.hidden = false;
+    elements.choiceControls.hidden = false;
+    elements.choiceHelp.hidden = false;
+    elements.transition.hidden = true;
+    elements.terminal.hidden = true;
+    elements.card.removeAttribute("inert");
+    elements.card.tabIndex = 0;
+    elements.cardStack.setAttribute("aria-label", "Current decision");
+    lastSpecialAnnouncement = null;
+  };
+
+  const setSpecialSurface = (surface, label) => {
+    activeCard = null;
+    elements.card.hidden = true;
+    elements.cardBackdrop.hidden = true;
+    elements.choiceControls.hidden = true;
+    elements.choiceHelp.hidden = true;
+    elements.card.setAttribute("inert", "");
+    elements.card.tabIndex = -1;
+    elements.transition.hidden = surface !== "transition";
+    elements.terminal.hidden = surface !== "terminal";
+    elements.leftButton.disabled = true;
+    elements.rightButton.disabled = true;
+    elements.cardStack.setAttribute("aria-label", label);
+  };
+
+  const announceSpecial = (key, message) => {
+    if (lastSpecialAnnouncement === key) return;
+    lastSpecialAnnouncement = key;
+    elements.cardLive.textContent = message;
+  };
+
+  const renderTransition = (presentation) => {
+    setSpecialSurface("transition", `Story transition: ${presentation.beatName}`);
+    elements.transitionBeat.textContent = `Beat ${presentation.beatNumber} · ${presentation.beatName}`;
+    elements.transitionTitle.textContent = presentation.subtitle;
+    elements.transitionSentence.textContent = presentation.text;
+    elements.transitionContinue.disabled = false;
+    elements.transitionContinue.setAttribute("aria-label", `Continue to ${presentation.beatName}`);
+    announceSpecial(`transition:${presentation.beatId}`, presentation.announcement);
+  };
+
+  const renderTerminal = (presentation) => {
+    setSpecialSurface("terminal", presentation.kind === "death" ? "Arc ended" : "Arc complete");
+    elements.terminal.dataset.kind = presentation.kind;
+    elements.terminalKicker.textContent = presentation.kicker;
+    elements.terminalArcTitle.textContent = presentation.arcTitle;
+    elements.terminalTitle.textContent = presentation.title;
+    elements.terminalCopy.textContent = presentation.copy;
+    elements.terminalRestart.textContent = presentation.restartLabel;
+    elements.terminalRestart.setAttribute("aria-label", `${presentation.restartLabel}: ${presentation.arcTitle}`);
+    elements.terminalRestart.disabled = false;
+
+    elements.terminalStats.replaceChildren();
+    for (const stat of presentation.stats) {
+      const group = document.createElement("div");
+      group.className = stat.wide
+        ? "col-span-2 rounded-lg bg-[#091923] px-2 py-2"
+        : "rounded-lg bg-[#091923] px-2 py-2";
+      const term = document.createElement("dt");
+      term.className = "text-[0.58rem] font-black uppercase tracking-wider text-[#87a1aa]";
+      term.textContent = stat.label;
+      const value = document.createElement("dd");
+      value.className = "mt-0.5 text-sm font-black text-[#fff6e6]";
+      value.textContent = stat.value;
+      group.append(term, value);
+      elements.terminalStats.append(group);
+    }
+
+    elements.terminalDiscoveryList.replaceChildren();
+    elements.terminalDiscoveries.hidden = presentation.discoveries.length === 0;
+    for (const discovery of presentation.discoveries) {
+      const item = document.createElement("li");
+      item.textContent = discovery;
+      elements.terminalDiscoveryList.append(item);
+    }
+    announceSpecial(
+      `terminal:${presentation.kind}:${presentation.title}`,
+      `${presentation.kicker}. ${presentation.arcTitle}. ${presentation.title}. ${presentation.copy}`,
+    );
+  };
+
   return {
     elements,
-    render(state, card, { derivedStats, xpNeeded }) {
+    render(state, card, { derivedStats, xpNeeded, storyProgress } = {}) {
       currentState = state;
       elements.app.setAttribute("aria-busy", "false");
       elements.card.setAttribute("aria-busy", "false");
       elements.app.dataset.mode = state.mode;
-      renderHud(state, derivedStats, xpNeeded);
+      const safeDerivedStats = derivedStats ?? state.player?.baseStats ?? {
+        maxHp: Math.max(1, Number(state.player?.hp ?? 1)),
+        maxMp: Math.max(0, Number(state.player?.mp ?? 0)),
+      };
+      renderHud(state, safeDerivedStats, xpNeeded ?? 1, storyProgress);
       renderEnemy(state);
+      const terminal = deriveTerminalPresentation(state, {
+        arcById,
+        enemyById,
+        calculateStoryProgress: Number.isFinite(Number(storyProgress))
+          ? () => Number(storyProgress)
+          : calculateStoryProgress,
+      });
+      if (terminal) {
+        renderTerminal(terminal);
+        return;
+      }
+      const transition = deriveTransitionPresentation(state, { arcById });
+      if (transition) {
+        renderTransition(transition);
+        return;
+      }
+      setInteractiveSurface();
       renderCard(card);
+    },
+    focusPrimarySurface() {
+      if (!elements.transition.hidden) elements.transitionContinue.focus();
+      else if (!elements.terminal.hidden) elements.terminalRestart.focus();
+      else elements.card.focus();
     },
     renderInventory(state, { derivedStats } = {}) {
       currentState = state;
@@ -366,13 +526,13 @@ export function createRenderer({ itemById = {}, enemyById = {}, allowedArtIds = 
     previewChoice(direction) {
       const choice = direction === "left" ? activeCard?.left : direction === "right" ? activeCard?.right : null;
       const affected = new Set(affectedResources(choice));
-      for (const resource of ["hp", "mp", "xp", "gold", "journey", "enemyHp"]) {
+      for (const resource of ["hp", "mp", "xp", "gold", "enemyHp"]) {
         const valueNode = resource === "enemyHp" ? elements.enemyHud : byId(`hud-${resource}`);
         const node = valueNode.closest("[data-resource]") ?? valueNode;
         node.toggleAttribute("data-previewed", affected.has(resource));
       }
       elements.resourcePreview.textContent = choice
-        ? choiceDetail(choice) || `${choice.label} changes the road ahead.`
+        ? choiceDetail(choice) || `${choice.label} changes the story ahead.`
         : cardResourceSummary(activeCard);
     },
   };

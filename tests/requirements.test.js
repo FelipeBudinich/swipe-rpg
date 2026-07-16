@@ -19,7 +19,21 @@ function richState() {
   return {
     ...state,
     mode: "exploration",
-    journeyStep: 8,
+    story: {
+      ...state.story,
+      currentBeatId: "funAndGames",
+      currentBeatIndex: 7,
+      cardsResolvedInBeat: 3,
+      cardsResolvedByBeat: { setup: 4, funAndGames: 3 },
+      totalWorldCardsResolved: 16,
+      completedBeatIds: ["openingImage", "themeStated", "setup"],
+      resolvedStoryTags: ["mountain-gate-located"],
+      facts: { trustedSerin: true, shrinesRestored: 2 },
+      selectedAnchorIdByBeat: { midpoint: "midpoint-serins-counterseal" },
+      resolvedAnchorIds: ["catalyst-core-theft"],
+      endingId: "crown-of-dawn",
+      endingTitle: "Crown of Dawn",
+    },
     player: {
       ...state.player,
       level: 3,
@@ -38,7 +52,7 @@ function richState() {
   };
 }
 
-test("central requirement evaluator supports numeric, range, flag, ownership, and history gates", () => {
+test("central requirement evaluator supports resources, story state, ownership, and history gates", () => {
   const state = richState();
   const context = { items: fixtureItems };
   assert.equal(
@@ -50,7 +64,21 @@ test("central requirement evaluator supports numeric, range, flag, ownership, an
         { type: "maxHpPercent", value: 0.51 },
         { type: "minMp", value: 4 },
         { type: "minGold", value: 7 },
-        { type: "journeyStep", min: 5, max: 10 },
+        { type: "currentArcId", value: "ember-crown" },
+        { type: "currentBeatId", value: "funAndGames" },
+        { type: "completedBeat", beatId: "setup" },
+        { type: "beatNotCompleted", beatId: "finale" },
+        { type: "minimumCardsResolvedInBeat", value: 3 },
+        { type: "minimumCardsResolvedInBeat", beatId: "setup", value: 4 },
+        { type: "minimumTotalWorldCards", value: 16 },
+        { type: "storyFactExists", key: "trustedSerin" },
+        { type: "storyFactAbsent", key: "serinCaptured" },
+        { type: "storyFactEquals", key: "trustedSerin", value: true },
+        { type: "storyCounterMinimum", key: "shrinesRestored", value: 2 },
+        { type: "storyTagResolved", tag: "mountain-gate-located" },
+        { type: "anchorSelected", beatId: "midpoint", cardId: "midpoint-serins-counterseal" },
+        { type: "anchorResolved", cardId: "catalyst-core-theft" },
+        { type: "endingSelected", endingId: "crown-of-dawn" },
         { type: "flagEquals", flag: "oath", value: "kept" },
         { type: "flagAbsent", flag: "lost" },
         { type: "equipmentSlot", slot: "weapon", itemId: "key-blade" },
@@ -66,6 +94,9 @@ test("central requirement evaluator supports numeric, range, flag, ownership, an
   );
   assert.equal(evaluateRequirement({ type: "cardNotResolved", cardId: "old-card" }, state), false);
   assert.equal(evaluateRequirement({ type: "flagAbsent", flag: "oath" }, state), false);
+  assert.equal(evaluateRequirement({ type: "currentBeatId", value: "finale" }, state), false);
+  assert.equal(evaluateRequirement({ type: "storyFactAbsent", key: "trustedSerin" }, state), false);
+  assert.equal(evaluateRequirement({ type: "anchorResolved", cardId: "not-resolved" }, state), false);
   assert.equal(evaluateRequirement({ type: "unknown-rule" }, state), false);
 });
 
