@@ -194,7 +194,10 @@ export function hasActiveRequiredStoryCombat(state, beat) {
   if (required && !["resolved", "defeated", "complete"].includes(required)) return true;
 
   // Mandatory combat rewards and level-ups resolve before narrative advancement.
-  if (["loot", "levelUp"].includes(state?.mode) && story.combatRewardBeatId === beatId) {
+  if (
+    ["combatReward", "loot", "levelUp"].includes(state?.mode) &&
+    story.combatRewardBeatId === beatId
+  ) {
     return true;
   }
   return false;

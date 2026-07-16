@@ -9,6 +9,7 @@ import {
   calculateStoryProgress,
   canAdvanceBeat,
   getStoryBudgetTotals,
+  hasActiveRequiredStoryCombat,
   shouldForceBeatCompletion,
 } from "../public/js/game/story/beat-progress.js";
 import {
@@ -69,6 +70,17 @@ test("hybrid advancement requires minimum, objective, no local queue, and no com
   assert.equal(canAdvanceBeat(state, setup), false);
   state = { ...state, encounter: null };
   assert.equal(canAdvanceBeat(state, setup), true);
+});
+
+test("combat rewards retain the legacy required-combat beat gate", () => {
+  const beat = arc.beats[8];
+  const state = fixtureState(8, {
+    combatRewardBeatId: beat.id,
+  });
+  assert.equal(
+    hasActiveRequiredStoryCombat({ ...state, mode: "combatReward" }, beat),
+    true,
+  );
 });
 
 test("maximum-minus-one forces completion and ambient cards cannot extend the budget", () => {

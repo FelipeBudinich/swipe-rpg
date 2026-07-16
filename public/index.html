@@ -22,34 +22,20 @@
       aria-busy="true"
     >
       <header id="player-hud" class="shrink-0 rounded-2xl border border-[#36505d] bg-[#102633]/95 p-2.5 shadow-lg" aria-label="Player status">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <div class="min-w-0">
-            <p id="arc-kicker" class="truncate text-[0.65rem] font-bold uppercase tracking-[0.24em] text-[#79d4c5]">Story Arc</p>
-            <h1 id="arc-title" class="truncate text-sm font-black tracking-wide text-[#fff6e6]">The Ember Crown</h1>
+        <section id="story-hud" class="rounded-lg bg-[#091923] px-2 py-1.5" aria-labelledby="arc-title hud-beat-name">
+          <div class="mb-1 flex items-center justify-between gap-3">
+            <h1 id="arc-title" class="min-w-0 truncate text-sm font-black tracking-wide text-[#fff6e6]">The Ember Crown</h1>
+            <button
+              id="inventory-open"
+              type="button"
+              class="min-h-11 shrink-0 rounded-xl border border-[#d8a94d]/70 bg-[#201d26] px-3 text-xs font-extrabold uppercase tracking-wider text-[#ffd77d] shadow-sm transition hover:bg-[#332b2e] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#102633] active:translate-y-px"
+              aria-controls="inventory-drawer"
+              aria-expanded="false"
+              data-resource="gold"
+            >Pack</button>
           </div>
-          <button
-            id="inventory-open"
-            type="button"
-            class="min-h-11 shrink-0 rounded-xl border border-[#d8a94d]/70 bg-[#201d26] px-3 text-xs font-extrabold uppercase tracking-wider text-[#ffd77d] shadow-sm transition hover:bg-[#332b2e] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#102633] active:translate-y-px"
-            aria-controls="inventory-drawer"
-            aria-expanded="false"
-          >Pack</button>
-        </div>
-
-        <dl class="grid grid-cols-2 gap-1.5 text-center">
-          <div class="rounded-lg bg-[#091923] px-1.5 py-1" data-resource="level">
-            <dt class="text-[0.58rem] font-bold uppercase tracking-wider text-[#9bb3ba]">Level</dt>
-            <dd id="hud-level" class="text-sm font-black tabular-nums text-[#fff6e6]">1</dd>
-          </div>
-          <div class="relative rounded-lg bg-[#091923] px-1.5 py-1" data-resource="gold">
-            <dt class="text-[0.58rem] font-bold uppercase tracking-wider text-[#9bb3ba]">Gold</dt>
-            <dd class="text-sm font-black tabular-nums text-[#ffd77d]"><span id="hud-gold">10</span><span id="hud-gold-delta" class="resource-delta" aria-hidden="true"></span></dd>
-          </div>
-        </dl>
-
-        <section id="story-hud" class="mt-1.5 rounded-lg bg-[#091923] px-2 py-1.5" aria-labelledby="hud-beat-name">
           <div class="mb-1 flex items-baseline justify-between gap-3">
-            <h2 id="hud-beat-name" class="min-w-0 truncate text-xs font-black text-[#fff6e6]">Opening Image</h2>
+            <h2 id="hud-beat-name" class="min-w-0 truncate text-xs font-black text-[#b9cbd0]">Opening Image</h2>
             <p class="shrink-0 text-[0.62rem] font-black uppercase tracking-wider text-[#ffd77d]">Beat <span id="hud-beat-number" class="tabular-nums">1 / 15</span></p>
           </div>
           <progress
@@ -60,6 +46,20 @@
             max="100"
             aria-label="Story progress: 0 percent"
           >0 percent</progress>
+        </section>
+
+        <section id="level-xp-hud" class="relative mt-1.5 rounded-lg bg-[#091923] px-2 py-1.5" data-resource="xp" aria-label="Character progression">
+          <dl class="mb-1 flex items-baseline justify-between gap-3">
+            <div class="flex items-baseline gap-1.5">
+              <dt class="text-[0.62rem] font-bold uppercase tracking-wider text-[#9bb3ba]">Level</dt>
+              <dd id="hud-level" class="text-sm font-black tabular-nums text-[#fff6e6]">1</dd>
+            </div>
+            <div class="flex min-w-0 items-baseline gap-1.5 text-right">
+              <dt class="text-[0.62rem] font-bold uppercase tracking-wider text-[#a7e5bd]">XP</dt>
+              <dd class="tabular-nums text-[0.72rem] font-black text-[#a7e5bd]"><span id="hud-xp">0 / 20</span><span id="hud-xp-delta" class="resource-delta" aria-hidden="true"></span></dd>
+            </div>
+          </dl>
+          <progress id="hud-xp-bar" class="resource-meter" data-meter="xp" value="0" max="20" aria-label="Experience: 0 of 20">0 of 20</progress>
         </section>
 
         <div class="mt-1.5 grid grid-cols-2 gap-1.5">
@@ -77,33 +77,8 @@
             </div>
             <progress id="hud-mp-bar" class="resource-meter" data-meter="mp" value="10" max="10" aria-label="Magic points: 10 of 10">10 of 10</progress>
           </section>
-          <section class="relative col-span-2 rounded-lg bg-[#091923] px-2 py-1.5" data-resource="xp" aria-label="Experience">
-            <div class="mb-1 flex items-baseline justify-between gap-2 text-[0.62rem] font-bold uppercase tracking-wider text-[#a7e5bd]">
-              <span>XP</span>
-              <span class="tabular-nums"><span id="hud-xp">0 / 20</span><span id="hud-xp-delta" class="resource-delta" aria-hidden="true"></span></span>
-            </div>
-            <progress id="hud-xp-bar" class="resource-meter" data-meter="xp" value="0" max="20" aria-label="Experience: 0 of 20">0 of 20</progress>
-          </section>
         </div>
       </header>
-
-      <section
-        id="enemy-hud"
-        class="shrink-0 rounded-xl border border-[#b65f65]/70 bg-[#291d26] px-3 py-2 shadow-md"
-        aria-label="Enemy status"
-        data-active="false"
-        data-resource="enemyHp"
-        hidden
-      >
-        <div class="flex items-center justify-between gap-3">
-          <div class="min-w-0">
-            <p id="enemy-name" class="truncate text-sm font-black text-[#ffe3d1]">Unknown foe</p>
-            <p class="text-[0.62rem] font-bold uppercase tracking-wider text-[#d7a6a7]">Intent: <span id="enemy-intent" class="text-[#fff6e6]">Watching</span></p>
-          </div>
-          <span id="enemy-hp" class="shrink-0 text-xs font-black tabular-nums text-[#ffb3a7]">0 / 0 HP</span>
-        </div>
-        <progress id="enemy-hp-bar" class="resource-meter mt-1" data-meter="enemy" value="0" max="1" aria-label="Enemy health">0 of 1</progress>
-      </section>
 
       <main id="game-main" class="flex min-h-0 flex-1 flex-col">
         <p
@@ -182,6 +157,13 @@
             <header class="shrink-0 border-b border-[#b7a98f] bg-[#e6d8bd] px-4 py-2 text-center">
               <p id="card-speaker" class="text-[0.63rem] font-black uppercase tracking-[0.2em] text-[#285b5a]">The road awaits</p>
               <h2 id="card-title" class="mt-0.5 text-lg font-black leading-tight text-[#142630]">Reading the trail…</h2>
+              <section id="card-combat-status" class="mt-1.5 rounded-lg border border-[#b65f65]/50 bg-[#f0cfc3]/55 px-2 py-1.5 text-left" data-resource="enemyHp" aria-label="Enemy health" hidden>
+                <div class="mb-1 flex items-baseline justify-between gap-2 text-[0.65rem] font-black uppercase tracking-wider text-[#7a3038]">
+                  <span>HP</span>
+                  <span id="card-enemy-hp" class="tabular-nums">0 / 1</span>
+                </div>
+                <progress id="card-enemy-hp-bar" class="resource-meter" data-meter="enemy" value="0" max="1">0 of 1</progress>
+              </section>
             </header>
 
             <figure class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_45%,#f8e7bc_0%,#b8c4ad_58%,#66848a_100%)] px-4 py-2">
@@ -190,6 +172,7 @@
 
             <div class="shrink-0 space-y-1.5 border-t border-[#b7a98f] bg-[#f4ead8] px-4 py-3 text-center">
               <p id="card-text" class="text-sm font-semibold leading-snug text-[#20343d]">Preparing your caravan's first step toward the moonlit prism ruins.</p>
+              <dl id="card-reward-summary" class="grid gap-1 rounded-lg border border-[#c7ae76] bg-[#fff6e6]/75 px-3 py-2 text-left" aria-label="Battle rewards" hidden></dl>
               <p id="card-detail" class="min-h-4 text-[0.67rem] font-bold uppercase tracking-wide text-[#70584f]"></p>
               <p id="card-resource-preview" class="min-h-4 text-[0.67rem] font-black text-[#356e6b]" aria-label="Affected resources"></p>
             </div>
@@ -235,6 +218,10 @@
         </header>
 
         <div class="min-h-0 overflow-y-auto overscroll-contain px-4 py-3">
+          <section id="inventory-wallet" class="mb-3 flex items-center justify-between rounded-lg border border-[#d8a94d]/45 bg-[#201d26] px-3 py-2" data-resource="gold" aria-label="Gold">
+            <span class="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#9bb3ba]">Gold</span>
+            <strong id="inventory-gold" class="text-base font-black tabular-nums text-[#ffd77d]">10</strong>
+          </section>
           <p id="inventory-stats" class="mb-3 rounded-lg bg-[#091923] px-3 py-2 text-center text-xs font-bold text-[#b9cbd0]">Attack 5 · Defense 2 · Max HP 30 · Max MP 10</p>
 
           <section aria-labelledby="equipped-heading">

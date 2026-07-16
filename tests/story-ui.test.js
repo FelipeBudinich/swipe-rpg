@@ -81,6 +81,10 @@ test("story HUD shows exact beat identity and target-weighted narrative progress
   assert.equal(exploration.beatName, "Fun and Games");
   assert.equal(exploration.arcTitle, "The Ember Crown");
   assert.ok(Math.abs(exploration.progressPercent - (16 / 35) * 100) < 0.001);
+  assert.equal(
+    exploration.progressLabel,
+    "The Ember Crown. Beat 8 of 15: Fun and Games. Story progress: 46 percent.",
+  );
   assert.deepEqual(combat, exploration);
   assert.equal(Object.hasOwn(exploration, "journeyStep"), false);
 });
@@ -128,6 +132,24 @@ test("major-beat transition presentation uses canonical arc-authored copy", () =
   assert.equal(isStoryTransitionActive(state), true);
   assert.equal(isStoryTransitionActive(storyState()), false);
   assert.equal(deriveTransitionPresentation(storyState(), { arcById }), null);
+});
+
+test("a pending beat transition cannot cover a priority combat-reward card", () => {
+  const state = storyState({
+    pendingInterstitialBeatId: "midpoint",
+  });
+  state.mode = "combatReward";
+  state.currentCardData = {
+    category: "combatReward",
+    id: "combat-reward:iron-wyvern:37",
+  };
+
+  assert.equal(isStoryTransitionActive(state), false);
+  assert.equal(deriveTransitionPresentation(state, { arcById }), null);
+
+  const restoredCardBeforeModeRepair = { ...state, mode: "exploration" };
+  assert.equal(isStoryTransitionActive(restoredCardBeforeModeRepair), false);
+  assert.equal(deriveTransitionPresentation(restoredCardBeforeModeRepair, { arcById }), null);
 });
 
 test("victory presentation includes the ending and required run statistics", () => {
@@ -181,12 +203,25 @@ test("debug checkpoint controls require both a local host and explicit URL opt-i
   assert.equal(DEBUG_CHECKPOINTS[14].id, "15-final-image");
 });
 
-test("document exposes story surfaces without the deprecated journey HUD", async () => {
+test("document exposes the compact story, progression, combat, reward, and Pack surfaces", async () => {
   const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
   for (const id of [
+    "arc-title",
     "hud-beat-number",
     "hud-beat-name",
     "hud-story-progress",
+    "level-xp-hud",
+    "hud-level",
+    "hud-xp",
+    "hud-xp-bar",
+    "hud-hp",
+    "hud-mp",
+    "inventory-open",
+    "inventory-gold",
+    "card-combat-status",
+    "card-enemy-hp",
+    "card-enemy-hp-bar",
+    "card-reward-summary",
     "story-transition",
     "story-transition-continue",
     "terminal-summary",
@@ -195,6 +230,44 @@ test("document exposes story surfaces without the deprecated journey HUD", async
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
+
+  for (const removedId of [
+    "arc-kicker",
+    "hud-gold",
+    "hud-gold-delta",
+    "enemy-hud",
+    "enemy-name",
+    "enemy-hp",
+    "enemy-hp-bar",
+    "enemy-intent",
+  ]) {
+    assert.doesNotMatch(html, new RegExp(`id=["']${removedId}["']`));
+  }
+
+  const storyHudStart = html.indexOf('id="story-hud"');
+  const storyHudEnd = html.indexOf("</section>", storyHudStart);
+  const arcTitle = html.indexOf('id="arc-title"');
+  const packButton = html.indexOf('id="inventory-open"');
+  assert.ok(storyHudStart >= 0 && storyHudEnd > storyHudStart);
+  assert.ok(arcTitle > storyHudStart && arcTitle < storyHudEnd);
+  assert.ok(packButton > storyHudStart && packButton < storyHudEnd);
+
+  const progressionStart = html.indexOf('id="level-xp-hud"');
+  const progressionEnd = html.indexOf("</section>", progressionStart);
+  assert.ok(html.indexOf('id="hud-level"') > progressionStart);
+  assert.ok(html.indexOf('id="hud-level"') < progressionEnd);
+  assert.ok(html.indexOf('id="hud-xp"') > progressionStart);
+  assert.ok(html.indexOf('id="hud-xp"') < progressionEnd);
+
+  const drawerStart = html.indexOf('id="inventory-drawer"');
+  const drawerEnd = html.indexOf("</dialog>", drawerStart);
+  const wallet = html.indexOf('id="inventory-gold"');
+  assert.ok(wallet > drawerStart && wallet < drawerEnd);
+  assert.match(html, /<button\s+id="inventory-open"/);
+  assert.match(html, /id="inventory-open"[\s\S]*?data-resource="gold"/);
+  assert.match(html, /id="level-xp-hud"[\s\S]*?aria-label="Character progression"/);
+  assert.match(html, /id="inventory-wallet"[\s\S]*?aria-label="Gold"/);
+  assert.match(html, /id="card-reward-summary"[\s\S]*?aria-label="Battle rewards"[\s\S]*?hidden/);
   assert.doesNotMatch(html, /hud-journey|>Depth</);
   assert.doesNotMatch(html, /on(?:click|load|error|submit)=/i);
 });

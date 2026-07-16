@@ -117,20 +117,38 @@ function explorationScore(choice, state) {
   return score;
 }
 
+function isConsumableUsefulNow(item, state) {
+  const stats = getDerivedStats(state, items);
+  return (item?.useEffects ?? []).some((effect) => {
+    if (["heal", "healPercent"].includes(effect.type)) {
+      return state.player.hp < stats.maxHp;
+    }
+    if (effect.type === "restoreMp") return state.player.mp < stats.maxMp;
+    return false;
+  });
+}
+
 function chooseDirection(card, state, options = {}) {
   if (card.id === "finale-fate-of-the-crown") {
     return options.endingId === "unbound-flame" ? "right" : "left";
   }
   if (card.category === "levelUp") return "left";
 
+  if (card.category === "combatReward") {
+    const item = itemById[card.reward?.itemId];
+    if (!item) return "left";
+    if (item.type === "consumable") {
+      return isConsumableUsefulNow(item, state) ? "left" : "right";
+    }
+    // Structural and ordinary audits retain equipment instead of optimizing
+    // their economy by selling the deterministic battle drop.
+    return "right";
+  }
+
   if (card.category === "loot") {
     const item = itemById[card.itemId];
     if (item?.type === "consumable") {
-      const stats = getDerivedStats(state, items);
-      const usefulNow =
-        item.useEffects?.some((effect) => ["heal", "healPercent"].includes(effect.type)) &&
-        state.player.hp < stats.maxHp;
-      return usefulNow ? "left" : "right";
+      return isConsumableUsefulNow(item, state) ? "left" : "right";
     }
     return "right";
   }
@@ -181,6 +199,17 @@ function normalizeSimulationArguments(maxDecisions, options) {
   };
 }
 
+const PRIORITY_CARD_CATEGORIES = new Set(["combat", "combatReward", "loot", "levelUp"]);
+
+export function shouldDismissStoryTransition(state, card = null) {
+  const hasPendingTransition =
+    state?.mode === "storyTransition" || Boolean(state?.story?.pendingInterstitialBeatId);
+  const category = card?.category ?? state?.currentCardData?.category ?? null;
+  return hasPendingTransition &&
+    !PRIORITY_CARD_CATEGORIES.has(state?.mode) &&
+    !PRIORITY_CARD_CATEGORIES.has(category);
+}
+
 /**
  * Deterministically play one arc. Ordinary mode uses only authored resources;
  * structural mode boosts combat stats so the audit can inspect the complete
@@ -201,7 +230,7 @@ export function simulateRun(seed, maxDecisions = MAX_DECISIONS, inputOptions = {
     safetySteps < normalized.maxDecisions * 4
   ) {
     safetySteps += 1;
-    if (state.mode === "storyTransition" || state.story?.pendingInterstitialBeatId) {
+    if (shouldDismissStoryTransition(state, card)) {
       transcript.push({
         kind: "transition",
         decision: state.decisionCount,
@@ -218,7 +247,7 @@ export function simulateRun(seed, maxDecisions = MAX_DECISIONS, inputOptions = {
     const next = getNextCard(state);
     state = next.state;
     card = next.card;
-    if (state.mode === "storyTransition" || state.story?.pendingInterstitialBeatId) continue;
+    if (shouldDismissStoryTransition(state, card)) continue;
     if (!card) {
       stallReason = "no-card";
       break;
@@ -237,7 +266,11 @@ export function simulateRun(seed, maxDecisions = MAX_DECISIONS, inputOptions = {
       mode: state.mode,
       cardId: card.id,
       source: state.currentCardSource ?? next.source ?? null,
-      enemyId: state.encounter?.enemyId ?? null,
+      enemyId: card.reward?.enemyId ?? state.encounter?.enemyId ?? null,
+      rewardId: card.reward?.rewardId ?? null,
+      xpAwarded: card.reward?.xpAwarded ?? null,
+      goldAwarded: card.reward?.goldAwarded ?? null,
+      itemId: card.reward?.itemId ?? null,
       direction,
       hp: state.player.hp,
       mp: state.player.mp,

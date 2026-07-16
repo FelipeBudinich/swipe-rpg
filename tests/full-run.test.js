@@ -4,6 +4,7 @@ import test from "node:test";
 import { EMBER_CROWN_BEAT_IDS } from "../public/js/data/arcs/ember-crown.js";
 import {
   auditSeeds,
+  shouldDismissStoryTransition,
   simulateRun,
   simulateStructuralRun,
 } from "../scripts/audit-runs.mjs";
@@ -22,6 +23,19 @@ function visitedBeatIds(run) {
 
 function indexOfCard(run, predicate) {
   return decisionTurns(run).findIndex((turn) => predicate(turn.cardId, turn));
+}
+
+function lastIndexOfCard(run, predicate) {
+  return decisionTurns(run).findLastIndex((turn) => predicate(turn.cardId, turn));
+}
+
+function assertRewardTranscript(turn, enemyId) {
+  assert.equal(turn.enemyId, enemyId);
+  assert.equal(typeof turn.rewardId, "string");
+  assert.ok(turn.rewardId.length > 0);
+  assert.ok(Number.isFinite(turn.xpAwarded));
+  assert.ok(Number.isFinite(turn.goldAwarded));
+  assert.ok(turn.itemId === null || typeof turn.itemId === "string");
 }
 
 function assertCompleteStructuralRun(run, { endingId, finalImageCardId }) {
@@ -46,26 +60,61 @@ function assertCompleteStructuralRun(run, { endingId, finalImageCardId }) {
   const midpointIntro = indexOfCard(run, (id) =>
     ["midpoint-sun-shard-challenge", "midpoint-serins-counterseal"].includes(id),
   );
-  const wyvernCombat = indexOfCard(run, (id) => id.startsWith("combat:iron-wyvern:"));
+  const wyvernCombat = lastIndexOfCard(run, (id) => id.startsWith("combat:iron-wyvern:"));
+  const wyvernRewards = turns.filter(({ mode, enemyId }) =>
+    mode === "combatReward" && enemyId === "iron-wyvern");
+  const wyvernReward = indexOfCard(run, (id, turn) =>
+    turn.mode === "combatReward" &&
+    turn.enemyId === "iron-wyvern" &&
+    id.startsWith("combat-reward:"));
   const midpointAftermath = indexOfCard(run, (id) => id === "midpoint-wyvern-aftermath");
   assert.ok(midpointIntro >= 0);
   assert.ok(wyvernCombat > midpointIntro);
-  assert.ok(midpointAftermath > wyvernCombat);
+  assert.equal(wyvernRewards.length, 1);
+  assertRewardTranscript(wyvernRewards[0], "iron-wyvern");
+  assert.ok(wyvernReward > wyvernCombat);
+  assert.ok(midpointAftermath > wyvernReward);
   assert.ok(Number(run.state.run.enemiesDefeated["iron-wyvern"] ?? 0) > 0);
 
   const malrecIntro = indexOfCard(run, (id) =>
     ["finale-malrec-infiltration", "finale-malrec-confrontation"].includes(id),
   );
-  const malrecCombat = indexOfCard(run, (id) => id.startsWith("combat:malrec-crown-bound:"));
+  const malrecCombat = lastIndexOfCard(run, (id) => id.startsWith("combat:malrec-crown-bound:"));
+  const malrecRewards = turns.filter(({ mode, enemyId }) =>
+    mode === "combatReward" && enemyId === "malrec-crown-bound");
+  const malrecReward = indexOfCard(run, (id, turn) =>
+    turn.mode === "combatReward" &&
+    turn.enemyId === "malrec-crown-bound" &&
+    id.startsWith("combat-reward:"));
   const crownChoice = indexOfCard(run, (id) => id === "finale-fate-of-the-crown");
   const finalImage = indexOfCard(run, (id) => id === finalImageCardId);
   assert.ok(malrecIntro >= 0);
   assert.ok(malrecCombat > malrecIntro);
-  assert.ok(crownChoice > malrecCombat);
+  assert.equal(malrecRewards.length, 1);
+  assertRewardTranscript(malrecRewards[0], "malrec-crown-bound");
+  assert.ok(malrecReward > malrecCombat);
+  assert.ok(crownChoice > malrecReward);
   assert.ok(finalImage > crownChoice);
   assert.equal(turns.at(-1).cardId, finalImageCardId);
   assert.ok(Number(run.state.run.enemiesDefeated["malrec-crown-bound"] ?? 0) > 0);
 }
+
+test("audit transition handling preserves priority reward surfaces", () => {
+  const state = {
+    mode: "combatReward",
+    story: { pendingInterstitialBeatId: "midpoint" },
+    currentCardData: { category: "combatReward" },
+  };
+  const reward = { category: "combatReward" };
+  assert.equal(shouldDismissStoryTransition(state, reward), false);
+  assert.equal(
+    shouldDismissStoryTransition(
+      { ...state, mode: "storyTransition", currentCardData: null },
+      { category: "story" },
+    ),
+    true,
+  );
+});
 
 test("ordinary seeded play is deterministic and reaches only death or survival", () => {
   const first = simulateRun(1);
@@ -82,6 +131,11 @@ test("a broad ordinary seed audit has victories, deaths, and no soft locks", () 
   assert.equal(audit.victories.length + audit.deaths.length, audit.runs.length);
   assert.ok(audit.victories.length > 0);
   assert.ok(audit.deaths.length > 0);
+  for (const run of audit.runs) assert.equal(run.stallReason, null);
+  for (const run of audit.victories) {
+    assert.ok(run.state.story.totalWorldCardsResolved >= 30);
+    assert.ok(run.state.story.totalWorldCardsResolved <= 40);
+  }
 });
 
 test("boosted structural runs traverse all beats and reach both ending-specific Final Images", () => {

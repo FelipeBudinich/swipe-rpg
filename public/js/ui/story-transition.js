@@ -120,6 +120,13 @@ function storyProgressPercent(state, arc, calculateStoryProgress) {
   return Math.max(0, Math.min(100, percent));
 }
 
+const PRIORITY_CARD_MODES = new Set(["combat", "combatReward", "loot", "levelUp"]);
+
+function hasPriorityCardSurface(state) {
+  const category = state?.currentCardData?.category ?? state?.currentCard?.category;
+  return PRIORITY_CARD_MODES.has(state?.mode) || PRIORITY_CARD_MODES.has(category);
+}
+
 export function deriveStoryHud(state, {
   arcById = {},
   calculateStoryProgress,
@@ -127,19 +134,24 @@ export function deriveStoryHud(state, {
   const arc = resolveStoryArc(state, arcById);
   const { beat, index, beats } = resolveCurrentBeat(state, arc);
   const progressPercent = storyProgressPercent(state, arc, calculateStoryProgress);
+  const arcTitle = arc.title ?? state?.story?.arcTitle ?? DEFAULT_ARC.title;
+  const beatName = beat?.name ?? state?.story?.currentBeatName ?? STORY_BEAT_NAMES[index] ?? STORY_BEAT_NAMES[0];
+  const beatNumber = index + 1;
+  const beatCount = beats.length;
   return {
     arcId: arc.id ?? state?.story?.arcId ?? DEFAULT_ARC.id,
-    arcTitle: arc.title ?? state?.story?.arcTitle ?? DEFAULT_ARC.title,
+    arcTitle,
     beatId: beat?.id ?? state?.story?.currentBeatId ?? DEFAULT_ARC.beats[0].id,
-    beatName: beat?.name ?? state?.story?.currentBeatName ?? STORY_BEAT_NAMES[index] ?? STORY_BEAT_NAMES[0],
-    beatNumber: index + 1,
-    beatCount: beats.length,
+    beatName,
+    beatNumber,
+    beatCount,
     progressPercent,
-    progressLabel: `Story progress: ${Math.round(progressPercent)} percent`,
+    progressLabel: `${arcTitle}. Beat ${beatNumber} of ${beatCount}: ${beatName}. Story progress: ${Math.round(progressPercent)} percent.`,
   };
 }
 
 export function deriveTransitionPresentation(state, { arcById = {} } = {}) {
+  if (hasPriorityCardSurface(state)) return null;
   const story = state?.story ?? {};
   const pendingBeatId = typeof story.pendingInterstitialBeatId === "string"
     ? story.pendingInterstitialBeatId
@@ -168,6 +180,7 @@ export function deriveTransitionPresentation(state, { arcById = {} } = {}) {
 }
 
 export function isStoryTransitionActive(state) {
+  if (hasPriorityCardSurface(state)) return false;
   return Boolean(
     state?.mode === "storyTransition" ||
     typeof state?.story?.pendingInterstitialBeatId === "string",

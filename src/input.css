@@ -299,12 +299,7 @@
     padding: 0.4rem 0.5rem;
   }
 
-  #player-hud > div:first-child {
-    margin-bottom: 0.25rem;
-  }
-
   #story-hud {
-    margin-top: 0.2rem;
     padding-top: 0.2rem;
     padding-bottom: 0.25rem;
   }
@@ -313,8 +308,14 @@
     margin-bottom: 0.15rem;
   }
 
-  #player-hud h1 {
-    display: none;
+  #level-xp-hud {
+    margin-top: 0.2rem;
+    padding-top: 0.2rem;
+    padding-bottom: 0.25rem;
+  }
+
+  #level-xp-hud > dl {
+    margin-bottom: 0.15rem;
   }
 
   #card {
@@ -348,6 +349,12 @@
     padding-bottom: 0.3rem;
   }
 
+  #card-combat-status {
+    margin-top: 0.2rem;
+    padding-top: 0.2rem;
+    padding-bottom: 0.25rem;
+  }
+
   #card figure {
     padding-top: 0.2rem;
     padding-bottom: 0.2rem;
@@ -366,17 +373,26 @@
     display: none;
   }
 
-  #app[data-mode="combat"] #enemy-hud {
-    padding-top: 0.25rem;
-    padding-bottom: 0.25rem;
-  }
-
   #app[data-mode="combat"] #card {
     min-height: 11rem !important;
   }
 
   #app[data-mode="combat"] #card-art {
     height: 3.25rem !important;
+  }
+
+  #app[data-mode="combatReward"] #card {
+    min-height: 12rem !important;
+  }
+
+  #app[data-mode="combatReward"] #card-art {
+    height: 3.25rem !important;
+  }
+
+  #card-reward-summary {
+    gap: 0.15rem;
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
   }
 
   #app[data-mode="combat"] #player-hud .mt-1\.5 {

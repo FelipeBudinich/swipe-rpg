@@ -97,7 +97,7 @@ const feedback = createFeedbackController({
     hp: document.getElementById("hud-hp"),
     mp: document.getElementById("hud-mp"),
     xp: document.getElementById("hud-xp"),
-    gold: document.getElementById("hud-gold"),
+    gold: document.getElementById("inventory-open"),
   },
 });
 

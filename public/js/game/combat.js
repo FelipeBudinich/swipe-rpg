@@ -2,7 +2,6 @@ import { enemies as DEFAULT_ENEMIES } from "../data/enemies.js";
 import { items as DEFAULT_ITEMS } from "../data/items.js";
 import { randomFloat, randomInt, weightedChoice } from "../rng.js";
 import { getDerivedStats } from "./equipment.js";
-import { grantXp } from "./progression.js";
 import { requirementsMet } from "./requirements.js";
 
 export const INTENTS = Object.freeze(["attack", "opening", "charge", "hesitate"]);
@@ -363,54 +362,50 @@ function finishEnemy(state, enemy) {
   let working = state;
   const goldRoll = randomInt(working.rngState, enemy.goldMin ?? 0, enemy.goldMax ?? 0);
   working = { ...working, rngState: goldRoll.state };
-  working = grantXp(working, enemy.xpReward ?? 0);
   const drop = rollDrop(working.rngState, enemy);
   working = { ...working, rngState: drop.state };
+  const xpAwarded = Math.max(0, Number(enemy.xpReward ?? 0));
 
   const defeated = { ...(working.run.enemiesDefeated ?? {}) };
   defeated[enemy.id] = Number(defeated[enemy.id] ?? 0) + 1;
   const queue = [...(working.run.forcedCardQueue ?? [])];
-  if (drop.itemId) {
-    queue.push({
-      cardId: "loot",
-      itemId: drop.itemId,
-    });
-  }
+  const rewardId = `${enemy.id}:${working.decisionCount}`;
+  queue.push({
+    cardId: "combat-reward",
+    rewardId,
+    enemyId: enemy.id,
+    originBeatId: working.encounter?.originBeatId ?? working.story?.currentBeatId ?? null,
+    xpAwarded,
+    goldAwarded: goldRoll.value,
+    itemId: drop.itemId,
+  });
   const defeatFacts = enemy.story?.onDefeatFacts ?? {};
-  const rewarded = {
-    ...working,
-    player: { ...working.player, gold: working.player.gold + goldRoll.value },
-  };
 
   return {
     state: {
-      ...rewarded,
+      ...working,
       mode: "exploration",
       encounter: null,
       story: {
-        ...rewarded.story,
-        facts: { ...(rewarded.story?.facts ?? {}), ...defeatFacts },
+        ...working.story,
+        facts: { ...(working.story?.facts ?? {}), ...defeatFacts },
       },
       run: {
-        ...rewarded.run,
+        ...working.run,
         forcedCardQueue: queue,
         turnsSinceEncounter: 0,
-        lastCombatTurn: rewarded.decisionCount,
+        lastCombatTurn: working.decisionCount,
         enemiesDefeated: defeated,
-        goldEarned: Number(rewarded.run.goldEarned ?? 0) + goldRoll.value,
-        itemsFound: Number(rewarded.run.itemsFound ?? 0) + (drop.itemId ? 1 : 0),
       },
       meta: {
-        ...rewarded.meta,
-        discoveredEnemyIds: addUnique(rewarded.meta.discoveredEnemyIds ?? [], enemy.id),
-        discoveredItemIds: drop.itemId
-          ? addUnique(rewarded.meta.discoveredItemIds ?? [], drop.itemId)
-          : rewarded.meta.discoveredItemIds,
+        ...working.meta,
+        discoveredEnemyIds: addUnique(working.meta.discoveredEnemyIds ?? [], enemy.id),
       },
     },
     goldAwarded: goldRoll.value,
-    xpAwarded: Number(enemy.xpReward ?? 0),
+    xpAwarded,
     itemDrop: drop.itemId,
+    rewardId,
   };
 }
 
@@ -475,7 +470,7 @@ export function resolveCombatAction(
       enemyDamage: 0,
       enemyDefeated: true,
       evaded: false,
-      resultText: `${enemy.name} falls. You gain ${finished.xpAwarded} XP and ${finished.goldAwarded} gold.`,
+      resultText: `${enemy.name} falls. The spoils of battle are ready.`,
     };
   }
 

@@ -140,7 +140,7 @@ test("major interstitials block binary cards until explicitly dismissed", () => 
   assert.equal(continued.card.story.role, "anchor");
 });
 
-test("Midpoint orders intro, Iron Wyvern, level-up, loot, and aftermath", () => {
+test("Midpoint orders intro, Iron Wyvern, battle rewards, level-up, and aftermath", () => {
   let next = getNextCard(stateAtBeat("midpoint", 48));
   assert.equal(next.card.story.role, "anchor");
   assert.match(next.card.id, /^midpoint-/);
@@ -160,15 +160,18 @@ test("Midpoint orders intro, Iron Wyvern, level-up, loot, and aftermath", () => 
   });
   assert.equal(defeated.state.story.facts.ironWyvernDefeated, true);
   assert.equal(defeated.state.run.enemiesDefeated[EMBER_CROWN_ARC.midbossId], 1);
-  assert.equal(defeated.card.category, "levelUp");
+  assert.equal(defeated.card.category, "combatReward");
+  assert.equal(defeated.card.reward.enemyId, EMBER_CROWN_ARC.midbossId);
+  assert.equal(defeated.card.reward.itemId, "dawn-compass");
 
-  const leveled = resolveVisible(defeated.state, defeated.card);
-  assert.equal(leveled.card.category, "loot");
-  const looted = resolveVisible(leveled.state, leveled.card, "right");
-  assert.equal(looted.card.id, "midpoint-wyvern-aftermath");
-  assert.equal(looted.state.story.currentBeatId, "midpoint");
+  const rewarded = resolveVisible(defeated.state, defeated.card, "right");
+  assert.equal(rewarded.card.category, "levelUp");
+  assert.ok(rewarded.state.player.inventory.includes("dawn-compass"));
+  const leveled = resolveVisible(rewarded.state, rewarded.card);
+  assert.equal(leveled.card.id, "midpoint-wyvern-aftermath");
+  assert.equal(leveled.state.story.currentBeatId, "midpoint");
 
-  const aftermath = resolveVisible(looted.state, looted.card);
+  const aftermath = resolveVisible(leveled.state, leveled.card);
   assert.equal(aftermath.state.story.currentBeatId, "badGuysCloseIn");
   assert.equal(aftermath.state.story.cardsResolvedByBeat.midpoint, 2);
 });
@@ -192,10 +195,12 @@ test("Finale reserves two preparations, then resolves Malrec before ending choic
   });
   assert.equal(bossResult.state.story.facts.malrecDefeated, true);
   assert.notEqual(bossResult.state.mode, "victory");
+  assert.equal(bossResult.card.category, "combatReward");
+  assert.equal(bossResult.card.reward.enemyId, EMBER_CROWN_ARC.finalBossId);
 
-  next = bossResult;
-  while (["levelUp", "loot"].includes(next.state.mode)) {
-    next = resolveVisible(next.state, next.card, next.state.mode === "loot" ? "right" : "left");
+  next = resolveVisible(bossResult.state, bossResult.card);
+  while (next.state.mode === "levelUp") {
+    next = resolveVisible(next.state, next.card, "left");
   }
   assert.equal(next.card.id, "finale-fate-of-the-crown");
   assert.notEqual(next.state.mode, "victory");

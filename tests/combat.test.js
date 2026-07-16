@@ -61,10 +61,25 @@ test("a lethal player hit ends combat before enemy retaliation", () => {
   assert.equal(resolved.enemyDamage, 0);
   assert.equal(resolved.state.player.hp, 9);
   assert.equal(resolved.state.encounter, null);
-  assert.equal(resolved.state.player.gold, 14);
+  assert.equal(resolved.state.player.gold, 10);
+  assert.equal(resolved.state.player.xp, 0);
   assert.equal(resolved.state.run.enemiesDefeated[enemy.id], 1);
   assert.ok(resolved.state.meta.discoveredEnemyIds.includes(enemy.id));
-  assert.deepEqual(resolved.state.run.forcedCardQueue, ["level-up", { cardId: "loot", itemId: "test-drop" }]);
+  assert.equal(resolved.state.run.goldEarned, 0);
+  assert.equal(resolved.state.run.itemsFound, 0);
+  assert.ok(!resolved.state.meta.discoveredItemIds.includes("test-drop"));
+  assert.deepEqual(resolved.state.run.forcedCardQueue, [
+    {
+      cardId: "combat-reward",
+      rewardId: "test-fiend:0",
+      enemyId: "test-fiend",
+      originBeatId: "openingImage",
+      xpAwarded: 25,
+      goldAwarded: 4,
+      itemId: "test-drop",
+    },
+  ]);
+  assert.match(resolved.resultText, /spoils of battle are ready/i);
 });
 
 test("final boss defeat records concrete facts without entering victory", () => {
@@ -103,7 +118,17 @@ test("final boss defeat records concrete facts without entering victory", () => 
   assert.notEqual(resolved.state.mode, "victory");
   assert.equal(resolved.state.story.facts.malrecDefeated, true);
   assert.equal(resolved.state.story.facts.cinderTitanSealed, true);
-  assert.deepEqual(resolved.state.run.forcedCardQueue, ["level-up"]);
+  assert.deepEqual(resolved.state.run.forcedCardQueue, [
+    {
+      cardId: "combat-reward",
+      rewardId: "test-final-boss:0",
+      enemyId: "test-final-boss",
+      originBeatId: "finale",
+      xpAwarded: 25,
+      goldAwarded: 4,
+      itemId: null,
+    },
+  ]);
   assert.equal(resolved.state.story.endingId, null);
 });
 

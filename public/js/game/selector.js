@@ -30,7 +30,7 @@ export function isSelectableStorylet(card) {
   if (!card || typeof card.id !== "string") return false;
   if (Number(card.baseWeight ?? 0) <= 0) return false;
   if (card.forcedOnly || card.system) return false;
-  if (["levelUp", "gameOver", "victory", "combat", "loot"].includes(card.category)) return false;
+  if (["levelUp", "gameOver", "victory", "combat", "combatReward", "loot"].includes(card.category)) return false;
   if (["death", "victory", "level-up", "boss-intro"].includes(card.id)) return false;
   // Authored fallback content is reserved for the deterministic fallback path.
   if (card.tags?.includes("fallback")) return false;

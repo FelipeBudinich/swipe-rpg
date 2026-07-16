@@ -105,3 +105,16 @@ test("successor entry uses a generation-guarded bounded timer", () => {
     /elements\.card\.dataset\.swipeState = "idle";[\s\S]*?\}, 200\);/,
   );
 });
+
+test("main routes gold feedback to the Pack button without removed HUD nodes", () => {
+  assert.match(
+    MAIN_SOURCE,
+    /gold: document\.getElementById\("inventory-open"\)/,
+  );
+  assert.doesNotMatch(MAIN_SOURCE, /getElementById\("hud-gold"\)/);
+  assert.match(MAIN_SOURCE, /if \(drawerController\?\.isOpen\) renderer\.renderInventory\(state/);
+  assert.match(
+    MAIN_SOURCE,
+    /onOpen\(\) \{[\s\S]*?renderer\.renderInventory\(state, \{ derivedStats: getDerivedStats\(state, ITEMS\) \}\)/,
+  );
+});

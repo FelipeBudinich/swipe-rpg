@@ -38,6 +38,7 @@ const VALID_ENEMY_INTENTS = new Set(["attack", "opening", "charge", "hesitate"])
 const VALID_MODES = new Set([
   "exploration",
   "combat",
+  "combatReward",
   "loot",
   "levelUp",
   "storyTransition",

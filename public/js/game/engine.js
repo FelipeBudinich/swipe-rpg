@@ -14,7 +14,7 @@ import {
   inventoryHasItem,
   removeInventoryItem,
 } from "./equipment.js";
-import { applyLevelUpChoice } from "./progression.js";
+import { applyLevelUpChoice, grantXp } from "./progression.js";
 import { cardHasAvailableChoice, choiceIsAvailable, requirementsMet } from "./requirements.js";
 import {
   advanceBeat,
@@ -193,6 +193,7 @@ function withModeForCard(state, card) {
   if (card?.id === "level-up" || card?.category === "levelUp") mode = "levelUp";
   if (card?.id === "death" || card?.category === "gameOver") mode = "gameOver";
   if (card?.id === "victory" || card?.category === "victory") mode = "victory";
+  if (card?.category === "combatReward") mode = "combatReward";
   if (card?.category === "loot") mode = "loot";
   if (card?.category === "combat") mode = "combat";
   return { ...state, mode };
@@ -312,6 +313,129 @@ function recordTerminal(state, terminal, content) {
   return { ...working, mode: death ? "gameOver" : "victory", encounter: null };
 }
 
+function nonNegativeRewardAmount(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? Math.max(0, amount) : 0;
+}
+
+function rewardItemIsProtected(item) {
+  return Boolean(
+    item &&
+      (["key", "quest", "questItem"].includes(item.type) ||
+        item.keyItem === true ||
+        item.questCritical === true ||
+        item.sellable === false ||
+        item.discardable === false),
+  );
+}
+
+export function buildCombatRewardCard(entry, contentInput = DEFAULT_CONTENT) {
+  const content = normalizeContent(contentInput);
+  const enemyId = typeof entry?.enemyId === "string" ? entry.enemyId : "unknown-enemy";
+  const itemId = typeof entry?.itemId === "string" && entry.itemId ? entry.itemId : null;
+  const rewardId =
+    typeof entry?.rewardId === "string" && entry.rewardId
+      ? entry.rewardId
+      : `${enemyId}:${Number.isFinite(Number(entry?.decisionCount)) ? Number(entry.decisionCount) : "unknown"}`;
+  const enemy = content.enemies.find(({ id }) => id === enemyId) ?? null;
+  const item = itemId ? createItemMap(content.items).get(itemId) ?? null : null;
+  const protectedItem = rewardItemIsProtected(item);
+  const reward = {
+    rewardId,
+    enemyId,
+    originBeatId: typeof entry?.originBeatId === "string" ? entry.originBeatId : null,
+    xpAwarded: nonNegativeRewardAmount(entry?.xpAwarded),
+    goldAwarded: nonNegativeRewardAmount(entry?.goldAwarded),
+    itemId,
+  };
+
+  let left;
+  let right;
+  if (!itemId) {
+    const continueChoice = {
+      label: "Continue",
+      resultText: "The battle rewards are gathered.",
+      effects: [],
+    };
+    left = { ...continueChoice };
+    right = { ...continueChoice };
+  } else if (!item) {
+    const unavailableChoice = {
+      label: "Continue",
+      detail: "Item unavailable · XP and gold remain safe",
+      resultText: "The known rewards are secured, though the strange item cannot be recovered.",
+      effects: [],
+    };
+    left = { ...unavailableChoice };
+    right = { ...unavailableChoice };
+  } else if (protectedItem) {
+    const keepChoice = {
+      label: "Keep",
+      detail: item.name,
+      resultText: `${item.name} is secured with the battle rewards.`,
+      preview: [{ resource: "inventory", label: `Keep ${item.name}` }],
+      effects: [],
+    };
+    left = { ...keepChoice };
+    right = { ...keepChoice };
+  } else if (item.type === "equipment") {
+    const saleValue = nonNegativeRewardAmount(item.sellValue);
+    left = {
+      label: `Sell · +${saleValue} gold`,
+      resultText: `${item.name} is traded for ${saleValue} gold.`,
+      preview: [{ resource: "gold", delta: saleValue }],
+      effects: [],
+    };
+    right = {
+      label: "Keep",
+      detail: item.name,
+      resultText: `${item.name} is packed safely away.`,
+      preview: [{ resource: "inventory", label: `Keep ${item.name}` }],
+      effects: [],
+    };
+  } else if (item.type === "consumable") {
+    left = {
+      label: "Use now",
+      detail: item.name,
+      resultText: `${item.name} is used at once.`,
+      effects: [...(item.useEffects ?? item.effects ?? [])],
+    };
+    right = {
+      label: "Keep",
+      detail: item.name,
+      resultText: `${item.name} is packed safely away.`,
+      preview: [{ resource: "inventory", label: `Keep ${item.name}` }],
+      effects: [],
+    };
+  } else {
+    const keepChoice = {
+      label: "Keep",
+      detail: item.name,
+      resultText: `${item.name} is secured with the battle rewards.`,
+      preview: [{ resource: "inventory", label: `Keep ${item.name}` }],
+      effects: [],
+    };
+    left = { ...keepChoice };
+    right = { ...keepChoice };
+  }
+
+  return {
+    id: `combat-reward:${rewardId}`,
+    category: "combatReward",
+    speaker: enemy?.name ? `${enemy.name} defeated` : "Enemy defeated",
+    title: "Battle Rewards",
+    text: "The spoils of battle are yours.",
+    artId: item?.artId ?? enemy?.artId ?? "player",
+    reward,
+    originBeatId: reward.originBeatId,
+    story: { countsTowardStory: false, originBeatId: reward.originBeatId },
+    left,
+    right,
+  };
+}
+
+// Legacy loot cards remain loadable for compatible version-two saves. New
+// victories use combatReward and this path can be removed only with a deliberate migration.
 function buildLootCard(item) {
   const equipment = item?.type === "equipment";
   return {
@@ -348,6 +472,7 @@ function buildLootCard(item) {
 function queueCard(entry, content) {
   if (isPlayableCard(entry?.card)) return entry.card;
   const cardId = typeof entry === "string" ? entry : entry?.cardId ?? entry?.id;
+  if (cardId === "combat-reward") return buildCombatRewardCard(entry, content);
   if (cardId === "loot") return buildLootCard(createItemMap(content.items).get(entry.itemId));
   if (cardId === "level-up") return TERMINAL_CARDS.levelUp;
   return content.cardById[cardId] ?? TERMINAL_CARDS[cardId] ?? null;
@@ -362,9 +487,43 @@ function withQueueOrigin(card, entry) {
   };
 }
 
-function isRewardEntry(entry, content) {
+function isCombatRewardEntry(entry, content) {
+  return queueCard(entry, content)?.category === "combatReward";
+}
+
+function isLegacyRewardEntry(entry, content) {
   const card = queueCard(entry, content);
   return Boolean(card && ["loot", "levelUp"].includes(card.category));
+}
+
+function deferCurrentCardBehindCombatReward(state, card) {
+  if (!card || card.category === "combatReward") return state;
+
+  // Combat rounds can be rebuilt from the persisted encounter. Terminal cards
+  // are likewise rebuilt from terminal state, so neither needs a queue copy.
+  if (["combat", "gameOver", "victory"].includes(card.category)) {
+    return clearCurrentCard(state);
+  }
+
+  const persistedCard =
+    isPlayableCard(state.currentCardData) && state.currentCardData.id === card.id
+      ? state.currentCardData
+      : card;
+  const originBeatId =
+    persistedCard.originBeatId ?? persistedCard.story?.originBeatId ?? null;
+  const resumedEntry = {
+    card: persistedCard,
+    resumeSource: state.currentCardSource ?? "current",
+    ...(originBeatId ? { originBeatId } : {}),
+  };
+
+  return clearCurrentCard({
+    ...state,
+    run: {
+      ...state.run,
+      forcedCardQueue: [resumedEntry, ...(state.run.forcedCardQueue ?? [])],
+    },
+  });
 }
 
 function takeQueueEntry(state, content, predicate = () => true) {
@@ -560,10 +719,16 @@ export function getNextCard(inputState, contentInput = DEFAULT_CONTENT) {
   }
 
   let current = getCurrentCard(working, content);
+  const hasQueuedCombatReward = (working.run.forcedCardQueue ?? []).some((entry) =>
+    isCombatRewardEntry(entry, content));
+  if (hasQueuedCombatReward && current?.category !== "combatReward") {
+    working = deferCurrentCardBehindCombatReward(working, current);
+    current = null;
+  }
   if (
     working.story?.pendingInterstitialBeatId &&
     current &&
-    !["combat", "loot", "levelUp"].includes(current.category)
+    !["combat", "combatReward", "loot", "levelUp"].includes(current.category)
   ) {
     working = clearCurrentCard(working);
     current = null;
@@ -582,10 +747,19 @@ export function getNextCard(inputState, contentInput = DEFAULT_CONTENT) {
     working = { ...working, encounter: null, mode: "exploration" };
   }
 
-  // Reward and level-up entries may have been appended behind a beat-local
-  // aftermath; pull them forward without disturbing the relative reward order.
-  while ((working.run.forcedCardQueue ?? []).some((entry) => isRewardEntry(entry, content))) {
-    const taken = takeQueueEntry(working, content, isRewardEntry);
+  // The battle reward is the first post-combat surface even when an authored
+  // aftermath was queued before the encounter began.
+  while ((working.run.forcedCardQueue ?? []).some((entry) => isCombatRewardEntry(entry, content))) {
+    const taken = takeQueueEntry(working, content, isCombatRewardEntry);
+    working = taken.state;
+    const presented = presentQueueEntry(working, taken.entry, content, "combat-reward");
+    if (presented) return presented;
+  }
+
+  // Legacy loot and level-up entries keep their existing relative order while
+  // remaining ahead of beat-local aftermath, transitions, and story cards.
+  while ((working.run.forcedCardQueue ?? []).some((entry) => isLegacyRewardEntry(entry, content))) {
+    const taken = takeQueueEntry(working, content, isLegacyRewardEntry);
     working = taken.state;
     const presented = presentQueueEntry(working, taken.entry, content, "reward");
     if (presented) return presented;
@@ -620,7 +794,11 @@ export function getNextCard(inputState, contentInput = DEFAULT_CONTENT) {
     ) {
       continue;
     }
-    const presented = presentQueueEntry(working, entry, content, "forced");
+    const source =
+      entry && typeof entry === "object" && typeof entry.resumeSource === "string"
+        ? entry.resumeSource
+        : "forced";
+    const presented = presentQueueEntry(working, entry, content, source);
     if (presented) return presented;
   }
 
@@ -698,8 +876,75 @@ function resolveLoot(state, card, direction, content) {
   return { state: addInventoryItem(state, item.id), resultText: card.right.resultText };
 }
 
+export function resolveCombatReward(
+  state,
+  card,
+  direction,
+  contentInput = DEFAULT_CONTENT,
+) {
+  const content = normalizeContent(contentInput);
+  const reward = card?.reward && typeof card.reward === "object" ? card.reward : {};
+  const xpAwarded = nonNegativeRewardAmount(reward.xpAwarded);
+  const goldAwarded = nonNegativeRewardAmount(reward.goldAwarded);
+  const itemId = typeof reward.itemId === "string" && reward.itemId ? reward.itemId : null;
+
+  let working = {
+    ...state,
+    player: { ...state.player, gold: Number(state.player.gold ?? 0) + goldAwarded },
+    run: {
+      ...state.run,
+      goldEarned: Number(state.run.goldEarned ?? 0) + goldAwarded,
+    },
+  };
+  working = grantXp(working, xpAwarded);
+
+  let resultText = card?.[direction]?.resultText ?? "The battle rewards are gathered.";
+  if (itemId) {
+    working = {
+      ...working,
+      run: {
+        ...working.run,
+        itemsFound: Number(working.run.itemsFound ?? 0) + 1,
+      },
+      meta: {
+        ...working.meta,
+        discoveredItemIds: addUnique(working.meta.discoveredItemIds ?? [], itemId),
+      },
+    };
+
+    const item = createItemMap(content.items).get(itemId) ?? null;
+    if (!item) {
+      resultText = "The known rewards are secured, though the strange item cannot be recovered.";
+    } else if (rewardItemIsProtected(item)) {
+      working = addInventoryItem(working, item.id);
+    } else if (item.type === "equipment" && direction === "left") {
+      const saleValue = nonNegativeRewardAmount(item.sellValue);
+      working = {
+        ...working,
+        player: { ...working.player, gold: Number(working.player.gold ?? 0) + saleValue },
+        run: {
+          ...working.run,
+          goldEarned: Number(working.run.goldEarned ?? 0) + saleValue,
+        },
+      };
+    } else if (item.type === "consumable" && direction === "left") {
+      working = applyEffects(working, item.useEffects ?? item.effects ?? [], content);
+    } else {
+      working = addInventoryItem(working, item.id);
+    }
+  }
+
+  return {
+    state: clampPlayerResources(working, content.items),
+    resultText,
+  };
+}
+
 function markResolved(state, card) {
-  const dynamic = card.id.startsWith("combat:") || card.id.startsWith("loot:");
+  const dynamic =
+    card.id.startsWith("combat:") ||
+    card.id.startsWith("combat-reward:") ||
+    card.id.startsWith("loot:");
   return {
     ...state,
     run: {
@@ -724,6 +969,8 @@ function feedbackTone({ after, before, card, combat }) {
   if (after.mode === "gameOver") return "death";
   if (after.mode === "victory" || after.story?.completed) return "victory";
   if (card.category === "levelUp") return "level-up";
+  if (card.category === "combatReward" && after.player.hp < before.player.hp) return "danger";
+  if (card.category === "combatReward") return "reward";
   if (card.category === "loot") return "loot";
   if (combat?.enemyDefeated) return "reward";
   if (after.player.hp < before.player.hp) return "danger";
@@ -829,6 +1076,10 @@ export function resolveChoice(
     combatResult = resolveCombatChoice(working, direction, content.enemies, content.items);
     working = combatResult.state;
     resultText = combatResult.resultText ?? resultText;
+  } else if (resolvedMode === "combatReward" || current.category === "combatReward") {
+    const rewardResult = resolveCombatReward(working, current, direction, content);
+    working = rewardResult.state;
+    resultText = rewardResult.resultText;
   } else if (resolvedMode === "levelUp" || current.id === "level-up") {
     working = applyLevelUpChoice(working, direction, content.items);
   } else if (resolvedMode === "loot" || current.category === "loot") {
