@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Moss knight</title>
+  <desc id="desc">An empty prism knight overgrown with luminous moss raises a broad shield in an old salute.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#11183a"/><stop offset="1" stop-color="#26323f"/></linearGradient><linearGradient id="mail" x2="0" y2="1"><stop stop-color="#66658d"/><stop offset="1" stop-color="#292943"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="74" cy="70" r="38" fill="#f4d07a"/><circle cx="89" cy="57" r="36" fill="#161b3d"/>
+  <path d="M0 343q87-43 177-16t223-11v84H0Z" fill="#10152c"/>
+  <path d="M159 121q42-34 83 0l7 84-98 1Z" fill="url(#mail)" stroke="#b1adeb" stroke-width="6"/>
+  <path d="M165 145h71M174 162h53" stroke="#16172d" stroke-width="9"/><circle cx="184" cy="150" r="4" fill="#6fe7dd"/><circle cx="217" cy="150" r="4" fill="#6fe7dd"/>
+  <path d="M141 202q61-30 119 1l40 138H102Z" fill="url(#mail)" stroke="#aaa6ef" stroke-width="6"/>
+  <path d="M164 208l36 31 36-31" fill="none" stroke="#6fe7dd" stroke-width="7"/>
+  <path d="M138 222 91 276M262 221l43 54" stroke="#5a5c7f" stroke-width="19" stroke-linecap="round"/>
+  <path d="M46 235q60-37 105 0v102q-51 36-105 0Z" fill="#424867" stroke="#bcb7ff" stroke-width="7"/><path d="M99 229v121M48 281h101" stroke="#6fe7dd" stroke-width="5"/>
+  <path d="M301 155v190M286 170l15-29 15 29" fill="none" stroke="#f5c66d" stroke-width="9" stroke-linecap="round"/>
+  <path d="M143 337l-13 44M252 337l15 44" stroke="#24233d" stroke-width="19" stroke-linecap="round"/>
+  <path d="M152 113q-15-30-34-14 20 14 20 42M241 119q28-21 39-2-25 5-31 32M132 231q-28 0-25 22 18-13 35-5" fill="#5a8a61" stroke="#8bcf80" stroke-width="4"/>
+  <circle cx="123" cy="97" r="5" fill="#bde78a"/><circle cx="278" cy="116" r="5" fill="#bde78a"/>
+</svg>

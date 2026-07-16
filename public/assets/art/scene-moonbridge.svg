@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Crooked moonbridge</title>
+  <desc id="desc">A rope bridge hung with tiny lanterns crosses a glowing prism fault beneath a crescent moon.</desc>
+  <defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#11183b"/><stop offset="1" stop-color="#261f45"/></linearGradient><linearGradient id="rift" x2="0" y2="1"><stop stop-color="#6fe7dd" stop-opacity="0"/><stop offset="1" stop-color="#6fe7dd"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="200" cy="71" r="42" fill="#f7d782"/><circle cx="218" cy="57" r="40" fill="#151a3d"/>
+  <path d="M0 205 94 169l41 47-33 184H0ZM400 199l-91-38-45 61 34 178h102Z" fill="#19192f" stroke="#5a5680" stroke-width="5"/>
+  <path d="M148 191q51 46 106 0M142 239q58 48 117 0" fill="none" stroke="#c5a26e" stroke-width="5"/>
+  <path d="M145 198l5 44M161 208l4 45M178 218l2 46M196 223v47M215 219l-2 46M233 210l-5 44M251 199l-6 43" stroke="#7d614f" stroke-width="5"/>
+  <path d="M153 226q47 34 94 0l12 29q-62 43-118 0Z" fill="#4c3b4a"/>
+  <path d="M139 187v-44M260 188v-47" stroke="#aaa6ef" stroke-width="8"/><path d="M125 141h28M247 140h27" stroke="#f5c66d" stroke-width="5"/>
+  <circle cx="153" cy="207" r="5" fill="#fff1a7"/><circle cx="181" cy="224" r="5" fill="#7ce9df"/><circle cx="216" cy="221" r="5" fill="#fff1a7"/><circle cx="246" cy="204" r="5" fill="#7ce9df"/>
+  <path d="M107 400 183 276l23 124ZM293 400l-78-124-22 124Z" fill="url(#rift)" opacity=".6"/>
+  <path d="M191 293l9 14 9-14M177 329l23 28 23-28" fill="none" stroke="#e2ffff" stroke-width="4" opacity=".8"/>
+</svg>

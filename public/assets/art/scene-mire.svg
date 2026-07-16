@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Mirror mire</title>
+  <desc id="desc">Black mirror-water reflects an impossible moon and a beckoning traveler among crooked reeds.</desc>
+  <defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#111735"/><stop offset=".55" stop-color="#262042"/><stop offset=".56" stop-color="#12172e"/><stop offset="1" stop-color="#0b1125"/></linearGradient><linearGradient id="water" x2="1"><stop stop-color="#7ce9df" stop-opacity=".1"/><stop offset=".5" stop-color="#7068b0" stop-opacity=".45"/><stop offset="1" stop-color="#ff8d78" stop-opacity=".08"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="89" cy="73" r="39" fill="#f5d27b"/><circle cx="104" cy="59" r="37" fill="#151938"/>
+  <path d="M0 222q83-31 160 1t240-6v183H0Z" fill="url(#water)"/>
+  <path d="M52 271q69-23 143 0t158-4M12 318q83-25 174 3t201-4M60 365q89-20 160 0t129-3" fill="none" stroke="#7771aa" stroke-width="3" opacity=".65"/>
+  <path d="M34 253l8-99M49 251l22-77M340 250l-7-104M356 247l19-72M298 231l18-65M104 235l-15-62" stroke="#31395a" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="215" cy="160" r="18" fill="#b77b75"/><path d="M190 182q26-16 51 0l20 70h-91Z" fill="#34304e" stroke="#918bc6" stroke-width="4"/>
+  <path d="M201 252l-8 41M230 252l9 41M190 194l-26 31M240 195l25 25" stroke="#aaa6ef" stroke-width="8" stroke-linecap="round"/>
+  <g transform="translate(0 520) scale(1 -1)" opacity=".55"><circle cx="215" cy="160" r="18" fill="#6fe7dd"/><path d="M190 182q26-16 51 0l20 70h-91Z" fill="#4e4776"/><path d="M190 194l-34 18M240 195l33 8" stroke="#d6d3ff" stroke-width="8" stroke-linecap="round"/></g>
+  <circle cx="304" cy="313" r="31" fill="#74e7dc" opacity=".35"/><circle cx="316" cy="302" r="29" fill="#10162c"/>
+</svg>

@@ -1,0 +1,22 @@
+node_modules/
+
+# Environment and package-manager credentials
+.env
+.env.*
+!.env.example
+.npmrc.local
+npm-debug.log*
+
+# Test and build scratch output
+coverage/
+.tmp/
+tmp/
+*.tmp
+
+# Operating-system and editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

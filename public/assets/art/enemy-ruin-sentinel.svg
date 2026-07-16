@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Ruin sentinel</title>
+  <desc id="desc">A towering faceted guardian unfolds six precise arms around a glowing prism core.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0f1638"/><stop offset="1" stop-color="#30234b"/></linearGradient><linearGradient id="stone" x2="0" y2="1"><stop stop-color="#686493"/><stop offset="1" stop-color="#292842"/></linearGradient><radialGradient id="core"><stop stop-color="#fff8bd"/><stop offset=".4" stop-color="#6fe7dd"/><stop offset="1" stop-color="#6fe7dd" stop-opacity="0"/></radialGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="73" cy="67" r="36" fill="#f5d17b"/><circle cx="88" cy="54" r="34" fill="#151a3d"/>
+  <path d="M42 356V132h48v224M310 356V110h49v246" fill="none" stroke="#514f79" stroke-width="11"/>
+  <path d="M169 82h62l28 66-59 46-59-46Z" fill="url(#stone)" stroke="#bcb7ff" stroke-width="6"/><path d="M170 127h60" stroke="#15162d" stroke-width="12"/><circle cx="185" cy="127" r="4" fill="#6fe7dd"/><circle cx="216" cy="127" r="4" fill="#6fe7dd"/>
+  <path d="M141 183q59-35 119 0l29 142-89 50-90-50Z" fill="url(#stone)" stroke="#aaa6ef" stroke-width="6"/>
+  <circle cx="200" cy="242" r="62" fill="url(#core)" opacity=".45"/><path d="M200 207l28 38-28 40-29-40Z" fill="#6fe7dd" stroke="#f1fffc" stroke-width="5"/>
+  <path d="M145 205 88 167M132 242l-76 0M143 280l-63 50M255 205l57-42M268 242h78M257 280l66 49" stroke="#59577d" stroke-width="18" stroke-linecap="round"/>
+  <path d="M74 158l28 17-21 19M43 229l30 13-30 14M68 333l22-22 13 27M325 153l-28 18 22 18M357 229l-31 13 31 14M333 334l-23-22-13 27" fill="#7d78a9" stroke="#c8c4ff" stroke-width="4"/>
+  <path d="M158 341l-16 42M242 341l18 42" stroke="#24233d" stroke-width="22" stroke-linecap="round"/>
+</svg>

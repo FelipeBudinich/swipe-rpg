@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Glass serpent</title>
+  <desc id="desc">A transparent serpent coils through broken reflections, its prism fangs shining.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101739"/><stop offset="1" stop-color="#30214b"/></linearGradient><linearGradient id="scale" x2="1" y2="1"><stop stop-color="#7ce9df" stop-opacity=".85"/><stop offset=".5" stop-color="#8a7bda" stop-opacity=".72"/><stop offset="1" stop-color="#ff9a85" stop-opacity=".7"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="314" cy="69" r="39" fill="#f5d17b"/><circle cx="330" cy="56" r="37" fill="#151a3d"/>
+  <path d="M0 326q100-29 188-2t212-8v84H0Z" fill="#0d1228"/>
+  <path d="M93 316q-48-78 37-112t135 26q35 43-24 74t-111-9q-40-34 1-75t122-27q85 17 70 92" fill="none" stroke="url(#scale)" stroke-width="37" stroke-linecap="round"/>
+  <path d="M93 316q-48-78 37-112t135 26q35 43-24 74t-111-9q-40-34 1-75t122-27q85 17 70 92" fill="none" stroke="#effffb" stroke-width="4" stroke-dasharray="5 19" opacity=".75"/>
+  <path d="M276 127q46-39 80 5l4 72-74 20-46-51Z" fill="url(#scale)" stroke="#effffb" stroke-width="6"/>
+  <path d="M278 142 251 88l51 31 22-58 12 61 47-25-29 52" fill="url(#scale)" stroke="#c8c4ff" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="312" cy="157" r="7" fill="#ffe88d"/><circle cx="340" cy="151" r="7" fill="#ffe88d"/><path d="M329 165v38" stroke="#5d2850" stroke-width="4"/>
+  <path d="M303 205l13 34 14-38 15 31 9-38" fill="#fff" stroke="#bcb7ff" stroke-width="3"/>
+  <path d="M44 348h312" stroke="#6fe7dd" stroke-width="3" stroke-dasharray="3 14" opacity=".65"/>
+  <path d="M65 264l31-25M119 341l26-31M217 338l28-28M305 325l32-17" stroke="#8076d4" stroke-width="5" opacity=".6"/>
+</svg>

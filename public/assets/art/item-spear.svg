@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Moonfork spear</title><desc id="desc">A long silver spear ending in a forked crescent prism point.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#10183a"/><stop offset="1" stop-color="#302249"/></linearGradient><linearGradient id="tip" x2="1" y2="1"><stop stop-color="#effffb"/><stop offset="1" stop-color="#6fe7dd"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/><circle cx="200" cy="200" r="145" fill="none" stroke="#5f5987" stroke-width="5" stroke-dasharray="4 15"/>
+  <path d="M104 338 274 139" stroke="#a3745c" stroke-width="16" stroke-linecap="round"/><path d="M263 151 299 49l17 72 67 28-106 15Z" fill="url(#tip)" stroke="#e9fffb" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M294 80l6 62M332 126l-40 28" stroke="#766dd0" stroke-width="4"/><path d="M89 345l23 20" stroke="#ff8d78" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="96" cy="76" r="28" fill="#f5cf78"/><circle cx="107" cy="66" r="26" fill="#13183a"/>
+</svg>

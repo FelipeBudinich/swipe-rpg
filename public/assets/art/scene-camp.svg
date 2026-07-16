@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Emberless caravan camp</title>
+  <desc id="desc">Empty crescent-topped tents and wagons surround a mysteriously warm fire under the prism stars.</desc>
+  <defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#12183a"/><stop offset="1" stop-color="#35203e"/></linearGradient><radialGradient id="fire"><stop stop-color="#fff0a8"/><stop offset=".35" stop-color="#ff9b70"/><stop offset="1" stop-color="#ff715f" stop-opacity="0"/></radialGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="316" cy="68" r="39" fill="#f5d07a"/><circle cx="332" cy="54" r="37" fill="#161a3d"/>
+  <path d="M0 311q84-49 171-15t229-4v108H0Z" fill="#11152d"/>
+  <path d="M42 287 103 180l61 107Z" fill="#45344f" stroke="#9a83ba" stroke-width="6"/><path d="M103 180v107M76 236h54" stroke="#6fe7dd" stroke-width="4" opacity=".65"/>
+  <path d="M265 276v-75h101v75M275 201l19-29h50l22 29" fill="#352a47" stroke="#806ca0" stroke-width="6"/><circle cx="287" cy="278" r="14" fill="#10142a" stroke="#aaa6ef" stroke-width="5"/><circle cx="345" cy="278" r="14" fill="#10142a" stroke="#aaa6ef" stroke-width="5"/>
+  <ellipse cx="205" cy="330" rx="111" ry="69" fill="url(#fire)" opacity=".55"/>
+  <path d="M182 337q-17-32 14-69 5 24 19 34 15-22 20-43 31 45 3 78Z" fill="#ff8d72"/><path d="M200 337q-6-22 12-42 5 18 14 27 9-13 11-25 14 24-2 40Z" fill="#ffe799"/>
+  <path d="M153 346l96-31M157 315l91 35" stroke="#5a3440" stroke-width="11" stroke-linecap="round"/>
+  <path d="M22 366h356" stroke="#f5c66d" stroke-width="3" stroke-dasharray="3 14"/>
+  <circle cx="62" cy="112" r="3" fill="#fff"/><circle cx="115" cy="72" r="4" fill="#7ce9df"/><circle cx="194" cy="101" r="3" fill="#fff"/><circle cx="248" cy="55" r="4" fill="#ffb091"/>
+</svg>

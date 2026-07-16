@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Twin-moon knot</title><desc id="desc">Two luminous cords braid around a warm fragment of crescent skyglass.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101739"/><stop offset="1" stop-color="#312049"/></linearGradient><linearGradient id="cord" x2="1"><stop stop-color="#f5c66d"/><stop offset="1" stop-color="#ff8d78"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/><circle cx="200" cy="200" r="150" fill="none" stroke="#615a89" stroke-width="5" stroke-dasharray="4 15"/>
+  <path d="M107 73q188 106 54 249M293 73Q105 179 239 322" fill="none" stroke="url(#cord)" stroke-width="15" stroke-linecap="round"/><path d="M121 77q168 101 56 235M279 77Q111 178 223 315" fill="none" stroke="#6fe7dd" stroke-width="5"/>
+  <path d="M200 136 259 195 200 280 141 195Z" fill="#7771aa" stroke="#effffb" stroke-width="6"/><circle cx="200" cy="204" r="43" fill="#f5d17b"/><circle cx="217" cy="190" r="40" fill="#554c79"/>
+  <circle cx="101" cy="69" r="13" fill="#ff8d78"/><circle cx="299" cy="69" r="13" fill="#6fe7dd"/>
+</svg>

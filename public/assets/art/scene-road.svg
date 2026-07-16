@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Moon road through prism ruins</title>
+  <desc id="desc">A silver road winds between leaning violet ruins toward a distant caravan beneath twin crescents.</desc>
+  <defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#10183b"/><stop offset="1" stop-color="#30234f"/></linearGradient><linearGradient id="road" x2="0" y2="1"><stop stop-color="#7771aa"/><stop offset="1" stop-color="#292746"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#sky)"/>
+  <circle cx="308" cy="74" r="41" fill="#f6d57d"/><circle cx="325" cy="60" r="39" fill="#151a3d"/>
+  <circle cx="70" cy="94" r="20" fill="#8ce8dc" opacity=".75"/><circle cx="78" cy="88" r="19" fill="#12183a"/>
+  <path d="M0 271Q75 223 145 263T275 246T400 260V400H0Z" fill="#11152e"/>
+  <path d="M184 400Q160 337 193 284T218 197Q265 277 238 325T258 400Z" fill="url(#road)"/>
+  <path d="M39 285V164h50v103M48 165l18-42 17 42M310 270V137h52v127M319 137l13-35 20 35" fill="none" stroke="#595580" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M115 271v-82h39v74M123 189l10-26 14 26" fill="none" stroke="#3e416b" stroke-width="8"/>
+  <path d="M208 261h42l12 25h-67Z" fill="#6f4969" stroke="#c29bd1" stroke-width="4"/><circle cx="209" cy="289" r="10" fill="#14162e" stroke="#aaa6ef" stroke-width="4"/><circle cx="249" cy="289" r="10" fill="#14162e" stroke="#aaa6ef" stroke-width="4"/>
+  <path d="M204 260l11-18h22l13 18" fill="none" stroke="#f3cf77" stroke-width="5"/>
+  <circle cx="199" cy="256" r="5" fill="#fff2a8"/><circle cx="259" cy="256" r="5" fill="#fff2a8"/>
+  <path d="M15 321h370" stroke="#6fe7dd" stroke-width="3" stroke-dasharray="3 16" opacity=".5"/>
+</svg>

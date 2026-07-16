@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en" class="h-full bg-[#07131d]">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="description" content="Lumenwake: The Prism Road, a swipe-driven fantasy JRPG journey.">
+    <meta name="theme-color" content="#07131d">
+    <title>Lumenwake: The Prism Road</title>
+    <link rel="stylesheet" href="/assets/app.css">
+    <script type="module" src="/js/main.js"></script>
+  </head>
+  <body class="min-h-full overflow-x-hidden bg-[#07131d] font-sans text-[#f4ead8] antialiased selection:bg-[#d8a94d] selection:text-[#07131d]">
+    <a
+      href="#card"
+      class="fixed left-3 top-3 z-50 -translate-y-24 rounded-md bg-[#f4ead8] px-4 py-3 font-bold text-[#07131d] shadow-xl transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]"
+    >Skip to the current choice</a>
+
+    <div
+      id="app"
+      class="safe-screen relative mx-auto flex w-full max-w-[34rem] flex-col gap-2"
+      data-mode="exploration"
+      aria-busy="true"
+    >
+      <header id="player-hud" class="shrink-0 rounded-2xl border border-[#36505d] bg-[#102633]/95 p-2.5 shadow-lg" aria-label="Player status">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <p class="truncate text-[0.65rem] font-bold uppercase tracking-[0.24em] text-[#79d4c5]">Lumenwake</p>
+            <h1 class="truncate text-sm font-black tracking-wide text-[#fff6e6]">The Prism Road</h1>
+          </div>
+          <button
+            id="inventory-open"
+            type="button"
+            class="min-h-11 shrink-0 rounded-xl border border-[#d8a94d]/70 bg-[#201d26] px-3 text-xs font-extrabold uppercase tracking-wider text-[#ffd77d] shadow-sm transition hover:bg-[#332b2e] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#102633] active:translate-y-px"
+            aria-controls="inventory-drawer"
+            aria-expanded="false"
+          >Pack</button>
+        </div>
+
+        <dl class="grid grid-cols-3 gap-1.5 text-center">
+          <div class="rounded-lg bg-[#091923] px-1.5 py-1" data-resource="level">
+            <dt class="text-[0.58rem] font-bold uppercase tracking-wider text-[#9bb3ba]">Level</dt>
+            <dd id="hud-level" class="text-sm font-black tabular-nums text-[#fff6e6]">1</dd>
+          </div>
+          <div class="relative rounded-lg bg-[#091923] px-1.5 py-1" data-resource="gold">
+            <dt class="text-[0.58rem] font-bold uppercase tracking-wider text-[#9bb3ba]">Gold</dt>
+            <dd class="text-sm font-black tabular-nums text-[#ffd77d]"><span id="hud-gold">10</span><span id="hud-gold-delta" class="resource-delta" aria-hidden="true"></span></dd>
+          </div>
+          <div class="rounded-lg bg-[#091923] px-1.5 py-1" data-resource="journey">
+            <dt class="text-[0.58rem] font-bold uppercase tracking-wider text-[#9bb3ba]">Depth</dt>
+            <dd id="hud-journey" class="text-sm font-black tabular-nums text-[#fff6e6]">0 / 20</dd>
+          </div>
+        </dl>
+
+        <div class="mt-1.5 grid grid-cols-2 gap-1.5">
+          <section class="relative rounded-lg bg-[#091923] px-2 py-1.5" data-resource="hp" aria-label="Health">
+            <div class="mb-1 flex items-baseline justify-between gap-2 text-[0.66rem] font-bold uppercase tracking-wider text-[#ffb3a7]">
+              <span>HP</span>
+              <span class="tabular-nums"><span id="hud-hp">30 / 30</span><span id="hud-hp-delta" class="resource-delta" aria-hidden="true"></span></span>
+            </div>
+            <progress id="hud-hp-bar" class="resource-meter" data-meter="hp" value="30" max="30" aria-label="Health: 30 of 30">30 of 30</progress>
+          </section>
+          <section class="relative rounded-lg bg-[#091923] px-2 py-1.5" data-resource="mp" aria-label="Magic points">
+            <div class="mb-1 flex items-baseline justify-between gap-2 text-[0.66rem] font-bold uppercase tracking-wider text-[#aebcff]">
+              <span>MP</span>
+              <span class="tabular-nums"><span id="hud-mp">10 / 10</span><span id="hud-mp-delta" class="resource-delta" aria-hidden="true"></span></span>
+            </div>
+            <progress id="hud-mp-bar" class="resource-meter" data-meter="mp" value="10" max="10" aria-label="Magic points: 10 of 10">10 of 10</progress>
+          </section>
+          <section class="relative col-span-2 rounded-lg bg-[#091923] px-2 py-1.5" data-resource="xp" aria-label="Experience">
+            <div class="mb-1 flex items-baseline justify-between gap-2 text-[0.62rem] font-bold uppercase tracking-wider text-[#a7e5bd]">
+              <span>XP</span>
+              <span class="tabular-nums"><span id="hud-xp">0 / 20</span><span id="hud-xp-delta" class="resource-delta" aria-hidden="true"></span></span>
+            </div>
+            <progress id="hud-xp-bar" class="resource-meter" data-meter="xp" value="0" max="20" aria-label="Experience: 0 of 20">0 of 20</progress>
+          </section>
+        </div>
+      </header>
+
+      <section
+        id="enemy-hud"
+        class="shrink-0 rounded-xl border border-[#b65f65]/70 bg-[#291d26] px-3 py-2 shadow-md"
+        aria-label="Enemy status"
+        data-active="false"
+        data-resource="enemyHp"
+        hidden
+      >
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <p id="enemy-name" class="truncate text-sm font-black text-[#ffe3d1]">Unknown foe</p>
+            <p class="text-[0.62rem] font-bold uppercase tracking-wider text-[#d7a6a7]">Intent: <span id="enemy-intent" class="text-[#fff6e6]">Watching</span></p>
+          </div>
+          <span id="enemy-hp" class="shrink-0 text-xs font-black tabular-nums text-[#ffb3a7]">0 / 0 HP</span>
+        </div>
+        <progress id="enemy-hp-bar" class="resource-meter mt-1" data-meter="enemy" value="0" max="1" aria-label="Enemy health">0 of 1</progress>
+      </section>
+
+      <main id="game-main" class="flex min-h-0 flex-1 flex-col">
+        <p
+          id="result-live"
+          class="result-feedback mb-1 min-h-5 shrink-0 px-2 text-center text-xs font-bold tracking-wide text-[#ffd77d]"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        ></p>
+
+        <section id="card-stack" class="relative flex min-h-0 flex-1 items-stretch justify-center" aria-label="Current decision">
+          <div class="pointer-events-none absolute inset-x-3 bottom-1 top-2 rounded-[1.4rem] border border-[#28434f] bg-[#102633] opacity-70 shadow-lg" aria-hidden="true"></div>
+
+          <article
+            id="card"
+            class="relative z-10 flex min-h-[clamp(18.25rem,47dvh,29rem)] w-full flex-col overflow-hidden rounded-[1.4rem] border border-[#567481] bg-[#f4ead8] text-[#142630] shadow-[0_16px_45px_rgba(0,0,0,0.38)] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d]"
+            tabindex="0"
+            aria-labelledby="card-title"
+            aria-describedby="card-text card-detail"
+            aria-busy="true"
+            data-swipe-state="idle"
+            data-preview-direction="none"
+          >
+            <div id="choice-left-overlay" class="choice-overlay absolute inset-y-0 left-0 z-20 flex w-1/2 items-center justify-start bg-gradient-to-r from-[#174d50]/95 to-transparent px-4" aria-hidden="true">
+              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-left text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg">← <span id="choice-left-overlay-label">Left choice</span></span>
+            </div>
+            <div id="choice-right-overlay" class="choice-overlay absolute inset-y-0 right-0 z-20 flex w-1/2 items-center justify-end bg-gradient-to-l from-[#643b46]/95 to-transparent px-4" aria-hidden="true">
+              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-right text-xs font-black uppercase tracking-wider text-[#ffd8cf] shadow-lg"><span id="choice-right-overlay-label">Right choice</span> →</span>
+            </div>
+
+            <header class="shrink-0 border-b border-[#b7a98f] bg-[#e6d8bd] px-4 py-2 text-center">
+              <p id="card-speaker" class="text-[0.63rem] font-black uppercase tracking-[0.2em] text-[#285b5a]">The road awaits</p>
+              <h2 id="card-title" class="mt-0.5 text-lg font-black leading-tight text-[#142630]">Reading the trail…</h2>
+            </header>
+
+            <figure class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_45%,#f8e7bc_0%,#b8c4ad_58%,#66848a_100%)] px-4 py-2">
+              <img id="card-art" class="h-[clamp(6.5rem,17dvh,10rem)] w-full select-none object-contain drop-shadow-[0_8px_8px_rgba(7,19,29,0.32)]" alt="" width="320" height="180" decoding="async" draggable="false">
+            </figure>
+
+            <div class="shrink-0 space-y-1.5 border-t border-[#b7a98f] bg-[#f4ead8] px-4 py-3 text-center">
+              <p id="card-text" class="text-sm font-semibold leading-snug text-[#20343d]">Preparing your caravan's first step toward the moonlit prism ruins.</p>
+              <p id="card-detail" class="min-h-4 text-[0.67rem] font-bold uppercase tracking-wide text-[#70584f]"></p>
+              <p id="card-resource-preview" class="min-h-4 text-[0.67rem] font-black text-[#356e6b]" aria-label="Affected resources"></p>
+            </div>
+          </article>
+        </section>
+
+        <div class="mt-2 grid shrink-0 grid-cols-2 gap-2" aria-label="Available choices">
+          <button
+            id="choice-left"
+            type="button"
+            class="min-h-14 rounded-xl border border-[#4e9b93] bg-[#123c40] px-3 py-2 text-left text-[#d8fff7] shadow-md transition hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Choose left"
+          >
+            <span class="block text-[0.58rem] font-bold uppercase tracking-[0.16em] text-[#86cfc5]">Left · A / ←</span>
+            <span id="choice-left-label" class="block text-sm font-black leading-tight">Wait</span>
+            <span id="choice-left-detail" class="mt-0.5 block text-[0.62rem] font-bold leading-tight text-[#b4dfd9]"></span>
+          </button>
+          <button
+            id="choice-right"
+            type="button"
+            class="min-h-14 rounded-xl border border-[#b66f72] bg-[#542f3b] px-3 py-2 text-right text-[#ffe9e1] shadow-md transition hover:bg-[#6b3c48] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Choose right"
+          >
+            <span class="block text-[0.58rem] font-bold uppercase tracking-[0.16em] text-[#e0a9a9]">Right · D / →</span>
+            <span id="choice-right-label" class="block text-sm font-black leading-tight">Continue</span>
+            <span id="choice-right-detail" class="mt-0.5 block text-[0.62rem] font-bold leading-tight text-[#edc2be]"></span>
+          </button>
+        </div>
+        <p class="mt-1 shrink-0 text-center text-[0.6rem] font-semibold tracking-wide text-[#87a1aa]">Swipe the card or use either button. Your choice is final.</p>
+      </main>
+
+      <p id="card-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+
+    <dialog id="inventory-drawer" class="inventory-sheet" aria-labelledby="inventory-heading">
+      <div class="mx-auto flex max-h-[min(82dvh,44rem)] w-full max-w-[34rem] flex-col overflow-hidden rounded-t-3xl border border-b-0 border-[#567481] bg-[#102633] text-[#f4ead8] shadow-2xl sm:rounded-3xl sm:border">
+        <header class="flex shrink-0 items-center justify-between gap-3 border-b border-[#36505d] px-4 py-3">
+          <div>
+            <p class="text-[0.6rem] font-black uppercase tracking-[0.2em] text-[#79d4c5]">Loadout</p>
+            <h2 id="inventory-heading" class="text-lg font-black">Equipment &amp; Pack</h2>
+          </div>
+          <button id="inventory-close" type="button" class="min-h-11 min-w-11 rounded-xl border border-[#567481] bg-[#091923] px-3 font-black text-[#fff6e6] hover:bg-[#183442] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]" aria-label="Close equipment and inventory">Close</button>
+        </header>
+
+        <div class="min-h-0 overflow-y-auto overscroll-contain px-4 py-3">
+          <p id="inventory-stats" class="mb-3 rounded-lg bg-[#091923] px-3 py-2 text-center text-xs font-bold text-[#b9cbd0]">Attack 5 · Defense 2 · Max HP 30 · Max MP 10</p>
+
+          <section aria-labelledby="equipped-heading">
+            <h3 id="equipped-heading" class="mb-2 text-xs font-black uppercase tracking-[0.16em] text-[#ffd77d]">Equipped</h3>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div id="equipped-weapon" class="min-h-16 rounded-xl border border-[#36505d] bg-[#091923] p-2" data-slot="weapon">
+                <p class="text-[0.58rem] font-bold uppercase tracking-wider text-[#87a1aa]">Weapon</p>
+                <p class="mt-1 text-xs font-bold">Empty</p>
+              </div>
+              <div id="equipped-armor" class="min-h-16 rounded-xl border border-[#36505d] bg-[#091923] p-2" data-slot="armor">
+                <p class="text-[0.58rem] font-bold uppercase tracking-wider text-[#87a1aa]">Armor</p>
+                <p class="mt-1 text-xs font-bold">Empty</p>
+              </div>
+              <div id="equipped-charm" class="min-h-16 rounded-xl border border-[#36505d] bg-[#091923] p-2" data-slot="charm">
+                <p class="text-[0.58rem] font-bold uppercase tracking-wider text-[#87a1aa]">Charm</p>
+                <p class="mt-1 text-xs font-bold">Empty</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="mt-4" aria-labelledby="pack-heading">
+            <div class="mb-2 flex items-center justify-between gap-2">
+              <h3 id="pack-heading" class="text-xs font-black uppercase tracking-[0.16em] text-[#ffd77d]">Pack</h3>
+              <span id="inventory-count" class="text-[0.65rem] font-bold text-[#9bb3ba]">0 items</span>
+            </div>
+            <div id="inventory-content" class="grid gap-2" aria-live="polite">
+              <p id="inventory-empty" class="rounded-xl border border-dashed border-[#567481] p-4 text-center text-xs font-semibold text-[#9bb3ba]">Your pack is empty.</p>
+            </div>
+          </section>
+
+          <section class="mt-5 border-t border-[#36505d] pt-3" aria-labelledby="run-controls-heading">
+            <h3 id="run-controls-heading" class="sr-only">Run controls</h3>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="new-run" type="button" class="min-h-11 rounded-xl border border-[#4e9b93] bg-[#123c40] px-3 py-2 text-xs font-black text-[#d8fff7] hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]">New Run</button>
+              <button id="reset-data" type="button" class="min-h-11 rounded-xl border border-[#b66f72] bg-[#542f3b] px-3 py-2 text-xs font-black text-[#ffe9e1] hover:bg-[#6b3c48] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d]">Reset All Data</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="confirm-dialog" class="confirm-sheet" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <div class="w-[min(calc(100vw-2rem),24rem)] rounded-2xl border border-[#567481] bg-[#102633] p-5 text-[#f4ead8] shadow-2xl">
+        <h2 id="confirm-title" class="text-lg font-black">Confirm action</h2>
+        <p id="confirm-message" class="mt-2 text-sm leading-relaxed text-[#b9cbd0]">This cannot be undone.</p>
+        <div class="mt-5 grid grid-cols-2 gap-2">
+          <button id="confirm-cancel" type="button" class="min-h-11 rounded-xl border border-[#567481] bg-[#091923] px-3 text-sm font-bold hover:bg-[#183442] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]">Cancel</button>
+          <button id="confirm-accept" type="button" class="min-h-11 rounded-xl border border-[#b66f72] bg-[#542f3b] px-3 text-sm font-black text-[#ffe9e1] hover:bg-[#6b3c48] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d]">Confirm</button>
+        </div>
+      </div>
+    </dialog>
+
+    <noscript>
+      <div class="fixed inset-x-4 top-4 z-50 mx-auto max-w-md rounded-xl border border-[#b66f72] bg-[#291d26] p-4 text-center font-bold text-[#ffe9e1] shadow-2xl">Lumenwake needs JavaScript enabled to begin a run.</div>
+    </noscript>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">The last lantern</title><desc id="desc">An extinguished prism lantern rests on the road while a distant caravan carries its lights onward.</desc>
+  <defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#0c112b"/><stop offset="1" stop-color="#1f1931"/></linearGradient><linearGradient id="road" x2="0" y2="1"><stop stop-color="#4d496b"/><stop offset="1" stop-color="#151529"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="304" cy="69" r="39" fill="#b59b67"/><circle cx="320" cy="56" r="37" fill="#10142d"/>
+  <path d="M0 290q80-39 163-12t237-5v127H0Z" fill="#0a0e21"/><path d="M168 400q-5-73 34-119t34-99q53 91 20 218Z" fill="url(#road)"/>
+  <path d="M81 103h46l9 58H72Z" fill="#24213a" stroke="#706b94" stroke-width="5"/><path d="M84 103q16-25 32 0" fill="none" stroke="#8e88b8" stroke-width="5"/><path d="M104 161v52" stroke="#5d577b" stroke-width="6"/>
+  <path d="M261 218h38l13 22h-62Z" fill="#49334c"/><circle cx="264" cy="243" r="8" fill="#0d1024"/><circle cx="299" cy="243" r="8" fill="#0d1024"/><circle cx="251" cy="213" r="4" fill="#f0ce7b"/><circle cx="311" cy="213" r="4" fill="#f0ce7b"/>
+  <path d="M130 292h96l-10 90h-77Z" fill="#25223b" stroke="#7771aa" stroke-width="6"/><path d="M143 292q35-42 70 0" fill="none" stroke="#8f88bc" stroke-width="7"/><path d="M168 313h23l9 35-20 17-20-17Z" fill="#151526" stroke="#514c6d" stroke-width="4"/>
+  <path d="M26 377h348" stroke="#6d667d" stroke-width="3" stroke-dasharray="3 15"/>
+</svg>

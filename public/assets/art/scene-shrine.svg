@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Twin-moon prism shrine</title>
+  <desc id="desc">A moonlit roadside shrine holds two glowing bowls beneath a silent stone bell.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#11193b"/><stop offset="1" stop-color="#30234e"/></linearGradient><linearGradient id="altar" x2="0" y2="1"><stop stop-color="#615b8b"/><stop offset="1" stop-color="#26243f"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="91" cy="69" r="37" fill="#f6d37d"/><circle cx="106" cy="56" r="35" fill="#151a3d"/>
+  <path d="M67 338V154h266v184M48 154h304L314 112H88Z" fill="#24233f" stroke="#7771aa" stroke-width="9" stroke-linejoin="round"/>
+  <path d="M114 338V174M287 338V174" stroke="#5a567f" stroke-width="13"/>
+  <path d="M175 171q25-31 50 0l14 55h-78Z" fill="url(#altar)" stroke="#aaa6ef" stroke-width="5"/>
+  <path d="M177 183h46" stroke="#f5c66d" stroke-width="4" stroke-dasharray="4 7"/>
+  <path d="M194 225v27" stroke="#b9b5f5" stroke-width="6"/><circle cx="194" cy="259" r="7" fill="#f5c66d"/>
+  <path d="M91 332h218l30 50H61Z" fill="url(#altar)" stroke="#7771aa" stroke-width="6"/>
+  <path d="M93 319q32-37 64 0Z" fill="#6fe7dd" stroke="#effffb" stroke-width="4"/><path d="M244 319q32-37 64 0Z" fill="#f4cf78" stroke="#fff7d4" stroke-width="4"/>
+  <path d="M127 277l14-27 14 27M248 274l17-33 17 33" fill="none" stroke="#5d5987" stroke-width="6"/>
+  <circle cx="144" cy="301" r="5" fill="#fff"/><circle cx="276" cy="301" r="5" fill="#fff"/>
+  <path d="M34 382h332" stroke="#6fe7dd" stroke-width="3" stroke-dasharray="3 14" opacity=".55"/>
+</svg>

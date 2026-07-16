@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Moon-road merchant</title>
+  <desc id="desc">A smiling merchant displays glowing remedies from a many-drawered caravan cart.</desc>
+  <defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#141a3c"/><stop offset="1" stop-color="#322040"/></linearGradient><linearGradient id="coat" x2="1" y2="1"><stop stop-color="#aa5574"/><stop offset="1" stop-color="#4d315b"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="320" cy="71" r="38" fill="#f7d782"/><circle cx="335" cy="57" r="36" fill="#171a3b"/>
+  <path d="M27 304h346v73H27Z" fill="#15152a" stroke="#625682" stroke-width="5"/>
+  <path d="M45 303V190h118v113M55 190l17-35h79l17 35" fill="#422e50" stroke="#a58ed0" stroke-width="6"/>
+  <path d="M66 211h36v30H66Zm49 0h36v30h-36ZM66 251h36v30H66Zm49 0h36v30h-36Z" fill="#201b36" stroke="#745f96" stroke-width="3"/>
+  <circle cx="228" cy="140" r="35" fill="#d99a79"/>
+  <path d="M193 134q7-55 67-7l-10 16q-22-18-56 8Z" fill="#25213c"/><path d="M215 153q14 13 29-1" fill="none" stroke="#6b3447" stroke-width="4" stroke-linecap="round"/>
+  <path d="M183 180q44-25 89 5l40 120H153Z" fill="url(#coat)" stroke="#d4a9cf" stroke-width="4"/>
+  <path d="M204 185l24 26 24-24" fill="none" stroke="#f5cb72" stroke-width="6"/>
+  <path d="M181 207l-36 49M275 209l38 45" stroke="#d99a79" stroke-width="14" stroke-linecap="round"/>
+  <path d="M124 244h55v51h-55Z" fill="#242242" stroke="#f5cb72" stroke-width="4"/><path d="M135 244q15-22 31 0" fill="none" stroke="#f5cb72" stroke-width="4"/>
+  <path d="M286 244h42v54h-42Z" fill="#70e4d9" opacity=".8" stroke="#effffb" stroke-width="4"/><path d="M296 232h22v13h-22" fill="#b9b5f5"/>
+  <circle cx="151" cy="270" r="10" fill="#ff8c78"/><path d="M44 340h312" stroke="#6fe7dd" stroke-width="3" stroke-dasharray="4 13"/>
+</svg>

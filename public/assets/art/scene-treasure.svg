@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Prism ruin treasure</title>
+  <desc id="desc">A many-locked coffer and living prism seed glow inside a dark geometric vault.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101638"/><stop offset="1" stop-color="#352148"/></linearGradient><radialGradient id="glow"><stop stop-color="#fff5bf"/><stop offset=".38" stop-color="#74e7dc" stop-opacity=".8"/><stop offset="1" stop-color="#766dd0" stop-opacity="0"/></radialGradient><linearGradient id="chest" x2="0" y2="1"><stop stop-color="#6c5b88"/><stop offset="1" stop-color="#2a2949"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="202" cy="235" r="160" fill="url(#glow)" opacity=".4"/>
+  <path d="M48 350V118h304v232M49 118l65-63h172l65 63" fill="#1e203e" stroke="#5d5987" stroke-width="9"/>
+  <path d="M116 338V213q0-58 84-58t84 58v125Z" fill="#242345" stroke="#7771aa" stroke-width="6"/>
+  <path d="M111 262h178l23 84H88Z" fill="url(#chest)" stroke="#b0a9e7" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M112 262q18-79 88-79t88 79Z" fill="#514a72" stroke="#b0a9e7" stroke-width="6"/>
+  <path d="M176 250h48v61h-48Z" fill="#f4cb72" stroke="#fff1aa" stroke-width="4"/><circle cx="200" cy="274" r="8" fill="#382848"/><path d="M200 281v16" stroke="#382848" stroke-width="6"/>
+  <path d="M148 262v83M252 262v83" stroke="#77618e" stroke-width="5"/>
+  <path d="M200 76 218 111 200 149 181 111Z" fill="#7ce9df" stroke="#f2fffd" stroke-width="4"/><path d="M200 76v73M181 111h37" stroke="#766dd0" stroke-width="3"/>
+  <circle cx="200" cy="111" r="60" fill="url(#glow)" opacity=".55"/>
+  <path d="M20 369h360" stroke="#f5c66d" stroke-width="3" stroke-dasharray="3 15"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Prism road armor</title><desc id="desc">Layered caravan armor with overlapping violet prism plates and a moon clasp.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101739"/><stop offset="1" stop-color="#302149"/></linearGradient><linearGradient id="mail" x2="0" y2="1"><stop stop-color="#7771aa"/><stop offset="1" stop-color="#292843"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/><circle cx="200" cy="200" r="145" fill="none" stroke="#615a89" stroke-width="5" stroke-dasharray="4 15"/>
+  <path d="M127 101 175 69h50l48 32 61 53-38 61-30-26 13 155H121l13-155-30 26-38-61Z" fill="url(#mail)" stroke="#bcb7ff" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M174 69q25 54 52 0M134 190l67 38 65-39M128 251l73 39 72-39" fill="none" stroke="#6fe7dd" stroke-width="5"/>
+  <path d="M154 112h94l18 77-65 39-67-38Z" fill="#48486e" opacity=".65"/><circle cx="201" cy="128" r="19" fill="#f5c66d"/><circle cx="209" cy="121" r="17" fill="#4a466e"/>
+</svg>

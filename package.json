@@ -1,0 +1,27 @@
+{
+  "name": "lumenwake-prism-road",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A mobile-first, swipe-driven fantasy JRPG roguelite.",
+  "type": "module",
+  "scripts": {
+    "build:css": "tailwindcss -i ./src/input.css -o ./public/assets/app.css --minify",
+    "build": "npm run build:css && npm run verify:production",
+    "watch:css": "tailwindcss -i ./src/input.css -o ./public/assets/app.css --watch",
+    "start": "node server.js",
+    "dev": "npm run build:css && node --watch server.js",
+    "test": "node --test",
+    "check:security": "node scripts/check-security.mjs",
+    "verify:production": "node scripts/verify-production.mjs",
+    "audit:runs": "node scripts/audit-runs.mjs 256"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "tailwindcss": "^4.1.0"
+  },
+  "engines": {
+    "node": "24.x",
+    "npm": "11.x"
+  }
+}

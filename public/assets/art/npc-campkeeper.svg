@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Caravan campkeeper</title>
+  <desc id="desc">A sturdy campkeeper tends a crescent-handled kettle beside moonlit wagons.</desc>
+  <defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#12183a"/><stop offset="1" stop-color="#39213d"/></linearGradient><radialGradient id="fire"><stop stop-color="#ffeaa0"/><stop offset=".45" stop-color="#ff8d72"/><stop offset="1" stop-color="#ff6d6d" stop-opacity="0"/></radialGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/>
+  <circle cx="70" cy="72" r="35" fill="#f4ce78"/><circle cx="84" cy="58" r="33" fill="#171a3b"/>
+  <ellipse cx="204" cy="331" rx="152" ry="62" fill="url(#fire)" opacity=".55"/>
+  <path d="M24 295h98V203H44l-20 29ZM282 295h94v-73l-23-22h-71Z" fill="#29213c" stroke="#65557d" stroke-width="5"/>
+  <circle cx="196" cy="143" r="35" fill="#b96f61"/>
+  <path d="M158 135q35-53 78-4l17 7-13 17q-46-13-83 4Z" fill="#30283f"/><path d="M173 155q23 28 49 0v26q-28 25-49 0Z" fill="#553242"/>
+  <path d="M147 186q49-29 99 1l43 120H111Z" fill="#66506f" stroke="#b8a6d8" stroke-width="4"/>
+  <path d="M165 195l31 24 29-24" fill="none" stroke="#f5cb72" stroke-width="5"/>
+  <path d="M145 215l-40 52M252 216l41 49" stroke="#b96f61" stroke-width="14" stroke-linecap="round"/>
+  <path d="M70 266q0-34 34-34t34 34v34H70Z" fill="#20203b" stroke="#bcb7ff" stroke-width="5"/><path d="M82 250q22-28 44 0" fill="none" stroke="#f5cb72" stroke-width="6"/>
+  <path d="M273 258h43v42h-43Z" fill="#293250" stroke="#74e7dc" stroke-width="4"/><path d="M282 258q11-17 23 0" fill="none" stroke="#74e7dc" stroke-width="4"/>
+  <path d="M161 306l-8 65M235 306l11 65" stroke="#1a162b" stroke-width="15" stroke-linecap="round"/>
+  <path d="M137 338l22 15-31 13M263 340l-20 16 31 12" fill="none" stroke="#ffb06f" stroke-width="8" stroke-linecap="round"/>
+</svg>

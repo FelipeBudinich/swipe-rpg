@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Routekeeper bow</title><desc id="desc">A crescent-shaped darkwood bow strung with a glowing silver wayline.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#11183b"/><stop offset="1" stop-color="#302148"/></linearGradient><linearGradient id="wood" x2="1" y2="1"><stop stop-color="#f5c66d"/><stop offset="1" stop-color="#8e5369"/></linearGradient></defs>
+  <rect width="400" height="400" rx="30" fill="url(#bg)"/><circle cx="200" cy="200" r="145" fill="none" stroke="#615a8a" stroke-width="5" stroke-dasharray="4 15"/>
+  <path d="M120 63q153 137 0 274 79-36 111-137Q199 99 120 63Z" fill="none" stroke="url(#wood)" stroke-width="17" stroke-linecap="round"/><path d="M121 65 121 337" stroke="#effffb" stroke-width="4"/>
+  <path d="M123 201h184M280 175l31 26-31 26" fill="none" stroke="#6fe7dd" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M208 192l23 9-23 9" fill="#f5c66d"/><circle cx="309" cy="83" r="28" fill="#f5cf78"/><circle cx="320" cy="73" r="26" fill="#13183a"/>
+</svg>
