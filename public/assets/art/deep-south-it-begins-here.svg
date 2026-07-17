@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">The Deep South logbook</title>
+  <desc id="desc">A salt-stained logbook and a wandering chart rest beneath a cold ship's lamp.</desc>
+  <defs>
+    <linearGradient id="sea" x2="0" y2="1">
+      <stop stop-color="#06131b"/>
+      <stop offset="1" stop-color="#102e34"/>
+    </linearGradient>
+    <linearGradient id="paper" x2="1" y2="1">
+      <stop stop-color="#ead9b0"/>
+      <stop offset="1" stop-color="#b99b6b"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="30" fill="url(#sea)"/>
+  <circle cx="319" cy="74" r="46" fill="#d8ad61" opacity=".12"/>
+  <path d="M311 18v56l-27 38h70l-27-38V18Z" fill="#173c43" stroke="#5da7a1" stroke-width="4"/>
+  <path d="M289 106h60" stroke="#d8ad61" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="319" cy="118" rx="73" ry="26" fill="#d8ad61" opacity=".13"/>
+  <path d="M0 296q80-30 153 2t128-3q61-24 119 5v100H0Z" fill="#081b23"/>
+  <path d="M53 157l145-25 31 174-145 25Z" fill="url(#paper)" stroke="#5f4939" stroke-width="5"/>
+  <path d="M77 177l99-17M82 203l116-20M87 229l79-14M92 255l112-20M97 281l83-15" stroke="#765e46" stroke-width="4" opacity=".7"/>
+  <path d="M116 148l29 171" stroke="#a65c48" stroke-width="7"/>
+  <path d="M210 176l116 21-25 138-116-21Z" fill="#d7c79d" stroke="#5f4939" stroke-width="5"/>
+  <path d="M225 202q34 32 78 4M217 239q39-22 96 10M206 279q41 17 98-1" fill="none" stroke="#5d8a83" stroke-width="5"/>
+  <path d="M260 205l-10 101M288 211l-19 103" stroke="#8d7657" stroke-width="3" opacity=".7"/>
+  <path d="M245 265l14-18 15 12 18-28" fill="none" stroke="#a65c48" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="292" cy="231" r="7" fill="#a65c48"/>
+  <path d="M38 351q70-22 126 2t111 0q56-23 105 2" fill="none" stroke="#5da7a1" stroke-width="6" opacity=".55"/>
+</svg>

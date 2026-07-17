@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Navigate the southern channels</title>
+  <desc id="desc">A small cutter follows a compass bearing between black waves and unfamiliar stars.</desc>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1">
+      <stop stop-color="#040d15"/>
+      <stop offset=".72" stop-color="#173841"/>
+      <stop offset="1" stop-color="#09202a"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="30" fill="url(#sky)"/>
+  <g fill="#d8ad61">
+    <circle cx="59" cy="69" r="3"/>
+    <circle cx="104" cy="41" r="4"/>
+    <circle cx="146" cy="88" r="3"/>
+    <circle cx="199" cy="48" r="5"/>
+    <circle cx="251" cy="78" r="3"/>
+    <circle cx="319" cy="42" r="4"/>
+    <circle cx="359" cy="96" r="3"/>
+  </g>
+  <path d="M59 69l45-28 42 47 53-40 52 30 68-36 40 54" fill="none" stroke="#5da7a1" stroke-width="2" opacity=".55"/>
+  <circle cx="75" cy="151" r="53" fill="#0c252d" stroke="#b99a62" stroke-width="5"/>
+  <circle cx="75" cy="151" r="38" fill="#102f36" stroke="#5da7a1" stroke-width="3"/>
+  <path d="M75 103l10 43 37 5-37 10-10 39-10-39-37-10 37-5Z" fill="#d8ad61"/>
+  <path d="M75 146l10 15-10 39-10-39Z" fill="#a65c48"/>
+  <path d="M211 198h117l30 63H180Z" fill="#6b5040" stroke="#07151d" stroke-width="7"/>
+  <path d="M228 194l28-36h57l15 40" fill="#17363c" stroke="#a9c3bc" stroke-width="5"/>
+  <path d="M271 157V76M273 83l-58 48h58" fill="#a65c48" stroke="#d8c58e" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M209 261q64 22 149 0l-30 54H224Z" fill="#3f3a34" stroke="#07151d" stroke-width="6"/>
+  <path d="M0 282q52-28 102 0t99 0q50-29 101 0t98 0v118H0Z" fill="#071923"/>
+  <path d="M0 316q51-28 101 0t100 0q50-28 101 0t98 0M0 360q52-27 102 0t99 0q50-28 101 0t98 0" fill="none" stroke="#5da7a1" stroke-width="7" opacity=".62"/>
+</svg>

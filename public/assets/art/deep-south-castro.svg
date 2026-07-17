@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Castro under rain</title>
+  <desc id="desc">Palafitos and a church tower rise above a dark Chiloé channel in slanting rain.</desc>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1">
+      <stop stop-color="#07141d"/>
+      <stop offset=".65" stop-color="#194049"/>
+      <stop offset="1" stop-color="#0b242c"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="30" fill="url(#sky)"/>
+  <circle cx="324" cy="73" r="39" fill="#d8ad61" opacity=".18"/>
+  <path d="M238 49h52v132h-52Z" fill="#c89b58" stroke="#503f35" stroke-width="5"/>
+  <path d="M229 53l35-32 35 32Z" fill="#a65c48" stroke="#503f35" stroke-width="5"/>
+  <path d="M248 80h32v34h-32Z" fill="#0a2029"/>
+  <circle cx="264" cy="97" r="8" fill="#d8ad61"/>
+  <path d="M251 132h26v49h-26Z" fill="#17353a"/>
+  <path d="M27 211l51-45 55 45v90H27ZM111 218l50-39 52 39v83H111ZM190 215l44-34 49 34v86h-93Z" fill="#6d4f45" stroke="#091a21" stroke-width="6"/>
+  <path d="M31 211h102M115 218h98M194 215h89" stroke="#d3b06d" stroke-width="5"/>
+  <path d="M48 232h23v30H48ZM91 230h22v32H91ZM135 238h22v29h-22ZM173 237h22v30h-22ZM214 233h22v31h-22ZM250 232h20v32h-20Z" fill="#d8ad61" opacity=".62"/>
+  <path d="M43 300l-9 67M82 300l5 67M123 300l-10 67M168 300l7 67M209 300l-6 67M256 300l9 67" stroke="#463d37" stroke-width="9"/>
+  <path d="M0 320q83-25 151 0t131-1q61-24 118 4v77H0Z" fill="#071923"/>
+  <path d="M0 354q77-21 146 1t135-2q61-21 119 3" fill="none" stroke="#5da7a1" stroke-width="5" opacity=".6"/>
+  <g stroke="#a6c1bd" stroke-width="3" opacity=".48">
+    <path d="M40 31L12 88M95 17L58 91M151 28l-37 75M216 22l-39 83M335 20l-42 86M389 43l-35 71"/>
+  </g>
+</svg>

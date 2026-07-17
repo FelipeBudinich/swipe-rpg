@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Explore R'lyeh</title>
+  <desc id="desc">Impossible green-black towers lean across one another above flooded streets and a tiny expedition.</desc>
+  <defs>
+    <linearGradient id="void" x2="0" y2="1">
+      <stop stop-color="#030b12"/>
+      <stop offset=".7" stop-color="#153a3c"/>
+      <stop offset="1" stop-color="#071a20"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="30" fill="url(#void)"/>
+  <circle cx="314" cy="79" r="58" fill="#5da7a1" opacity=".12"/>
+  <path d="M39 320L76 66l94 48-41 227ZM127 341l68-294 81 89-42 213ZM237 343l29-216 105-64-27 286Z" fill="#102829" stroke="#507a73" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M76 66l58 129-95 125M195 47l27 164-95 130M371 63l-74 157-60 123" fill="none" stroke="#759b8f" stroke-width="4" opacity=".7"/>
+  <path d="M91 124l32 17-9 49-31-14ZM183 110l35 22-9 47-35-20ZM293 129l38-25-8 54-37 22ZM278 217l34-16-7 45-34 14Z" fill="#071619" stroke="#a65c48" stroke-width="4"/>
+  <path d="M58 252l238-38M104 314l217-99" stroke="#d8ad61" stroke-width="5" opacity=".24"/>
+  <path d="M0 333q55-21 104 0t95 0q50-22 100 0t101 0v67H0Z" fill="#06151c"/>
+  <path d="M0 366q50-18 100 1t100-1q50-18 100 0t100 0" fill="none" stroke="#5da7a1" stroke-width="5" opacity=".55"/>
+  <g fill="#b17b5d" stroke="#07151a" stroke-width="3">
+    <circle cx="176" cy="316" r="9"/>
+    <circle cx="202" cy="307" r="9"/>
+    <circle cx="225" cy="320" r="9"/>
+  </g>
+  <path d="M165 352l11-27 12 27M191 346l11-30 12 30M214 354l11-25 13 25" fill="#18343a" stroke="#a65c48" stroke-width="4"/>
+  <path d="M195 194c22-21 49-2 43 21-6 24-38 25-48 5-8-16 6-34 22-29 14 4 16 23 3 29" fill="none" stroke="#91b3a6" stroke-width="5" opacity=".55"/>
+</svg>

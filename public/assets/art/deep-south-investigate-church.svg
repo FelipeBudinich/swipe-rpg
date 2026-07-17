@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">The church below the tide</title>
+  <desc id="desc">A wooden Chiloé church shelters a briny stair and a bell marked with an impossible spiral.</desc>
+  <defs>
+    <linearGradient id="wall" x2="0" y2="1">
+      <stop stop-color="#183a40"/>
+      <stop offset="1" stop-color="#071820"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="30" fill="url(#wall)"/>
+  <path d="M73 138L200 31l127 107v215H73Z" fill="#a98d64" stroke="#07171d" stroke-width="8"/>
+  <path d="M47 143L200 14l153 129" fill="none" stroke="#a65c48" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M174 47h52v92h-52Z" fill="#c6a96f" stroke="#604d3d" stroke-width="5"/>
+  <path d="M185 68h30v39h-30Z" fill="#10262c"/>
+  <path d="M200 44V17M188 29h24" stroke="#d7c28f" stroke-width="6" stroke-linecap="round"/>
+  <path d="M130 155h140v198H130Z" fill="#6d5947" stroke="#45392f" stroke-width="6"/>
+  <path d="M200 155v198M132 197h136M132 240h136M132 283h136" stroke="#887058" stroke-width="3"/>
+  <path d="M158 219q42-44 84 0v134h-84Z" fill="#06171f" stroke="#c7ae78" stroke-width="6"/>
+  <path d="M171 352l14-93h30l14 93" fill="#09232b"/>
+  <path d="M179 331h42M176 310h48M181 288h38M186 268h28" stroke="#5da7a1" stroke-width="5" opacity=".65"/>
+  <path d="M274 101q0-37 28-37t28 37q0 31-28 44-28-13-28-44Z" fill="#896b4b" stroke="#d8ad61" stroke-width="4"/>
+  <path d="M302 78c22 7 19 33 3 38-18 6-29-18-14-28 11-8 26 4 19 16" fill="none" stroke="#10262c" stroke-width="6" stroke-linecap="round"/>
+  <path d="M14 368q82-23 151 0t127-1q54-19 94 0" fill="none" stroke="#5da7a1" stroke-width="7" opacity=".7"/>
+</svg>

@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
-  <title id="title">Bellglass wand</title><desc id="desc">A tuning wand suspends a luminous glass bell between crescent prongs.</desc>
-  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101739"/><stop offset="1" stop-color="#33204a"/></linearGradient><radialGradient id="glow"><stop stop-color="#fff6bc"/><stop offset=".4" stop-color="#6fe7dd"/><stop offset="1" stop-color="#6fe7dd" stop-opacity="0"/></radialGradient></defs>
-  <rect width="400" height="400" rx="30" fill="url(#bg)"/><circle cx="200" cy="200" r="150" fill="url(#glow)" opacity=".22"/>
-  <path d="M117 343 253 170" stroke="#ad7e64" stroke-width="16" stroke-linecap="round"/><path d="M239 184q-11-77 34-126M245 183q69-35 100-2" fill="none" stroke="#bcb7ff" stroke-width="13" stroke-linecap="round"/>
-  <path d="M246 135q31-36 62 1l13 55h-88Z" fill="#6fe7dd" opacity=".78" stroke="#effffb" stroke-width="6"/><path d="M277 191v25" stroke="#f5c66d" stroke-width="6"/><circle cx="277" cy="222" r="8" fill="#fff1a5"/>
-  <path d="M101 350l25 20" stroke="#ff8d78" stroke-width="18" stroke-linecap="round"/><circle cx="83" cy="84" r="28" fill="#f5cf78"/><circle cx="94" cy="74" r="26" fill="#13183a"/>
-</svg>

@@ -1,365 +1,135 @@
 import { fileURLToPath } from "node:url";
 
-import { itemById, items } from "../public/js/data/items.js";
+import { DEEP_SOUTH_STORY } from "../public/js/data/deep-south.js";
 import {
   createGame,
   dismissChoiceFeedback,
-  dismissStoryTransition,
-  equipInventoryItem,
-  getNextCard,
+  getPlotStep,
   resolveChoice,
-  useInventoryItem,
 } from "../public/js/game/engine.js";
-import { getDerivedStats } from "../public/js/game/equipment.js";
 
-const MAX_DECISIONS = 320;
-const STRUCTURAL_STAT_VALUE = 999;
+const MAX_DECISIONS = 96;
 
-function equipmentValue(item) {
-  const stats = item?.statModifiers ?? {};
-  return (
-    Number(stats.attack ?? 0) * 3 +
-    Number(stats.defense ?? 0) * 3.5 +
-    Number(stats.maxHp ?? 0) * 0.45 +
-    Number(stats.maxMp ?? 0) * 0.3
+function selectDirection(state, card, decisionCount) {
+  const deck = DEEP_SOUTH_STORY.decks.find(
+    ({ id }) => id === state.currentDeckId,
   );
+  if (deck?.type === "intro") return "up";
+  const step = getPlotStep(state.currentDeckId);
+  if (step < 8) return "down";
+  return ["left", "right", "up", "down"][decisionCount % 4];
 }
 
-function prepareInventory(inputState) {
-  let state = inputState;
-
-  for (const itemId of [...(state.player.inventory ?? [])]) {
-    const item = itemById[typeof itemId === "string" ? itemId : itemId?.id];
-    if (!item || item.type !== "equipment") continue;
-    const equipped = itemById[state.player.equipment?.[item.slot]];
-    if (equipmentValue(item) <= equipmentValue(equipped)) continue;
-    state = equipInventoryItem(state, item.id).state;
-  }
-
-  const stats = getDerivedStats(state, items);
-  for (const itemId of [...(state.player.inventory ?? [])]) {
-    const item = itemById[typeof itemId === "string" ? itemId : itemId?.id];
-    if (!item || item.type !== "consumable") continue;
-    const effects = item.useEffects ?? [];
-    const heals = effects.some((effect) => ["heal", "healPercent"].includes(effect.type));
-    const restoresMp = effects.some((effect) => effect.type === "restoreMp");
-    const shouldUse =
-      (heals && state.player.hp <= stats.maxHp * 0.68) ||
-      (restoresMp && !heals && state.player.mp <= stats.maxMp * 0.3);
-    if (shouldUse) state = useInventoryItem(state, item.id).state;
-  }
-
-  return getNextCard(state).state;
-}
-
-function numericEffectValue(effect) {
-  const value = Number(effect?.amount ?? effect?.value ?? effect?.damage ?? 0);
-  return Number.isFinite(value) ? value : 0;
-}
-
-function explorationScore(choice, state) {
-  if (!choice || choice.disabled) return -Infinity;
-  const stats = getDerivedStats(state, items);
-  const missingHp = Math.max(0, stats.maxHp - state.player.hp);
-  const missingMp = Math.max(0, stats.maxMp - state.player.mp);
-  let score = 0;
-
-  for (const effect of choice.effects ?? []) {
-    const amount = numericEffectValue(effect);
-    switch (effect.type) {
-      case "heal":
-        score += Math.min(missingHp, Math.max(0, amount)) * 5;
-        break;
-      case "healPercent": {
-        const raw = Number(effect.percent ?? effect.value ?? 0);
-        const fraction = raw > 1 ? raw / 100 : raw;
-        score += Math.min(missingHp, Math.ceil(stats.maxHp * fraction)) * 5;
-        break;
-      }
-      case "modifyHp":
-        score += amount >= 0 ? Math.min(missingHp, amount) * 5 : amount * 8;
-        if (state.player.hp + amount <= 0) score -= 1_000;
-        break;
-      case "boundedHpLoss":
-      case "applyBoundedHpLoss":
-        score -= Math.abs(amount) * 6;
-        break;
-      case "restoreMp":
-        score += Math.min(missingMp, Math.max(0, amount)) * 1.3;
-        break;
-      case "modifyMp":
-        score += amount >= 0 ? Math.min(missingMp, amount) * 1.3 : amount * 0.8;
-        break;
-      case "modifyGold":
-        score += amount * (amount >= 0 ? 0.45 : 0.65);
-        break;
-      case "addXp":
-        score += amount * 0.9;
-        break;
-      case "addItem":
-        score += 9;
-        break;
-      case "recordDiscovery":
-      case "setFlag":
-      case "setStoryFact":
-      case "recordStoryTag":
-      case "setFinalPlan":
-        score += 2;
-        break;
-      case "startEncounter":
-      case "startStoryEncounter":
-        score += state.player.hp >= stats.maxHp * 0.68 ? 3 : -18;
-        break;
-      default:
-        break;
-    }
-  }
-
-  return score;
-}
-
-function isConsumableUsefulNow(item, state) {
-  const stats = getDerivedStats(state, items);
-  return (item?.useEffects ?? []).some((effect) => {
-    if (["heal", "healPercent"].includes(effect.type)) {
-      return state.player.hp < stats.maxHp;
-    }
-    if (effect.type === "restoreMp") return state.player.mp < stats.maxMp;
-    return false;
-  });
-}
-
-function chooseDirection(card, state, options = {}) {
-  if (card.id === "finale-fate-of-the-crown") {
-    return options.endingId === "unbound-flame" ? "right" : "left";
-  }
-  if (card.category === "levelUp") return "left";
-
-  if (card.category === "combatReward") {
-    const item = itemById[card.reward?.itemId];
-    if (!item) return "left";
-    if (item.type === "consumable") {
-      return isConsumableUsefulNow(item, state) ? "left" : "right";
-    }
-    // Structural and ordinary audits retain equipment instead of optimizing
-    // their economy by selling the deterministic battle drop.
-    return "right";
-  }
-
-  if (card.category === "loot") {
-    const item = itemById[card.itemId];
-    if (item?.type === "consumable") {
-      return isConsumableUsefulNow(item, state) ? "left" : "right";
-    }
-    return "right";
-  }
-
-  if (card.category === "combat") {
-    if (options.mode === "structural") return card.left.disabled ? "right" : "left";
-    const intent = state.encounter?.currentIntent;
-    if (intent === "opening") return card.right.disabled ? "left" : "right";
-    if (intent === "charge") return "right";
-    if (intent === "hesitate") {
-      return state.player.mp < 3 && state.encounter.hp > 7 ? "left" : "right";
-    }
-    const strikeMax = Number(card.right?.estimate?.max ?? 0);
-    return state.encounter.hp <= strikeMax && !card.right.disabled ? "right" : "left";
-  }
-
-  const left = explorationScore(card.left, state);
-  const right = explorationScore(card.right, state);
-  return right > left ? "right" : "left";
-}
-
-function boostStructuralState(state) {
-  return {
-    ...state,
-    player: {
-      ...state.player,
-      hp: STRUCTURAL_STAT_VALUE,
-      mp: STRUCTURAL_STAT_VALUE,
-      gold: Math.max(STRUCTURAL_STAT_VALUE, Number(state.player.gold ?? 0)),
-      baseStats: {
-        ...state.player.baseStats,
-        attack: STRUCTURAL_STAT_VALUE,
-        defense: STRUCTURAL_STAT_VALUE,
-        maxHp: STRUCTURAL_STAT_VALUE,
-        maxMp: STRUCTURAL_STAT_VALUE,
-      },
-    },
-  };
-}
-
-function normalizeSimulationArguments(maxDecisions, options) {
-  if (maxDecisions && typeof maxDecisions === "object") {
-    return { maxDecisions: MAX_DECISIONS, options: maxDecisions };
-  }
-  return {
-    maxDecisions: Math.max(1, Number(maxDecisions) || MAX_DECISIONS),
-    options: options ?? {},
-  };
-}
-
-const PRIORITY_CARD_CATEGORIES = new Set(["combat", "combatReward", "loot", "levelUp"]);
-
-export function shouldDismissStoryTransition(state, card = null) {
-  const hasPendingTransition =
-    state?.mode === "storyTransition" || Boolean(state?.story?.pendingInterstitialBeatId);
-  const category = card?.category ?? state?.currentCardData?.category ?? null;
-  return hasPendingTransition &&
-    !PRIORITY_CARD_CATEGORIES.has(state?.mode) &&
-    !PRIORITY_CARD_CATEGORIES.has(category);
-}
-
-/**
- * Deterministically play one arc. Ordinary mode uses only authored resources;
- * structural mode boosts combat stats so the audit can inspect the complete
- * narrative graph independently of roguelite combat survival.
- */
-export function simulateRun(seed, maxDecisions = MAX_DECISIONS, inputOptions = {}) {
-  const normalized = normalizeSimulationArguments(maxDecisions, inputOptions);
-  const options = normalized.options;
-  const structural = options.mode === "structural" || options.boosted === true;
+export function simulateRun(seed, maxDecisions = MAX_DECISIONS) {
   let { state, card } = createGame({ seed });
   const transcript = [];
+  const visitedDeckIds = new Set([state.currentDeckId]);
   let stallReason = null;
-  let safetySteps = 0;
 
   while (
-    !["victory", "gameOver"].includes(state.mode) &&
-    state.decisionCount < normalized.maxDecisions &&
-    safetySteps < normalized.maxDecisions * 4
+    state.decisionCount < maxDecisions &&
+    !(state.status === "lost" && !state.pendingFeedback)
   ) {
-    safetySteps += 1;
-    if (state.pendingChoiceFeedback) {
-      const feedback = state.pendingChoiceFeedback;
+    if (state.pendingFeedback) {
+      const decisionCount = state.decisionCount;
       transcript.push({
-        kind: "feedback",
-        decision: state.decisionCount,
-        sourceCardId: feedback.sourceCardId,
-        tone: feedback.tone,
-        nextCardId: feedback.nextCardId,
-        nextCardToken: feedback.nextCardToken,
+        type: "feedback",
+        sourceCardId: state.pendingFeedback.sourceCardId,
+        direction: state.pendingFeedback.direction,
+        destinationDeckId: state.pendingFeedback.destinationDeckId,
       });
       const dismissed = dismissChoiceFeedback(state, {
-        expectedFeedbackId: feedback.id,
+        expectedFeedbackId: state.pendingFeedback.id,
       });
       if (dismissed.ignored) {
-        stallReason = dismissed.reason ?? "ignored-feedback";
+        stallReason = dismissed.reason ?? "feedback-dismissal-ignored";
         break;
       }
       state = dismissed.state;
       card = dismissed.card;
+      if (state.decisionCount !== decisionCount) {
+        stallReason = "feedback-counted-as-decision";
+        break;
+      }
+      visitedDeckIds.add(state.currentDeckId);
       continue;
     }
 
-    if (shouldDismissStoryTransition(state, card)) {
-      transcript.push({
-        kind: "transition",
-        decision: state.decisionCount,
-        beatId: state.story?.currentBeatId ?? null,
-        beatIndex: state.story?.currentBeatIndex ?? null,
-        cardId: null,
-        source: "story-transition",
-      });
-      ({ state, card } = dismissStoryTransition(state));
-      continue;
-    }
-
-    state = structural ? boostStructuralState(state) : prepareInventory(state);
-    const next = getNextCard(state);
-    state = next.state;
-    card = next.card;
-    if (shouldDismissStoryTransition(state, card)) continue;
     if (!card) {
       stallReason = "no-card";
       break;
     }
-
-    const direction = chooseDirection(card, state, {
-      ...options,
-      mode: structural ? "structural" : "ordinary",
-    });
-    transcript.push({
-      kind: "decision",
-      decision: state.decisionCount + 1,
-      beatId: state.story?.currentBeatId ?? null,
-      beatIndex: state.story?.currentBeatIndex ?? null,
-      worldCardsResolved: state.story?.totalWorldCardsResolved ?? 0,
-      mode: state.mode,
-      cardId: card.id,
-      source: state.currentCardSource ?? next.source ?? null,
-      enemyId: card.reward?.enemyId ?? state.encounter?.enemyId ?? null,
-      rewardId: card.reward?.rewardId ?? null,
-      xpAwarded: card.reward?.xpAwarded ?? null,
-      goldAwarded: card.reward?.goldAwarded ?? null,
-      itemId: card.reward?.itemId ?? null,
-      direction,
-      hp: state.player.hp,
-      mp: state.player.mp,
-    });
+    const direction = selectDirection(state, card, state.decisionCount);
+    const wasIntro =
+      DEEP_SOUTH_STORY.decks.find(({ id }) => id === state.currentDeckId)?.type ===
+      "intro";
+    const beforeDecisionCount = state.decisionCount;
     const result = resolveChoice(state, direction, {
       expectedToken: card.resolutionToken,
     });
     if (result.ignored) {
-      stallReason = result.reason ?? "ignored-choice";
+      stallReason = result.reason ?? "choice-ignored";
       break;
     }
+    transcript.push({
+      type: "decision",
+      cardId: card.id,
+      deckId: state.currentDeckId,
+      direction,
+      resources: result.state.resources,
+    });
     state = result.state;
     card = result.card;
+    visitedDeckIds.add(state.currentDeckId);
+
+    const expectedIncrement = wasIntro ? 0 : 1;
+    if (state.decisionCount !== beforeDecisionCount + expectedIncrement) {
+      stallReason = "unexpected-decision-count";
+      break;
+    }
   }
 
-  if (
-    !stallReason &&
-    !["victory", "gameOver"].includes(state.mode)
-  ) {
-    stallReason = state.decisionCount >= normalized.maxDecisions ? "decision-limit" : "safety-limit";
-  }
-  return { state, card, transcript, stallReason, mode: structural ? "structural" : "ordinary" };
+  return {
+    state,
+    card,
+    transcript,
+    visitedDeckIds: [...visitedDeckIds],
+    stallReason,
+  };
 }
 
-export function simulateStructuralRun(seed, endingId = "crown-of-dawn", maxDecisions = MAX_DECISIONS) {
-  return simulateRun(seed, maxDecisions, { mode: "structural", endingId });
-}
-
-export function auditSeeds(count = 128, options = {}) {
+export function auditSeeds(count = 128, maxDecisions = MAX_DECISIONS) {
   const runs = Array.from({ length: count }, (_, index) =>
-    simulateRun(index + 1, options.maxDecisions ?? MAX_DECISIONS, options),
+    simulateRun(index + 1, maxDecisions),
   );
-  const victories = runs.filter((run) => run.state.mode === "victory");
-  const deaths = runs.filter((run) => run.state.mode === "gameOver");
-  const stalled = runs.filter((run) => !["victory", "gameOver"].includes(run.state.mode));
-  return { runs, victories, deaths, stalled };
-}
-
-export function auditStructuralSeeds(specifications = [
-  { seed: 101, endingId: "crown-of-dawn" },
-  { seed: 202, endingId: "unbound-flame" },
-]) {
-  return specifications.map(({ seed, endingId }) => ({
-    seed,
-    endingId,
-    run: simulateStructuralRun(seed, endingId),
-  }));
+  return {
+    runs,
+    lost: runs.filter(
+      ({ state }) => state.status === "lost" && !state.pendingFeedback,
+    ),
+    active: runs.filter(({ state }) => state.status === "playing"),
+    stalled: runs.filter(({ stallReason }) => Boolean(stallReason)),
+  };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const count = Math.max(1, Number.parseInt(process.argv[2] ?? "128", 10) || 128);
+  const count = Math.max(
+    1,
+    Number.parseInt(process.argv[2] ?? "128", 10) || 128,
+  );
   const audit = auditSeeds(count);
-  const structural = auditStructuralSeeds();
+  const evidenceRun = simulateRun(2, MAX_DECISIONS);
+  const deterministic =
+    JSON.stringify(simulateRun(2, MAX_DECISIONS).transcript) ===
+    JSON.stringify(evidenceRun.transcript);
   const summary = {
     seeds: count,
-    victories: audit.victories.length,
-    deaths: audit.deaths.length,
+    lost: audit.lost.length,
+    activeAtLimit: audit.active.length,
     stalled: audit.stalled.length,
-    structural: structural.map(({ seed, endingId, run }) => ({
-      seed,
-      endingId,
-      result: run.state.mode,
-      worldCardsResolved: run.state.story?.totalWorldCardsResolved ?? null,
-      finalLevel: run.state.player.level,
-      stallReason: run.stallReason,
-    })),
+    deterministic,
+    seed2VisitedDecks: evidenceRun.visitedDeckIds,
   };
   console.log(JSON.stringify(summary, null, 2));
+  if (audit.stalled.length > 0 || !deterministic) process.exitCode = 1;
 }

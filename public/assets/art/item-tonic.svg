@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
-  <title id="title">Bluewake tonic</title><desc id="desc">A faceted bottle of bright blue restorative tonic with a tiny moon stopper.</desc>
-  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101739"/><stop offset="1" stop-color="#302049"/></linearGradient><linearGradient id="bottle" x2="0" y2="1"><stop stop-color="#effffb" stop-opacity=".75"/><stop offset="1" stop-color="#6fe7dd" stop-opacity=".4"/></linearGradient><linearGradient id="liquid" x2="0" y2="1"><stop stop-color="#7ce9df"/><stop offset="1" stop-color="#5a6bc5"/></linearGradient></defs>
-  <rect width="400" height="400" rx="30" fill="url(#bg)"/><circle cx="200" cy="200" r="145" fill="none" stroke="#615a89" stroke-width="5" stroke-dasharray="4 15"/>
-  <path d="M163 75h74v69l54 65-22 137H131l-22-137 54-65Z" fill="url(#bottle)" stroke="#effffb" stroke-width="7"/><path d="M119 238h162l-12 108H131Z" fill="url(#liquid)" opacity=".9"/>
-  <path d="M161 75h78v42h-78Z" fill="#8076d4" stroke="#c8c4ff" stroke-width="6"/><path d="M156 197q43-29 88 0" fill="none" stroke="#f5c66d" stroke-width="6"/>
-  <circle cx="170" cy="270" r="9" fill="#fff" opacity=".7"/><circle cx="222" cy="310" r="12" fill="#fff" opacity=".5"/><circle cx="305" cy="79" r="28" fill="#f5cf78"/><circle cx="316" cy="69" r="26" fill="#13183a"/>
-</svg>

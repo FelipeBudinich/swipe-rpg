@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">The desolate beach</title>
+  <desc id="desc">A low campfire faces a black beach where an angular stone waits beyond the surf.</desc>
+  <defs>
+    <linearGradient id="dusk" x2="0" y2="1">
+      <stop stop-color="#09121b"/>
+      <stop offset=".62" stop-color="#294149"/>
+      <stop offset="1" stop-color="#0b2229"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="30" fill="url(#dusk)"/>
+  <circle cx="85" cy="77" r="45" fill="#d7c58f" opacity=".65"/>
+  <circle cx="101" cy="62" r="44" fill="#0b1720"/>
+  <path d="M0 216q79-26 145 1t131-1q63-25 124 2v80H0Z" fill="#0a1c23"/>
+  <path d="M0 250q75-22 139 1t127-1q67-22 134 2" fill="none" stroke="#5da7a1" stroke-width="5" opacity=".65"/>
+  <path d="M0 288q70-20 131 0t125 0q72-21 144 2v110H0Z" fill="#1a1c1c"/>
+  <path d="M40 341q65-30 129-3t118 0q47-21 92-6" fill="none" stroke="#3c4542" stroke-width="7"/>
+  <path d="M275 190l29-103 42 92-14 74-50 2Z" fill="#111a1e" stroke="#5d7b78" stroke-width="5"/>
+  <path d="M300 114l19 18-14 20 19 21-11 28" fill="none" stroke="#a65c48" stroke-width="5" opacity=".75"/>
+  <path d="M105 342l35-63 36 63Z" fill="#a65c48" opacity=".7"/>
+  <path d="M121 333l19-43 19 43Z" fill="#e1ad55"/>
+  <path d="M96 348l91-46M92 305l99 45" stroke="#665141" stroke-width="8" stroke-linecap="round"/>
+  <path d="M218 334q0-34 25-34t25 34v35h-50Z" fill="#14282d"/>
+  <circle cx="243" cy="286" r="18" fill="#99715b"/>
+  <path d="M228 281q15-20 30 0" fill="#263b3e"/>
+  <path d="M15 380q85-16 154 1t126-1q46-14 90 0" fill="none" stroke="#5da7a1" stroke-width="4" opacity=".4"/>
+</svg>

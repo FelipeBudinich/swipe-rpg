@@ -1,8 +1,8 @@
 {
-  "name": "lumenwake-prism-road",
+  "name": "deep-south",
   "version": "1.0.0",
   "private": true,
-  "description": "A mobile-first, swipe-driven fantasy JRPG roguelite.",
+  "description": "A mobile-first, four-direction maritime cosmic-horror card game.",
   "type": "module",
   "scripts": {
     "build:css": "tailwindcss -i ./src/input.css -o ./public/assets/app.css --minify",

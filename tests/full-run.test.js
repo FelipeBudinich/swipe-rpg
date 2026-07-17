@@ -1,178 +1,139 @@
-import assert from "node:assert/strict";
 import test from "node:test";
+import assert from "node:assert/strict";
 
-import { EMBER_CROWN_BEAT_IDS } from "../public/js/data/arcs/ember-crown.js";
 import {
-  auditSeeds,
-  shouldDismissStoryTransition,
-  simulateRun,
-  simulateStructuralRun,
-} from "../scripts/audit-runs.mjs";
+  createGame,
+  dismissChoiceFeedback,
+  restartGame,
+  resolveChoice,
+} from "../public/js/game/engine.js";
+import { normalizeState } from "../public/js/game/state.js";
+import { DEEP_SOUTH_STORY } from "../public/js/data/deep-south.js";
+import { simulateRun } from "../scripts/audit-runs.mjs";
 
-function decisionTurns(run) {
-  return run.transcript.filter(({ kind }) => kind === "decision");
+function commit(game, direction) {
+  const result = resolveChoice(game.state, direction, {
+    expectedToken: game.card?.resolutionToken,
+  });
+  assert.equal(result.ignored, false);
+  return result;
 }
 
-function feedbackTurns(run) {
-  return run.transcript.filter(({ kind }) => kind === "feedback");
+function continueOutcome(result) {
+  assert.ok(result.state.pendingFeedback);
+  const next = dismissChoiceFeedback(result.state, {
+    expectedFeedbackId: result.state.pendingFeedback.id,
+  });
+  assert.equal(next.ignored, false);
+  return next;
 }
 
-function visitedBeatIds(run) {
-  const ordered = [];
-  for (const { beatId } of decisionTurns(run)) {
-    if (typeof beatId === "string" && ordered.at(-1) !== beatId) ordered.push(beatId);
+test("representative Deep South run covers Intro, skip confirmation, both plot directions, loss feedback, reload, and restart", () => {
+  let game = createGame({ seed: 2 });
+  const firstIntroId = game.card.id;
+
+  game = commit(game, "up");
+  assert.equal(game.state.introCardIndex, 1);
+  game = commit(game, "left");
+  assert.equal(game.state.introSkipPending, true);
+  const heldIntroIndex = game.state.introCardIndex;
+  game = commit(game, "up");
+  assert.equal(game.state.introSkipPending, false);
+  assert.equal(game.state.introCardIndex, heldIntroIndex);
+  game = commit(game, "left");
+  game = commit(game, "left");
+  assert.equal(game.state.currentDeckId, "castro");
+
+  const visited = [game.state.currentDeckId];
+  while (game.state.currentDeckId !== "gather-evidence") {
+    game = continueOutcome(commit(game, "down"));
+    visited.push(game.state.currentDeckId);
   }
-  return ordered;
-}
-
-function indexOfCard(run, predicate) {
-  return decisionTurns(run).findIndex((turn) => predicate(turn.cardId, turn));
-}
-
-function lastIndexOfCard(run, predicate) {
-  return decisionTurns(run).findLastIndex((turn) => predicate(turn.cardId, turn));
-}
-
-function assertRewardTranscript(turn, enemyId) {
-  assert.equal(turn.enemyId, enemyId);
-  assert.equal(typeof turn.rewardId, "string");
-  assert.ok(turn.rewardId.length > 0);
-  assert.ok(Number.isFinite(turn.xpAwarded));
-  assert.ok(Number.isFinite(turn.goldAwarded));
-  assert.ok(turn.itemId === null || typeof turn.itemId === "string");
-}
-
-function assertCompleteStructuralRun(run, { endingId, finalImageCardId }) {
-  assert.equal(run.stallReason, null);
-  assert.equal(run.state.mode, "victory");
-  assert.equal(run.state.story.status, "completed");
-  assert.equal(run.state.story.completed, true);
-  assert.equal(run.state.story.endingId, endingId);
-  assert.deepEqual(run.state.story.completedBeatIds, EMBER_CROWN_BEAT_IDS);
-  assert.deepEqual(visitedBeatIds(run), EMBER_CROWN_BEAT_IDS);
-  assert.ok(run.state.story.totalWorldCardsResolved >= 30);
-  assert.ok(run.state.story.totalWorldCardsResolved <= 40);
-  assert.equal(run.state.meta.victoryCount, 1);
-
-  const turns = decisionTurns(run);
-  assert.equal(
-    turns.some(({ cardId, source }) =>
-      cardId === "story-safe-fallback" || source === "safe-fallback"),
-    false,
+  assert.deepEqual(
+    visited,
+    DEEP_SOUTH_STORY.decks.filter(({ type }) => type === "plot").map(({ id }) => id),
   );
 
-  const midpointIntro = indexOfCard(run, (id) =>
-    ["midpoint-sun-shard-challenge", "midpoint-serins-counterseal"].includes(id),
-  );
-  const wyvernCombat = lastIndexOfCard(run, (id) => id.startsWith("combat:iron-wyvern:"));
-  const wyvernRewards = turns.filter(({ mode, enemyId }) =>
-    mode === "combatReward" && enemyId === "iron-wyvern");
-  const wyvernReward = indexOfCard(run, (id, turn) =>
-    turn.mode === "combatReward" &&
-    turn.enemyId === "iron-wyvern" &&
-    id.startsWith("combat-reward:"));
-  const midpointAftermath = indexOfCard(run, (id) => id === "midpoint-wyvern-aftermath");
-  assert.ok(midpointIntro >= 0);
-  assert.ok(wyvernCombat > midpointIntro);
-  assert.equal(wyvernRewards.length, 1);
-  assertRewardTranscript(wyvernRewards[0], "iron-wyvern");
-  assert.ok(wyvernReward > wyvernCombat);
-  assert.ok(midpointAftermath > wyvernReward);
-  assert.ok(Number(run.state.run.enemiesDefeated["iron-wyvern"] ?? 0) > 0);
+  game = continueOutcome(commit(game, "up"));
+  assert.equal(game.state.currentDeckId, "explore-rlyeh");
 
-  const malrecIntro = indexOfCard(run, (id) =>
-    ["finale-malrec-infiltration", "finale-malrec-confrontation"].includes(id),
-  );
-  const malrecCombat = lastIndexOfCard(run, (id) => id.startsWith("combat:malrec-crown-bound:"));
-  const malrecRewards = turns.filter(({ mode, enemyId }) =>
-    mode === "combatReward" && enemyId === "malrec-crown-bound");
-  const malrecReward = indexOfCard(run, (id, turn) =>
-    turn.mode === "combatReward" &&
-    turn.enemyId === "malrec-crown-bound" &&
-    id.startsWith("combat-reward:"));
-  const crownChoice = indexOfCard(run, (id) => id === "finale-fate-of-the-crown");
-  const finalImage = indexOfCard(run, (id) => id === finalImageCardId);
-  assert.ok(malrecIntro >= 0);
-  assert.ok(malrecCombat > malrecIntro);
-  assert.equal(malrecRewards.length, 1);
-  assertRewardTranscript(malrecRewards[0], "malrec-crown-bound");
-  assert.ok(malrecReward > malrecCombat);
-  assert.ok(crownChoice > malrecReward);
-  assert.ok(finalImage > crownChoice);
-  assert.equal(turns.at(-1).cardId, finalImageCardId);
-  assert.ok(Number(run.state.run.enemiesDefeated["malrec-crown-bound"] ?? 0) > 0);
-}
+  let lossResult = null;
+  for (let safety = 0; safety < 10 && !lossResult; safety += 1) {
+    const damagingDirection = ["up", "down", "left", "right"].find(
+      (direction) => Number(game.card.choices[direction].effects.sanity) < 0,
+    );
+    const result = commit(game, damagingDirection ?? "left");
+    if (result.state.status === "lost") {
+      lossResult = result;
+    } else {
+      game = continueOutcome(result);
+    }
+  }
+  assert.ok(lossResult);
+  assert.equal(lossResult.state.resources.sanity, 0);
+  assert.ok(lossResult.state.pendingFeedback);
+  assert.equal(lossResult.state.pendingFeedback.changes.sanity, -1);
 
-test("audit transition handling preserves priority reward surfaces", () => {
-  const state = {
-    mode: "combatReward",
-    story: { pendingInterstitialBeatId: "midpoint" },
-    currentCardData: { category: "combatReward" },
+  const reloaded = normalizeState(
+    JSON.parse(JSON.stringify(lossResult.state)),
+    { decks: DEEP_SOUTH_STORY.decks },
+  );
+  assert.equal(reloaded.status, "lost");
+  assert.deepEqual(reloaded.pendingFeedback, lossResult.state.pendingFeedback);
+
+  const terminal = dismissChoiceFeedback(reloaded, {
+    expectedFeedbackId: reloaded.pendingFeedback.id,
+  });
+  assert.equal(terminal.state.status, "lost");
+  assert.equal(terminal.card, null);
+
+  const restarted = restartGame(terminal.state, { seed: 2026 });
+  assert.equal(restarted.state.currentDeckId, "it-begins-here");
+  assert.equal(restarted.card.id, firstIntroId);
+  assert.deepEqual(restarted.state.resources, {
+    eldritchLore: 0,
+    crew: 0,
+    sanity: 3,
+  });
+});
+
+test("a fixed seed produces the same card, feedback, destination, and resource transcript", () => {
+  const simulate = (seed) => {
+    let game = createGame({ seed });
+    game = commit(game, "left");
+    game = commit(game, "left");
+    const transcript = [];
+    const directions = ["down", "left", "right", "up"];
+    for (let index = 0; index < 12 && game.state.status === "playing"; index += 1) {
+      const direction = directions[index % directions.length];
+      const sourceCardId = game.card.id;
+      const result = commit(game, direction);
+      transcript.push({
+        sourceCardId,
+        direction,
+        destinationDeckId: result.state.currentDeckId,
+        resources: result.state.resources,
+        feedback: result.state.pendingFeedback,
+        rngState: result.state.rngState,
+      });
+      if (result.state.status === "lost") break;
+      game = continueOutcome(result);
+    }
+    return transcript;
   };
-  const reward = { category: "combatReward" };
-  assert.equal(shouldDismissStoryTransition(state, reward), false);
-  assert.equal(
-    shouldDismissStoryTransition(
-      { ...state, mode: "storyTransition", currentCardData: null },
-      { category: "story" },
-    ),
-    true,
-  );
+
+  assert.deepEqual(simulate(404), simulate(404));
+  assert.notDeepEqual(simulate(404), simulate(405));
 });
 
-test("ordinary seeded play is deterministic and reaches only death or survival", () => {
-  const first = simulateRun(1);
-  const replay = simulateRun(1);
-  assert.deepEqual(replay.state, first.state);
-  assert.deepEqual(replay.transcript, first.transcript);
-  assert.equal(replay.stallReason, null);
-  assert.ok(["victory", "gameOver"].includes(first.state.mode));
-});
-
-test("audit acknowledgements dismiss pending feedback without becoming decisions", () => {
-  const run = simulateStructuralRun(101, "crown-of-dawn");
-  const decisions = decisionTurns(run);
-  const acknowledgements = feedbackTurns(run);
-
-  assert.ok(acknowledgements.length > 0);
-  assert.equal(decisions.length, run.state.decisionCount);
-  assert.equal(run.state.pendingChoiceFeedback, null);
-  for (const entry of acknowledgements) {
-    assert.equal(Object.hasOwn(entry, "direction"), false);
-    assert.equal(typeof entry.sourceCardId, "string");
-    assert.equal(typeof entry.nextCardId, "string");
-    assert.equal(typeof entry.nextCardToken, "string");
-    assert.ok(["neutral", "reward", "recovery", "damage", "danger"].includes(entry.tone));
-  }
-});
-
-test("a broad ordinary seed audit has victories, deaths, and no soft locks", () => {
-  const audit = auditSeeds(64);
-  assert.equal(audit.stalled.length, 0);
-  assert.equal(audit.victories.length + audit.deaths.length, audit.runs.length);
-  assert.ok(audit.victories.length > 0);
-  assert.ok(audit.deaths.length > 0);
-  for (const run of audit.runs) assert.equal(run.stallReason, null);
-  for (const run of audit.victories) {
-    assert.ok(run.state.story.totalWorldCardsResolved >= 30);
-    assert.ok(run.state.story.totalWorldCardsResolved <= 40);
-  }
-});
-
-test("boosted structural runs traverse all beats and reach both ending-specific Final Images", () => {
-  const crown = simulateStructuralRun(101, "crown-of-dawn");
-  const unbound = simulateStructuralRun(202, "unbound-flame");
-
-  assertCompleteStructuralRun(crown, {
-    endingId: "crown-of-dawn",
-    finalImageCardId: "final-image-crown-of-dawn",
-  });
-  assertCompleteStructuralRun(unbound, {
-    endingId: "unbound-flame",
-    finalImageCardId: "final-image-unbound-flame",
-  });
-
-  const replay = simulateStructuralRun(101, "crown-of-dawn");
-  assert.deepEqual(replay.state, crown.state);
-  assert.deepEqual(replay.transcript, crown.transcript);
+test("the deterministic audit acknowledges outcomes without counting them as decisions", () => {
+  const first = simulateRun(2, 96);
+  const second = simulateRun(2, 96);
+  assert.equal(first.stallReason, null);
+  assert.deepEqual(first.transcript, second.transcript);
+  assert.ok(first.transcript.some(({ type }) => type === "feedback"));
+  assert.ok(first.transcript.some(({ type }) => type === "decision"));
+  assert.deepEqual(first.visitedDeckIds, DEEP_SOUTH_STORY.decks.map(({ id }) => id));
+  assert.equal(first.state.status, "lost");
+  assert.equal(first.state.pendingFeedback, null);
 });

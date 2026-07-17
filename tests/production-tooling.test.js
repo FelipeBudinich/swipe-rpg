@@ -56,7 +56,7 @@ async function createValidFixture(t) {
       },
     }, null, 2)}\n`,
     "server.js": 'export function createServer() { return { name: "fixture" }; }\n',
-    ".gitignore": "node_modules/\n.env\n.env.*\n!.env.example\ncoverage/\n.tmp/\n.vscode/\n.idea/\n",
+    ".gitignore": "node_modules/\nnpm-debug.log*\n.DS_Store\n.env\n.env.*\n!.env.example\ncoverage/\n.tmp/\n.vscode/\n.idea/\n",
     ".env.example": "PORT=3000\nNODE_ENV=development\nALLOWED_HOSTS=\n",
     "README.md": "# Fixture\n",
     "SECURITY.md": "# Security\n",
@@ -69,6 +69,7 @@ async function createValidFixture(t) {
     ].join("\n"),
     "public/assets/app.css": "body{color:#fff}\n",
     "public/assets/art/player.svg": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1z"/></svg>\n',
+    "public/assets/art/deep-south-it-begins-here.svg": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1z"/></svg>\n',
     "public/js/main.js": 'import "./module.js";\ndocument.getElementById("output").textContent = "Ready";\n',
     "public/js/module.js": "export const ready = true;\n",
   };
@@ -242,7 +243,7 @@ test("production verification rejects missing output, unsafe HTML, and broken as
   ));
   await t.test("missing authored art", async (t) => expectVerificationFailure(
     t,
-    (root) => write(root, "public/js/data/cards.js", 'export const card = { artId: "scene-missing" };\n'),
+    (root) => write(root, "public/js/data/cards/deep-south-cards.js", 'export const card = { artId: "scene-missing" };\n'),
     /references missing local asset \/assets\/art\/scene-missing\.svg/,
   ));
   await t.test("incorrect Procfile", (t) => expectVerificationFailure(

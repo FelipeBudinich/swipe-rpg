@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">The wandering coordinates</title>
+  <desc id="desc">A chart's crossed bearings hang above a sea where immense carved stones break the surface.</desc>
+  <defs>
+    <radialGradient id="sky" cx=".5" cy=".35" r=".75">
+      <stop stop-color="#244b51"/>
+      <stop offset="1" stop-color="#050e15"/>
+    </radialGradient>
+  </defs>
+  <rect width="400" height="400" rx="30" fill="url(#sky)"/>
+  <circle cx="200" cy="135" r="84" fill="none" stroke="#5da7a1" stroke-width="3" opacity=".45"/>
+  <circle cx="200" cy="135" r="56" fill="none" stroke="#d8ad61" stroke-width="3" opacity=".4"/>
+  <path d="M200 32v206M97 135h206M127 62l146 146M127 208L273 62" stroke="#8ab8b1" stroke-width="2" opacity=".42"/>
+  <path d="M181 134l19-36 19 36-19 38Z" fill="#a65c48"/>
+  <circle cx="200" cy="135" r="7" fill="#d8ad61"/>
+  <path d="M0 239q50-26 100 0t100 0q50-27 100 0t100 0v161H0Z" fill="#071923"/>
+  <path d="M38 298l27-127 45 111-14 79H48ZM151 277l35-160 45 148-8 102h-65ZM273 288l39-141 44 127-10 92h-64Z" fill="#162a2d" stroke="#60817d" stroke-width="6"/>
+  <path d="M61 212c23 9 22 38 2 45-20 7-34-19-18-32 13-10 31 4 22 17M183 174c28 12 24 48-2 54-25 5-38-30-16-44 16-10 37 9 25 24M311 199c24 10 22 41 0 48-22 7-36-23-18-36 14-10 32 6 23 20" fill="none" stroke="#a65c48" stroke-width="6" stroke-linecap="round"/>
+  <path d="M0 307q50-25 100 0t100 0q50-26 100 0t100 0M0 355q50-24 100 0t100 0q50-25 100 0t100 0" fill="none" stroke="#5da7a1" stroke-width="6" opacity=".55"/>
+</svg>

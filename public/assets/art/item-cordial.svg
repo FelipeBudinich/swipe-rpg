@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
-  <title id="title">Dusk cordial</title><desc id="desc">A rare violet cordial swirls with coral and turquoise light inside a crescent flask.</desc>
-  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101739"/><stop offset="1" stop-color="#332047"/></linearGradient><radialGradient id="liquid"><stop stop-color="#fff1ad"/><stop offset=".3" stop-color="#ff8d78"/><stop offset=".65" stop-color="#746ad0"/><stop offset="1" stop-color="#6fe7dd"/></radialGradient></defs>
-  <rect width="400" height="400" rx="30" fill="url(#bg)"/><circle cx="200" cy="200" r="145" fill="none" stroke="#615a89" stroke-width="5" stroke-dasharray="4 15"/>
-  <path d="M166 73h68v76q77 43 66 119t-100 85q-89-9-100-85t66-119Z" fill="#effffb" fill-opacity=".18" stroke="#effffb" stroke-width="7"/><circle cx="200" cy="254" r="80" fill="url(#liquid)" opacity=".82"/>
-  <path d="M165 73h70v45h-70Z" fill="#f5c66d" stroke="#fff1ac" stroke-width="6"/><path d="M131 253q68-55 138 1M147 298q55-33 106 0" fill="none" stroke="#effffb" stroke-width="5" opacity=".75"/>
-  <circle cx="183" cy="229" r="10" fill="#fff" opacity=".7"/><circle cx="231" cy="279" r="8" fill="#fff" opacity=".6"/><circle cx="84" cy="81" r="28" fill="#f5cf78"/><circle cx="95" cy="71" r="26" fill="#13183a"/>
-</svg>

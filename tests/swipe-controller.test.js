@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import * as Engine from "../public/js/game/engine.js";
-import {
-  isActiveCommitResolutionBlocked,
-  isNewInputBlocked,
-} from "../public/js/ui/interaction-lock.js";
 import { createSwipeController } from "../public/js/ui/swipe-controller.js";
 
 class FakeCard extends EventTarget {
@@ -13,9 +8,8 @@ class FakeCard extends EventTarget {
     super();
     this.dataset = {};
     this.offsetWidth = 320;
+    this.offsetHeight = 360;
     this.values = new Map();
-    this.hidden = false;
-    this.inert = false;
     this.capturedPointers = new Set();
     this.style = {
       setProperty: (name, value) => this.values.set(name, value),
@@ -25,7 +19,7 @@ class FakeCard extends EventTarget {
   }
 
   getBoundingClientRect() {
-    return { width: 320 };
+    return { width: 320, height: 360 };
   }
 
   setPointerCapture(pointerId) {
@@ -41,15 +35,6 @@ class FakeCard extends EventTarget {
   }
 }
 
-function useReducedMotion(t, matches = true) {
-  const priorMatchMedia = globalThis.matchMedia;
-  globalThis.matchMedia = () => ({ matches });
-  t.after(() => {
-    if (priorMatchMedia) globalThis.matchMedia = priorMatchMedia;
-    else delete globalThis.matchMedia;
-  });
-}
-
 function pointerEvent(type, properties) {
   const event = new Event(type, { cancelable: true });
   for (const [name, value] of Object.entries(properties)) {
@@ -58,448 +43,422 @@ function pointerEvent(type, properties) {
   return event;
 }
 
-test("commit start locks surrounding controls while active resolution remains allowed", async (t) => {
-  useReducedMotion(t);
-
-  const card = new FakeCard();
-  const events = [];
-  let inputLocked = false;
-  let controller;
-  const lockState = () => ({
-    inputLocked,
-    controllerCommitting: controller?.isCommitting === true,
+function installBrowserStubs(t, { reducedMotion = true } = {}) {
+  const priorMatchMedia = globalThis.matchMedia;
+  const priorRaf = globalThis.requestAnimationFrame;
+  const priorCancelRaf = globalThis.cancelAnimationFrame;
+  const priorInnerWidth = globalThis.innerWidth;
+  const priorInnerHeight = globalThis.innerHeight;
+  globalThis.matchMedia = () => ({ matches: reducedMotion });
+  globalThis.requestAnimationFrame = (callback) => {
+    callback();
+    return 1;
+  };
+  globalThis.cancelAnimationFrame = () => {};
+  globalThis.innerWidth = 390;
+  globalThis.innerHeight = 844;
+  t.after(() => {
+    if (priorMatchMedia) globalThis.matchMedia = priorMatchMedia;
+    else delete globalThis.matchMedia;
+    if (priorRaf) globalThis.requestAnimationFrame = priorRaf;
+    else delete globalThis.requestAnimationFrame;
+    if (priorCancelRaf) globalThis.cancelAnimationFrame = priorCancelRaf;
+    else delete globalThis.cancelAnimationFrame;
+    if (priorInnerWidth === undefined) delete globalThis.innerWidth;
+    else globalThis.innerWidth = priorInnerWidth;
+    if (priorInnerHeight === undefined) delete globalThis.innerHeight;
+    else globalThis.innerHeight = priorInnerHeight;
   });
-  controller = createSwipeController({
-    card,
-    isInputLocked: () => isNewInputBlocked(lockState()),
-    onCommitStart() {
-      events.push(["start", controller.isCommitting]);
-    },
-    async onCommit() {
-      events.push(["resolve", controller.isCommitting]);
-      assert.equal(isNewInputBlocked(lockState()), true);
-      assert.equal(isActiveCommitResolutionBlocked(lockState()), false);
-      inputLocked = true;
-      try {
-        return true;
-      } finally {
-        inputLocked = false;
-        controller.resetForNextCard();
-        card.dataset.swipeState = "entering";
-      }
-    },
-  });
+}
 
-  assert.equal(await controller.commit("right"), true);
-  assert.deepEqual(events, [["start", true], ["resolve", true]]);
-  assert.equal(controller.isCommitting, false);
-  assert.equal(card.dataset.swipeState, "entering");
-  assert.equal(card.values.size, 0);
-});
+async function settle() {
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+}
 
-test("defensive fallback unlocks and recenters a callback that forgot to reset", async (t) => {
-  useReducedMotion(t);
-
+test("programmatic commits accept all four directions and animate along the matching axis", async (t) => {
+  installBrowserStubs(t);
   const card = new FakeCard();
-  const previews = [];
-  let commitCount = 0;
-  let controller;
-  controller = createSwipeController({
+  const observed = [];
+  const controller = createSwipeController({
     card,
-    onPreview(direction, strength) {
-      previews.push([direction, strength]);
-    },
-    async onCommit() {
-      commitCount += 1;
-      assert.equal(controller.isCommitting, true);
+    async onCommit(direction) {
+      observed.push({
+        direction,
+        x: card.style.getPropertyValue("--card-x"),
+        y: card.style.getPropertyValue("--card-y"),
+        preview: card.dataset.previewDirection,
+      });
       return true;
     },
   });
 
-  assert.equal(await controller.commit("left"), true);
-  assert.equal(controller.isCommitting, false);
-  assert.equal(card.dataset.swipeState, "idle");
-  assert.equal(card.dataset.previewDirection, "none");
-  assert.equal(card.values.size, 0);
-  assert.deepEqual(previews.at(-1), [null, 0]);
+  for (const direction of ["up", "down", "left", "right"]) {
+    assert.equal(await controller.commit(direction), true);
+  }
 
-  assert.equal(await controller.commit("right"), true);
-  assert.equal(commitCount, 2);
-  assert.equal(controller.isCommitting, false);
+  assert.deepEqual(
+    observed.map(({ direction, preview }) => [direction, preview]),
+    [
+      ["up", "up"],
+      ["down", "down"],
+      ["left", "left"],
+      ["right", "right"],
+    ],
+  );
+  assert.equal(observed[0].x, "0px");
+  assert.match(observed[0].y, /^-/);
+  assert.equal(observed[1].x, "0px");
+  assert.doesNotMatch(observed[1].y, /^-/);
+  assert.match(observed[2].x, /^-/);
+  assert.equal(observed[2].y, "-12px");
+  assert.doesNotMatch(observed[3].x, /^-/);
+  assert.equal(card.dataset.swipeState, "idle");
   assert.equal(card.values.size, 0);
 });
 
-test("rapid duplicate commits resolve only the first choice", async (t) => {
-  useReducedMotion(t);
-
+test("unsupported directions never invoke resolution", async (t) => {
+  installBrowserStubs(t);
   const card = new FakeCard();
-  let commitCount = 0;
-  let releaseCommit;
+  let calls = 0;
+  const controller = createSwipeController({
+    card,
+    onCommit: async () => {
+      calls += 1;
+      return true;
+    },
+  });
+  assert.equal(await controller.commit("diagonal"), false);
+  assert.equal(await controller.commit(null), false);
+  assert.equal(calls, 0);
+});
+
+test("vertical drag previews up and commits after the preserved distance threshold", async (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  const previews = [];
+  const commits = [];
+  createSwipeController({
+    card,
+    onPreview: (direction, strength) => previews.push([direction, strength]),
+    onCommit: async (direction) => {
+      commits.push(direction);
+      return true;
+    },
+  });
+
+  card.dispatchEvent(
+    pointerEvent("pointerdown", {
+      pointerId: 7,
+      button: 0,
+      clientX: 160,
+      clientY: 250,
+      timeStamp: 0,
+    }),
+  );
+  card.dispatchEvent(
+    pointerEvent("pointermove", {
+      pointerId: 7,
+      clientX: 164,
+      clientY: 130,
+      timeStamp: 220,
+    }),
+  );
+  assert.equal(card.dataset.previewDirection, "up");
+  assert.equal(card.style.getPropertyValue("--choice-up-opacity") !== "0", true);
+  card.dispatchEvent(
+    pointerEvent("pointerup", {
+      pointerId: 7,
+      clientX: 164,
+      clientY: 130,
+      timeStamp: 240,
+    }),
+  );
+  await settle();
+  assert.deepEqual(commits, ["up"]);
+  assert.deepEqual(previews.at(-1), [null, 0]);
+});
+
+test("vertical drag previews down and commits a deliberate flick", async (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  const commits = [];
+  createSwipeController({
+    card,
+    onCommit: async (direction) => {
+      commits.push(direction);
+      return true;
+    },
+  });
+
+  card.dispatchEvent(
+    pointerEvent("pointerdown", {
+      pointerId: 9,
+      button: 0,
+      clientX: 150,
+      clientY: 120,
+      timeStamp: 0,
+    }),
+  );
+  card.dispatchEvent(
+    pointerEvent("pointermove", {
+      pointerId: 9,
+      clientX: 149,
+      clientY: 160,
+      timeStamp: 35,
+    }),
+  );
+  card.dispatchEvent(
+    pointerEvent("pointerup", {
+      pointerId: 9,
+      clientX: 149,
+      clientY: 160,
+      timeStamp: 40,
+    }),
+  );
+  await settle();
+  assert.deepEqual(commits, ["down"]);
+});
+
+test("dominant axis determines diagonal swipe direction", async (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  const commits = [];
+  createSwipeController({
+    card,
+    onCommit: async (direction) => {
+      commits.push(direction);
+      return true;
+    },
+  });
+
+  card.dispatchEvent(
+    pointerEvent("pointerdown", {
+      pointerId: 2,
+      button: 0,
+      clientX: 200,
+      clientY: 250,
+      timeStamp: 0,
+    }),
+  );
+  card.dispatchEvent(
+    pointerEvent("pointermove", {
+      pointerId: 2,
+      clientX: 105,
+      clientY: 205,
+      timeStamp: 180,
+    }),
+  );
+  assert.equal(card.dataset.previewDirection, "left");
+  card.dispatchEvent(
+    pointerEvent("pointerup", {
+      pointerId: 2,
+      clientX: 105,
+      clientY: 205,
+      timeStamp: 200,
+    }),
+  );
+  await settle();
+  assert.deepEqual(commits, ["left"]);
+});
+
+test("short slow drags return to center without committing", async (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  const commits = [];
+  createSwipeController({
+    card,
+    onCommit: async (direction) => {
+      commits.push(direction);
+      return true;
+    },
+  });
+
+  card.dispatchEvent(
+    pointerEvent("pointerdown", {
+      pointerId: 1,
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+      timeStamp: 0,
+    }),
+  );
+  card.dispatchEvent(
+    pointerEvent("pointermove", {
+      pointerId: 1,
+      clientX: 118,
+      clientY: 111,
+      timeStamp: 300,
+    }),
+  );
+  card.dispatchEvent(
+    pointerEvent("pointerup", {
+      pointerId: 1,
+      clientX: 118,
+      clientY: 111,
+      timeStamp: 340,
+    }),
+  );
+  await settle();
+  assert.deepEqual(commits, []);
+  assert.equal(card.dataset.previewDirection, "none");
+  assert.equal(card.style.getPropertyValue("--card-x"), "");
+  assert.equal(card.style.getPropertyValue("--card-y"), "");
+});
+
+test("blocked choices recenter and report their exact direction", async (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  const blocked = [];
+  let commits = 0;
+  const controller = createSwipeController({
+    card,
+    canCommit: (direction) => direction !== "right",
+    onBlocked: (direction) => blocked.push(direction),
+    onCommit: async () => {
+      commits += 1;
+      return true;
+    },
+  });
+  assert.equal(await controller.commit("right"), false);
+  assert.deepEqual(blocked, ["right"]);
+  assert.equal(commits, 0);
+  assert.equal(card.dataset.swipeState, "idle");
+});
+
+test("dragging toward an unavailable Intro direction shows no false preview", (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  const previews = [];
+  createSwipeController({
+    card,
+    canCommit: (direction) => direction === "up" || direction === "left",
+    onPreview: (direction, strength) => previews.push([direction, strength]),
+    onCommit: async () => true,
+  });
+  card.dispatchEvent(
+    pointerEvent("pointerdown", {
+      pointerId: 6,
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+      timeStamp: 0,
+    }),
+  );
+  card.dispatchEvent(
+    pointerEvent("pointermove", {
+      pointerId: 6,
+      clientX: 100,
+      clientY: 180,
+      timeStamp: 200,
+    }),
+  );
+  assert.equal(card.dataset.previewDirection, "none");
+  assert.deepEqual(previews.at(-1), [null, 0]);
+  assert.equal(card.style.getPropertyValue("--choice-down-opacity"), "0");
+});
+
+test("input locks prevent pointer starts and direct commits", async (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  let locked = true;
+  let commits = 0;
+  const controller = createSwipeController({
+    card,
+    isInputLocked: () => locked,
+    onCommit: async () => {
+      commits += 1;
+      return true;
+    },
+  });
+  assert.equal(await controller.commit("up"), false);
+  card.dispatchEvent(
+    pointerEvent("pointerdown", {
+      pointerId: 4,
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+      timeStamp: 0,
+    }),
+  );
+  assert.notEqual(card.dataset.swipeState, "dragging");
+  locked = false;
+  assert.equal(await controller.commit("up"), true);
+  assert.equal(commits, 1);
+});
+
+test("duplicate commits are ignored until the active resolution finishes", async (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  let resolveHeld;
   let reportStarted;
   const started = new Promise((resolve) => {
     reportStarted = resolve;
   });
-  const heldCommit = new Promise((resolve) => {
-    releaseCommit = resolve;
+  const held = new Promise((resolve) => {
+    resolveHeld = resolve;
   });
+  let commits = 0;
   const controller = createSwipeController({
     card,
     async onCommit() {
-      commitCount += 1;
+      commits += 1;
       reportStarted();
-      await heldCommit;
+      await held;
       return true;
     },
   });
 
-  const first = controller.commit("left");
+  const first = controller.commit("down");
   await started;
   assert.equal(controller.isCommitting, true);
-  assert.equal(await controller.commit("right"), false);
-  assert.equal(commitCount, 1);
-  releaseCommit();
+  assert.equal(await controller.commit("left"), false);
+  assert.equal(commits, 1);
+  resolveHeld();
   assert.equal(await first, true);
   assert.equal(controller.isCommitting, false);
 });
 
-test("disabled choices never invoke the resolution callback", async (t) => {
-  useReducedMotion(t);
-
+test("a commit callback can reset for the next card without losing its entry state", async (t) => {
+  installBrowserStubs(t);
   const card = new FakeCard();
-  let commitCount = 0;
-  const blocked = [];
-  const controller = createSwipeController({
-    card,
-    canCommit: (direction) => direction !== "left",
-    onBlocked: (direction) => blocked.push(direction),
-    onCommit: async () => {
-      commitCount += 1;
-      return true;
-    },
-  });
-
-  assert.equal(await controller.commit("left"), false);
-  assert.equal(commitCount, 0);
-  assert.deepEqual(blocked, ["left"]);
-  assert.equal(controller.isCommitting, false);
-  assert.equal(card.dataset.swipeState, "idle");
-});
-
-test("ignored resolution returns false, unlocks, and clears off-screen transforms", async (t) => {
-  useReducedMotion(t);
-
-  const card = new FakeCard();
-  const controller = createSwipeController({
-    card,
-    onCommit: async () => false,
-  });
-
-  assert.equal(await controller.commit("right"), false);
-  assert.equal(controller.isCommitting, false);
-  assert.equal(card.dataset.swipeState, "idle");
-  assert.equal(card.dataset.previewDirection, "none");
-  assert.equal(card.style.getPropertyValue("--card-x"), "");
-  assert.equal(card.style.getPropertyValue("--card-y"), "");
-  assert.equal(card.style.getPropertyValue("--card-rotation"), "");
-});
-
-test("an engine-stale token follows the accepted commit cleanup path", async (t) => {
-  useReducedMotion(t);
-
-  const game = Engine.createGame({ seed: 45 });
-  const card = new FakeCard();
-  let inputLocked = false;
-  let state = game.state;
-  let currentCard = game.card;
-  let ignoredReason = null;
   let controller;
   controller = createSwipeController({
     card,
-    async onCommit(direction) {
-      inputLocked = true;
-      try {
-        const resolution = Engine.resolveChoice(state, direction, undefined, {
-          expectedToken: "stale:opening-card",
-        });
-        ignoredReason = resolution.reason;
-        if (resolution.ignored) return false;
-        state = resolution.state;
-        currentCard = resolution.card;
-        return true;
-      } finally {
-        inputLocked = false;
-        controller.resetForNextCard();
-      }
-    },
-  });
-
-  assert.equal(await controller.commit("left"), false);
-  assert.equal(ignoredReason, "stale-resolution");
-  assert.equal(state.decisionCount, 0);
-  assert.equal(currentCard.id, "opening-hearthvale-oath");
-  assert.equal(inputLocked, false);
-  assert.equal(controller.isCommitting, false);
-  assert.equal(card.dataset.swipeState, "idle");
-  assert.equal(card.values.size, 0);
-});
-
-test("callback exceptions report the error, unlock, and recenter", async (t) => {
-  useReducedMotion(t);
-
-  const card = new FakeCard();
-  const expected = new Error("resolution failed");
-  const errors = [];
-  const controller = createSwipeController({
-    card,
-    onCommit: async () => {
-      throw expected;
-    },
-    onError: (error) => errors.push(error),
-  });
-
-  assert.equal(await controller.commit("left"), false);
-  assert.deepEqual(errors, [expected]);
-  assert.equal(controller.isCommitting, false);
-  assert.equal(card.dataset.swipeState, "idle");
-  assert.equal(card.values.size, 0);
-});
-
-test("destroying during an active callback clears the committed presentation", async (t) => {
-  useReducedMotion(t);
-
-  const card = new FakeCard();
-  let reportStarted;
-  let releaseCommit;
-  const started = new Promise((resolve) => {
-    reportStarted = resolve;
-  });
-  const heldCommit = new Promise((resolve) => {
-    releaseCommit = resolve;
-  });
-  const controller = createSwipeController({
-    card,
     async onCommit() {
-      reportStarted();
-      await heldCommit;
-      return true;
-    },
-  });
-
-  const pending = controller.commit("right");
-  await started;
-  assert.equal(card.dataset.swipeState, "committing");
-  controller.destroy();
-  assert.equal(controller.isCommitting, false);
-  assert.equal(card.dataset.swipeState, "idle");
-  assert.equal(card.values.size, 0);
-  releaseCommit();
-  assert.equal(await pending, false);
-});
-
-test("normal motion resolves on the transform transition without changing sequencing", async (t) => {
-  useReducedMotion(t, false);
-
-  const card = new FakeCard();
-  const states = [];
-  let controller;
-  controller = createSwipeController({
-    card,
-    onCommitStart() {
-      states.push(["start", controller.isCommitting, card.dataset.swipeState]);
-    },
-    async onCommit() {
-      states.push(["resolve", controller.isCommitting, card.dataset.swipeState]);
       controller.resetForNextCard();
+      card.dataset.swipeState = "entering";
       return true;
     },
   });
-
-  const pending = controller.commit("left");
-  const transitionEnd = new Event("transitionend");
-  Object.defineProperty(transitionEnd, "propertyName", {
-    configurable: true,
-    value: "transform",
-  });
-  card.dispatchEvent(transitionEnd);
-
-  assert.equal(await pending, true);
-  assert.deepEqual(states, [
-    ["start", true, undefined],
-    ["resolve", true, "committing"],
-  ]);
-  assert.equal(controller.isCommitting, false);
-  assert.equal(card.dataset.swipeState, "idle");
-});
-
-test("pointer release below threshold recenters and beyond threshold commits once", async (t) => {
-  useReducedMotion(t);
-
-  const card = new FakeCard();
-  let commitCount = 0;
-  let resolveCommitted;
-  const committed = new Promise((resolve) => {
-    resolveCommitted = resolve;
-  });
-  let controller;
-  controller = createSwipeController({
-    card,
-    async onCommit() {
-      commitCount += 1;
-      controller.resetForNextCard();
-      resolveCommitted();
-      return true;
-    },
-  });
-
-  card.dispatchEvent(pointerEvent("pointerdown", {
-    pointerId: 1,
-    button: 0,
-    clientX: 100,
-    clientY: 100,
-    timeStamp: 0,
-  }));
-  card.dispatchEvent(pointerEvent("pointerup", {
-    pointerId: 1,
-    clientX: 130,
-    clientY: 100,
-    timeStamp: 100,
-  }));
-  await Promise.resolve();
-  assert.equal(commitCount, 0);
-  assert.equal(card.dataset.swipeState, "idle");
-
-  card.dispatchEvent(pointerEvent("pointerdown", {
-    pointerId: 2,
-    button: 0,
-    clientX: 100,
-    clientY: 100,
-    timeStamp: 200,
-  }));
-  card.dispatchEvent(pointerEvent("pointerup", {
-    pointerId: 2,
-    clientX: 250,
-    clientY: 100,
-    timeStamp: 400,
-  }));
-  await committed;
-  assert.equal(commitCount, 1);
-  assert.equal(controller.isCommitting, false);
-});
-
-test("fixed-seed UI commit coordination advances three cards exactly once each", async (t) => {
-  useReducedMotion(t);
-
-  const game = Engine.createGame({ seed: 44 });
-  const card = new FakeCard();
-  let state = game.state;
-  let currentCard = game.card;
-  let inputLocked = false;
-  let resolutionCount = 0;
-  let controller;
-  const firstToken = currentCard.resolutionToken;
-  const firstCardId = currentCard.id;
-  const lockState = () => ({
-    inputLocked,
-    controllerCommitting: controller?.isCommitting === true,
-    drawerPaused: false,
-    storyTransitionActive: false,
-    terminalActive: false,
-    feedbackActive: Boolean(state.pendingChoiceFeedback),
-    confirmationOpen: false,
-  });
-  const dismissFeedback = () => {
-    const feedback = state.pendingChoiceFeedback;
-    assert.ok(feedback);
-    const before = {
-      decisionCount: state.decisionCount,
-      worldCardsResolved: state.story.totalWorldCardsResolved,
-      rngState: state.rngState,
-      cardId: state.currentCardId,
-      cardToken: state.currentCardToken,
-    };
-    const dismissed = Engine.dismissChoiceFeedback(state, {
-      expectedFeedbackId: feedback.id,
-    });
-    assert.equal(dismissed.ignored, false);
-    state = dismissed.state;
-    currentCard = dismissed.card;
-    assert.equal(state.pendingChoiceFeedback, null);
-    assert.equal(state.decisionCount, before.decisionCount);
-    assert.equal(state.story.totalWorldCardsResolved, before.worldCardsResolved);
-    assert.equal(state.rngState, before.rngState);
-    assert.equal(state.currentCardId, before.cardId);
-    assert.equal(state.currentCardToken, before.cardToken);
-    assert.equal(currentCard?.resolutionToken, before.cardToken);
-    card.dataset.cardId = currentCard?.id ?? "special-surface";
-    card.hidden = !currentCard;
-    card.inert = !currentCard;
-  };
-
-  assert.equal(firstCardId, "opening-hearthvale-oath");
-  card.dataset.cardId = firstCardId;
-  controller = createSwipeController({
-    card,
-    isInputLocked: () => isNewInputBlocked(lockState()),
-    canCommit: (direction) => currentCard?.[direction]?.disabled !== true,
-    async onCommit(direction) {
-      assert.equal(controller.isCommitting, true);
-      assert.equal(isNewInputBlocked(lockState()), true);
-      if (isActiveCommitResolutionBlocked(lockState())) return false;
-
-      inputLocked = true;
-      try {
-        const resolution = Engine.resolveChoice(state, direction, undefined, {
-          expectedToken: currentCard.resolutionToken,
-        });
-        resolutionCount += 1;
-        if (resolution.ignored) return false;
-        state = resolution.state;
-        currentCard = resolution.card;
-        card.dataset.cardId = currentCard?.id ?? "special-surface";
-        card.hidden = Boolean(state.pendingChoiceFeedback) || !currentCard;
-        card.inert = Boolean(state.pendingChoiceFeedback) || !currentCard;
-        return true;
-      } finally {
-        inputLocked = false;
-        controller.resetForNextCard();
-        card.dataset.swipeState = "entering";
-      }
-    },
-  });
-
-  assert.equal(await controller.commit("left"), true);
-  assert.equal(state.decisionCount, 1);
-  assert.equal(state.story.totalWorldCardsResolved, 1);
-  assert.notEqual(state.currentCardToken, firstToken);
-  assert.notEqual(currentCard?.id, firstCardId);
-  assert.ok(state.pendingChoiceFeedback);
-  assert.equal(card.hidden, true);
-  assert.equal(card.inert, true);
-  assert.equal(card.dataset.swipeState, "entering");
-  assert.equal(controller.isCommitting, false);
-
-  assert.equal(await controller.commit("right"), false);
-  assert.equal(resolutionCount, 1);
-  dismissFeedback();
-  assert.equal(card.hidden, false);
-  assert.equal(card.inert, false);
-
-  const stale = Engine.resolveChoice(state, "left", undefined, {
-    expectedToken: firstToken,
-  });
-  assert.equal(stale.ignored, true);
-  assert.equal(stale.reason, "stale-resolution");
-  assert.equal(stale.state.decisionCount, 1);
-
   assert.equal(await controller.commit("right"), true);
-  assert.ok(state.pendingChoiceFeedback);
-  dismissFeedback();
-  assert.equal(await controller.commit("left"), true);
-  assert.ok(state.pendingChoiceFeedback);
-  dismissFeedback();
-  assert.equal(resolutionCount, 3);
-  assert.equal(state.decisionCount, 3);
-  assert.equal(state.story.totalWorldCardsResolved, 3);
   assert.equal(controller.isCommitting, false);
+  assert.equal(card.dataset.swipeState, "entering");
   assert.equal(card.values.size, 0);
+});
+
+test("destroy removes pointer handlers and cancels active presentation state", async (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  let commits = 0;
+  const controller = createSwipeController({
+    card,
+    onCommit: async () => {
+      commits += 1;
+      return true;
+    },
+  });
+  controller.destroy();
+  assert.equal(await controller.commit("left"), false);
+  card.dispatchEvent(
+    pointerEvent("pointerdown", {
+      pointerId: 5,
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+      timeStamp: 0,
+    }),
+  );
+  assert.equal(commits, 0);
+  assert.notEqual(card.dataset.swipeState, "dragging");
 });

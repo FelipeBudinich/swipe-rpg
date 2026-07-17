@@ -3,158 +3,88 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="description" content="The Ember Crown, a swipe-driven heroic-fantasy JRPG story arc.">
+    <meta name="description" content="Deep South, a swipe-driven maritime cosmic-horror story.">
     <meta name="theme-color" content="#07131d">
-    <title>The Ember Crown</title>
+    <title>Deep South</title>
     <link rel="stylesheet" href="/assets/app.css">
     <script type="module" src="/js/main.js"></script>
   </head>
-  <body class="min-h-full overflow-x-hidden bg-[#07131d] font-sans text-[#f4ead8] antialiased selection:bg-[#d8a94d] selection:text-[#07131d]">
+  <body class="min-h-full overflow-x-hidden bg-[#07131d] font-sans text-[#f4ead8] antialiased selection:bg-[#8ab7a8] selection:text-[#07131d]">
     <a
       href="#card-stack"
       class="fixed left-3 top-3 z-50 -translate-y-24 rounded-md bg-[#f4ead8] px-4 py-3 font-bold text-[#07131d] shadow-xl transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]"
-    >Skip to the current story screen</a>
+    >Skip to the current story card</a>
 
     <div
       id="app"
       class="safe-screen relative mx-auto flex w-full max-w-[34rem] flex-col gap-2"
-      data-mode="exploration"
+      data-mode="intro"
       aria-busy="true"
     >
-      <header id="player-hud" class="shrink-0 rounded-2xl border border-[#36505d] bg-[#102633]/95 p-2.5 shadow-lg" aria-label="Player status">
-        <section id="story-hud" class="rounded-lg bg-[#091923] px-2 py-1.5" aria-labelledby="story-heading">
-          <div class="mb-1 flex min-w-0 items-baseline justify-between gap-2">
-            <h1
-              id="story-heading"
-              class="min-w-0 truncate text-sm font-black tracking-wide text-[#fff6e6]"
-              aria-label="The Ember Crown - Opening Image"
-            >
-              <span id="arc-title">The Ember Crown</span><span aria-hidden="true"> - </span><span id="hud-beat-name" class="text-[#b9cbd0]">Opening Image</span>
-            </h1>
-            <p class="shrink-0 text-[0.62rem] font-black uppercase tracking-wider text-[#ffd77d]">Beat <span id="hud-beat-number" class="tabular-nums">1 / 15</span></p>
-          </div>
-          <progress
-            id="hud-story-progress"
-            class="resource-meter"
-            data-meter="story"
-            value="0"
-            max="100"
-            aria-label="Story progress: 0 percent"
-          >0 percent</progress>
+      <header
+        id="player-hud"
+        class="shrink-0 rounded-2xl border border-[#36505d] bg-[#102633]/95 p-2.5 shadow-lg"
+        aria-label="Deep South expedition status"
+      >
+        <section id="story-hud" class="rounded-lg bg-[#091923] px-2.5 py-2" aria-labelledby="story-title">
+          <h1 id="story-title" class="text-sm font-black tracking-[0.08em] text-[#fff6e6]">Deep South</h1>
+          <p id="hud-deck-title" class="mt-0.5 truncate text-xs font-bold text-[#b9cbd0]">Intro — It begins here</p>
         </section>
 
         <div
           id="player-resource-row"
-          class="mt-1.5 grid grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)] gap-1.5"
+          class="mt-1.5 grid grid-cols-[minmax(0,1.45fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] gap-1.5"
+          aria-label="Expedition resources"
         >
           <section
-            id="level-xp-hud"
+            id="eldritch-lore-hud"
             class="relative min-w-0 rounded-lg bg-[#091923] px-2 py-1.5"
-            data-resource="xp"
-            aria-label="Level 1. Experience 0 of 20."
+            data-resource="eldritchLore"
+            aria-label="Eldritch Lore: 0"
           >
-            <div class="mb-1 flex min-w-0 items-baseline justify-between gap-1">
-              <span class="min-w-0 whitespace-nowrap text-[0.62rem] font-bold uppercase tracking-[0.04em] text-[#9bb3ba]">
-                Level <span id="hud-level" class="font-black tabular-nums text-[#fff6e6]">1</span>
-              </span>
-              <span class="min-w-0 truncate text-[0.64rem] font-black uppercase tabular-nums text-[#a7e5bd]">
-                XP <span id="hud-xp">0 / 20</span>
-                <span id="hud-xp-delta" class="resource-delta" aria-hidden="true"></span>
-              </span>
-            </div>
-            <progress id="hud-xp-bar" class="resource-meter" data-meter="xp" value="0" max="20" aria-label="Experience: 0 of 20">0 of 20</progress>
+            <span class="block truncate text-[0.58rem] font-bold uppercase tracking-[0.04em] text-[#a8c9bd]">Eldritch Lore</span>
+            <strong id="hud-eldritch-lore" class="block text-sm font-black tabular-nums text-[#d8fff7]">0</strong>
+            <span id="hud-eldritch-lore-delta" class="resource-delta" aria-hidden="true"></span>
           </section>
 
           <section
-            id="hp-hud"
+            id="crew-hud"
             class="relative min-w-0 rounded-lg bg-[#091923] px-2 py-1.5"
-            data-resource="hp"
-            aria-label="Health 30 of 30."
+            data-resource="crew"
+            aria-label="Crew: 0"
           >
-            <div class="mb-1 flex min-w-0 items-baseline justify-between gap-1">
-              <span class="shrink-0 text-[0.62rem] font-bold uppercase tracking-wider text-[#ffb3a7]">HP</span>
-              <span class="min-w-0 truncate text-[0.64rem] font-black tabular-nums text-[#ffb3a7]">
-                <span id="hud-hp">30 / 30</span>
-                <span id="hud-hp-delta" class="resource-delta" aria-hidden="true"></span>
-              </span>
-            </div>
-            <progress id="hud-hp-bar" class="resource-meter" data-meter="hp" value="30" max="30" aria-label="Health: 30 of 30">30 of 30</progress>
+            <span class="block text-[0.58rem] font-bold uppercase tracking-wider text-[#e7c98d]">Crew</span>
+            <strong id="hud-crew" class="block text-sm font-black tabular-nums text-[#fff1bb]">0</strong>
+            <span id="hud-crew-delta" class="resource-delta" aria-hidden="true"></span>
           </section>
 
           <section
-            id="mp-hud"
+            id="sanity-hud"
             class="relative min-w-0 rounded-lg bg-[#091923] px-2 py-1.5"
-            data-resource="mp"
-            aria-label="Magic points 10 of 10."
+            data-resource="sanity"
+            aria-label="Sanity: 3"
           >
-            <div class="mb-1 flex min-w-0 items-baseline justify-between gap-1">
-              <span class="shrink-0 text-[0.62rem] font-bold uppercase tracking-wider text-[#aebcff]">MP</span>
-              <span class="min-w-0 truncate text-[0.64rem] font-black tabular-nums text-[#aebcff]">
-                <span id="hud-mp">10 / 10</span>
-                <span id="hud-mp-delta" class="resource-delta" aria-hidden="true"></span>
-              </span>
-            </div>
-            <progress id="hud-mp-bar" class="resource-meter" data-meter="mp" value="10" max="10" aria-label="Magic points: 10 of 10">10 of 10</progress>
+            <span class="block text-[0.58rem] font-bold uppercase tracking-wider text-[#c7bce6]">Sanity</span>
+            <strong id="hud-sanity" class="block text-sm font-black tabular-nums text-[#e7dcff]">3</strong>
+            <span id="hud-sanity-delta" class="resource-delta" aria-hidden="true"></span>
           </section>
         </div>
       </header>
 
       <main id="game-main" class="flex min-h-0 flex-1 flex-col">
-        <p
-          id="result-live"
-          class="sr-only"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        ></p>
+        <p id="result-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
 
-        <section id="card-stack" class="relative flex min-h-0 flex-1 items-stretch justify-center" aria-label="Current decision" tabindex="-1">
-          <div id="card-backdrop" class="pointer-events-none absolute inset-x-3 bottom-1 top-2 rounded-[1.4rem] border border-[#28434f] bg-[#102633] opacity-70 shadow-lg" aria-hidden="true"></div>
-
-          <section
-            id="story-transition"
-            class="story-transition relative z-20 flex min-h-[clamp(18.25rem,47dvh,29rem)] w-full flex-col items-center justify-center overflow-hidden rounded-[1.4rem] border border-[#d8a94d]/80 bg-[#102633] px-6 py-8 text-center text-[#f4ead8] shadow-[0_16px_45px_rgba(0,0,0,0.42)]"
-            role="region"
-            aria-labelledby="story-transition-title"
-            aria-describedby="story-transition-sentence"
-            tabindex="-1"
-            hidden
-          >
-            <p id="story-transition-kicker" class="text-[0.65rem] font-black uppercase tracking-[0.24em] text-[#79d4c5]">A new chapter</p>
-            <p id="story-transition-beat" class="mt-4 text-xs font-black uppercase tracking-[0.18em] text-[#ffd77d]">Break into Two</p>
-            <h2 id="story-transition-title" class="mt-2 text-2xl font-black leading-tight text-[#fff6e6]">Beyond Hearthvale</h2>
-            <p id="story-transition-sentence" class="mt-4 max-w-sm text-sm font-semibold leading-relaxed text-[#b9cbd0]">The mountain road opens, and safety falls behind.</p>
-            <button
-              id="story-transition-continue"
-              type="button"
-              class="mt-7 min-h-12 min-w-36 rounded-xl border border-[#d8a94d] bg-[#3b3022] px-5 py-3 text-sm font-black text-[#fff1bb] shadow-md transition hover:bg-[#514027] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#102633] active:translate-y-px"
-            >Continue</button>
-          </section>
-
-          <section
-            id="terminal-summary"
-            class="terminal-summary relative z-20 flex min-h-[clamp(18.25rem,47dvh,29rem)] w-full flex-col overflow-y-auto rounded-[1.4rem] border border-[#567481] bg-[#102633] px-5 py-5 text-[#f4ead8] shadow-[0_16px_45px_rgba(0,0,0,0.42)]"
-            role="region"
-            aria-labelledby="terminal-title"
-            aria-describedby="terminal-copy"
-            tabindex="-1"
-            hidden
-          >
-            <p id="terminal-kicker" class="text-center text-[0.65rem] font-black uppercase tracking-[0.24em] text-[#79d4c5]">Arc complete</p>
-            <p id="terminal-arc-title" class="mt-2 text-center text-xs font-bold uppercase tracking-[0.14em] text-[#ffd77d]">The Ember Crown</p>
-            <h2 id="terminal-title" class="mt-1 text-center text-2xl font-black leading-tight text-[#fff6e6]">Crown of Dawn</h2>
-            <p id="terminal-copy" class="mt-2 text-center text-sm font-semibold leading-relaxed text-[#b9cbd0]">Hearthvale wakes beneath a gentler fire.</p>
-            <dl id="terminal-stats" class="mt-4 grid grid-cols-2 gap-2 text-center"></dl>
-            <section id="terminal-discoveries" class="mt-3 rounded-xl border border-[#36505d] bg-[#091923] p-3" aria-labelledby="terminal-discoveries-title" hidden>
-              <h3 id="terminal-discoveries-title" class="text-[0.62rem] font-black uppercase tracking-[0.16em] text-[#ffd77d]">New discoveries</h3>
-              <ul id="terminal-discovery-list" class="mt-1 grid gap-1 text-xs font-semibold text-[#b9cbd0]"></ul>
-            </section>
-            <button
-              id="terminal-restart"
-              type="button"
-              class="mt-auto min-h-12 rounded-xl border border-[#4e9b93] bg-[#123c40] px-5 py-3 text-sm font-black text-[#d8fff7] shadow-md transition hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#102633] active:translate-y-px"
-            >Begin Another Arc</button>
-          </section>
+        <section
+          id="card-stack"
+          class="relative flex min-h-0 flex-1 items-stretch justify-center"
+          aria-label="Current story card"
+          tabindex="-1"
+        >
+          <div
+            id="card-backdrop"
+            class="pointer-events-none absolute inset-x-3 bottom-1 top-2 rounded-[1.4rem] border border-[#28434f] bg-[#102633] opacity-70 shadow-lg"
+            aria-hidden="true"
+          ></div>
 
           <section
             id="choice-feedback-card"
@@ -186,9 +116,30 @@
             </div>
           </section>
 
+          <section
+            id="terminal-summary"
+            class="terminal-summary relative z-20 flex min-h-[clamp(18.25rem,47dvh,29rem)] w-full flex-col overflow-y-auto rounded-[1.4rem] border border-[#925f69] bg-[#171e28] px-5 py-5 text-[#f4ead8] shadow-[0_16px_45px_rgba(0,0,0,0.42)]"
+            role="region"
+            aria-labelledby="terminal-title"
+            aria-describedby="terminal-copy"
+            tabindex="-1"
+            hidden
+          >
+            <p id="terminal-kicker" class="text-center text-[0.65rem] font-black uppercase tracking-[0.24em] text-[#d9a9b5]">Expedition lost</p>
+            <p class="mt-2 text-center text-xs font-bold uppercase tracking-[0.14em] text-[#9fc7ba]">Deep South</p>
+            <h2 id="terminal-title" class="mt-1 text-center text-2xl font-black leading-tight text-[#fff6e6]">The sea remembers</h2>
+            <p id="terminal-copy" class="mt-3 text-center text-sm font-semibold leading-relaxed text-[#b9cbd0]">Reason fractures beneath the weight of what the expedition has witnessed.</p>
+            <dl id="terminal-stats" class="mt-4 grid grid-cols-3 gap-2 text-center"></dl>
+            <button
+              id="terminal-restart"
+              type="button"
+              class="mt-auto min-h-12 rounded-xl border border-[#7bb5a5] bg-[#123c40] px-5 py-3 text-sm font-black text-[#d8fff7] shadow-md transition hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#102633] active:translate-y-px"
+            >Begin Again</button>
+          </section>
+
           <article
             id="card"
-            class="relative z-10 flex min-h-[clamp(18.25rem,47dvh,29rem)] w-full flex-col overflow-hidden rounded-[1.4rem] border border-[#567481] bg-[#f4ead8] text-[#142630] shadow-[0_16px_45px_rgba(0,0,0,0.38)] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d]"
+            class="relative z-10 flex min-h-[clamp(18.25rem,47dvh,29rem)] w-full flex-col overflow-hidden rounded-[1.4rem] border border-[#567481] bg-[#e8e0cd] text-[#142630] shadow-[0_16px_45px_rgba(0,0,0,0.38)] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d]"
             tabindex="0"
             aria-labelledby="card-title"
             aria-describedby="card-text card-detail"
@@ -196,71 +147,71 @@
             data-swipe-state="idle"
             data-preview-direction="none"
           >
+            <div id="choice-up-overlay" class="choice-overlay choice-overlay-up absolute inset-x-0 top-0 z-20 flex h-1/2 items-start justify-center bg-gradient-to-b from-[#164850]/95 to-transparent px-4 py-4" aria-hidden="true">
+              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg">↑ <span id="choice-up-overlay-label">Up</span></span>
+            </div>
+            <div id="choice-down-overlay" class="choice-overlay choice-overlay-down absolute inset-x-0 bottom-0 z-20 flex h-1/2 items-end justify-center bg-gradient-to-t from-[#4b354e]/95 to-transparent px-4 py-4" aria-hidden="true">
+              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#eadcff] shadow-lg">↓ <span id="choice-down-overlay-label">Down</span></span>
+            </div>
             <div id="choice-left-overlay" class="choice-overlay absolute inset-y-0 left-0 z-20 flex w-1/2 items-center justify-start bg-gradient-to-r from-[#174d50]/95 to-transparent px-4" aria-hidden="true">
-              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-left text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg">← <span id="choice-left-overlay-label">Left choice</span></span>
+              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-left text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg">← <span id="choice-left-overlay-label">Left</span></span>
             </div>
             <div id="choice-right-overlay" class="choice-overlay absolute inset-y-0 right-0 z-20 flex w-1/2 items-center justify-end bg-gradient-to-l from-[#643b46]/95 to-transparent px-4" aria-hidden="true">
-              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-right text-xs font-black uppercase tracking-wider text-[#ffd8cf] shadow-lg"><span id="choice-right-overlay-label">Right choice</span> →</span>
+              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-right text-xs font-black uppercase tracking-wider text-[#ffd8cf] shadow-lg"><span id="choice-right-overlay-label">Right</span> →</span>
             </div>
 
-            <header class="shrink-0 border-b border-[#b7a98f] bg-[#e6d8bd] px-4 py-2 text-center">
-              <p id="card-speaker" class="text-[0.63rem] font-black uppercase tracking-[0.2em] text-[#285b5a]">The road awaits</p>
-              <h2 id="card-title" class="mt-0.5 text-lg font-black leading-tight text-[#142630]">Reading the trail…</h2>
-              <section id="card-combat-status" class="mt-1.5 rounded-lg border border-[#b65f65]/50 bg-[#f0cfc3]/55 px-2 py-1.5 text-left" data-resource="enemyHp" aria-label="Enemy health" hidden>
-                <div class="mb-1 flex items-baseline justify-between gap-2 text-[0.65rem] font-black uppercase tracking-wider text-[#7a3038]">
-                  <span>HP</span>
-                  <span id="card-enemy-hp" class="tabular-nums">0 / 1</span>
-                </div>
-                <progress id="card-enemy-hp-bar" class="resource-meter" data-meter="enemy" value="0" max="1">0 of 1</progress>
-              </section>
+            <header class="shrink-0 border-b border-[#a9a087] bg-[#d8d1bd] px-4 py-2 text-center">
+              <p id="card-speaker" class="text-[0.63rem] font-black uppercase tracking-[0.2em] text-[#285b5a]">Deep South</p>
+              <h2 id="card-title" class="mt-0.5 text-lg font-black leading-tight text-[#142630]">The packet</h2>
             </header>
 
-            <figure class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_45%,#f8e7bc_0%,#b8c4ad_58%,#66848a_100%)] px-4 py-2">
-              <img id="card-art" class="h-[clamp(6.5rem,17dvh,10rem)] w-full select-none object-contain drop-shadow-[0_8px_8px_rgba(7,19,29,0.32)]" alt="" width="320" height="180" decoding="async" draggable="false">
+            <figure class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_45%,#dce4ce_0%,#91a99f_58%,#3d616a_100%)] px-4 py-2">
+              <img
+                id="card-art"
+                class="h-[clamp(6.5rem,17dvh,10rem)] w-full select-none object-contain drop-shadow-[0_8px_8px_rgba(7,19,29,0.32)]"
+                alt=""
+                width="320"
+                height="180"
+                decoding="async"
+                draggable="false"
+              >
             </figure>
 
-            <div class="shrink-0 space-y-1.5 border-t border-[#b7a98f] bg-[#f4ead8] px-4 py-3 text-center">
-              <p id="card-text" class="text-sm font-semibold leading-snug text-[#20343d]">Preparing your caravan's first step toward the moonlit prism ruins.</p>
-              <dl id="card-reward-summary" class="grid gap-1 rounded-lg border border-[#c7ae76] bg-[#fff6e6]/75 px-3 py-2 text-left" aria-label="Battle rewards" hidden></dl>
-              <p id="card-detail" class="min-h-4 text-[0.67rem] font-bold uppercase tracking-wide text-[#70584f]"></p>
+            <div class="shrink-0 space-y-1.5 border-t border-[#a9a087] bg-[#e8e0cd] px-4 py-3 text-center">
+              <p id="card-text" class="text-sm font-semibold leading-snug text-[#20343d]">A salt-stained packet waits to be opened.</p>
+              <p id="card-detail" class="min-h-4 text-[0.67rem] font-bold uppercase tracking-wide text-[#5a5550]"></p>
             </div>
           </article>
         </section>
 
+        <p id="direction-hint" class="mt-1.5 shrink-0 text-center text-[0.62rem] font-bold leading-tight text-[#9bb3ba]">Up: keep reading · Left: skip introduction</p>
+
         <div
           id="choice-controls"
-          class="mt-2 grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2"
+          class="mt-1 grid shrink-0 grid-cols-2 gap-1.5"
           role="group"
-          aria-label="Actions"
+          aria-label="Story actions"
+          data-layout="intro"
         >
-          <button
-            id="choice-left"
-            type="button"
-            class="min-h-14 min-w-0 rounded-xl border border-[#4e9b93] bg-[#123c40] px-3 py-2 text-left text-[#d8fff7] shadow-md transition hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Choose left"
-          >
-            <span class="block text-[0.58rem] font-bold uppercase tracking-[0.16em] text-[#86cfc5]">Left · A / ←</span>
-            <span id="choice-left-label" class="block text-sm font-black leading-tight">Wait</span>
-            <span id="choice-left-detail" class="mt-0.5 block text-[0.62rem] font-bold leading-tight text-[#b4dfd9]"></span>
+          <button id="choice-up" type="button" class="choice-button" data-direction="up" aria-keyshortcuts="ArrowUp" aria-label="Up: Continue reading">
+            <span class="choice-direction">Up · ↑</span>
+            <span id="choice-up-label" class="choice-label">Continue reading</span>
+            <span id="choice-up-detail" class="choice-detail"></span>
           </button>
-          <button
-            id="inventory-open"
-            type="button"
-            class="min-h-14 min-w-16 shrink-0 rounded-xl border border-[#d8a94d]/70 bg-[#201d26] px-2 py-2 text-xs font-extrabold uppercase tracking-wider text-[#ffd77d] shadow-sm transition hover:bg-[#332b2e] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Open equipment and Pack"
-            aria-controls="inventory-drawer"
-            aria-expanded="false"
-            data-resource="gold"
-          >Pack</button>
-          <button
-            id="choice-right"
-            type="button"
-            class="min-h-14 min-w-0 rounded-xl border border-[#b66f72] bg-[#542f3b] px-3 py-2 text-right text-[#ffe9e1] shadow-md transition hover:bg-[#6b3c48] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Choose right"
-          >
-            <span class="block text-[0.58rem] font-bold uppercase tracking-[0.16em] text-[#e0a9a9]">Right · D / →</span>
-            <span id="choice-right-label" class="block text-sm font-black leading-tight">Continue</span>
-            <span id="choice-right-detail" class="mt-0.5 block text-[0.62rem] font-bold leading-tight text-[#edc2be]"></span>
+          <button id="choice-down" type="button" class="choice-button" data-direction="down" aria-keyshortcuts="ArrowDown" aria-label="Down" hidden>
+            <span class="choice-direction">Down · ↓</span>
+            <span id="choice-down-label" class="choice-label">Press onward</span>
+            <span id="choice-down-detail" class="choice-detail"></span>
+          </button>
+          <button id="choice-left" type="button" class="choice-button" data-direction="left" aria-keyshortcuts="ArrowLeft" aria-label="Left: Skip introduction">
+            <span class="choice-direction">Left · ←</span>
+            <span id="choice-left-label" class="choice-label">Skip introduction</span>
+            <span id="choice-left-detail" class="choice-detail"></span>
+          </button>
+          <button id="choice-right" type="button" class="choice-button" data-direction="right" aria-keyshortcuts="ArrowRight" aria-label="Right" hidden>
+            <span class="choice-direction">Right · →</span>
+            <span id="choice-right-label" class="choice-label">Act here</span>
+            <span id="choice-right-detail" class="choice-detail"></span>
           </button>
         </div>
 
@@ -268,7 +219,7 @@
           <button
             id="choice-feedback-continue"
             type="button"
-            class="min-h-14 w-full rounded-xl border border-[#d8a94d] bg-[#3b3022] px-5 py-3 text-sm font-black text-[#fff1bb] shadow-md transition hover:bg-[#514027] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+            class="min-h-14 w-full rounded-xl border border-[#9db58d] bg-[#2e3d32] px-5 py-3 text-sm font-black text-[#eff7df] shadow-md transition hover:bg-[#3c5142] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
           >Continue</button>
         </div>
       </main>
@@ -276,95 +227,8 @@
       <p id="card-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
     </div>
 
-    <dialog id="inventory-drawer" class="inventory-sheet" aria-labelledby="inventory-heading">
-      <div class="mx-auto flex max-h-[min(82dvh,44rem)] w-full max-w-[34rem] flex-col overflow-hidden rounded-t-3xl border border-b-0 border-[#567481] bg-[#102633] text-[#f4ead8] shadow-2xl sm:rounded-3xl sm:border">
-        <header class="flex shrink-0 items-center justify-between gap-3 border-b border-[#36505d] px-4 py-3">
-          <div>
-            <p class="text-[0.6rem] font-black uppercase tracking-[0.2em] text-[#79d4c5]">Loadout</p>
-            <h2 id="inventory-heading" class="text-lg font-black">Equipment &amp; Pack</h2>
-          </div>
-          <button id="inventory-close" type="button" class="min-h-11 min-w-11 rounded-xl border border-[#567481] bg-[#091923] px-3 font-black text-[#fff6e6] hover:bg-[#183442] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]" aria-label="Close equipment and inventory">Close</button>
-        </header>
-
-        <div class="min-h-0 overflow-y-auto overscroll-contain px-4 py-3">
-          <section id="inventory-wallet" class="mb-3 flex items-center justify-between rounded-lg border border-[#d8a94d]/45 bg-[#201d26] px-3 py-2" data-resource="gold" aria-label="Gold">
-            <span class="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#9bb3ba]">Gold</span>
-            <strong id="inventory-gold" class="text-base font-black tabular-nums text-[#ffd77d]">10</strong>
-          </section>
-          <p id="inventory-stats" class="mb-3 rounded-lg bg-[#091923] px-3 py-2 text-center text-xs font-bold text-[#b9cbd0]">Attack 5 · Defense 2 · Max HP 30 · Max MP 10</p>
-
-          <section aria-labelledby="equipped-heading">
-            <h3 id="equipped-heading" class="mb-2 text-xs font-black uppercase tracking-[0.16em] text-[#ffd77d]">Equipped</h3>
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <div id="equipped-weapon" class="min-h-16 rounded-xl border border-[#36505d] bg-[#091923] p-2" data-slot="weapon">
-                <p class="text-[0.58rem] font-bold uppercase tracking-wider text-[#87a1aa]">Weapon</p>
-                <p class="mt-1 text-xs font-bold">Empty</p>
-              </div>
-              <div id="equipped-armor" class="min-h-16 rounded-xl border border-[#36505d] bg-[#091923] p-2" data-slot="armor">
-                <p class="text-[0.58rem] font-bold uppercase tracking-wider text-[#87a1aa]">Armor</p>
-                <p class="mt-1 text-xs font-bold">Empty</p>
-              </div>
-              <div id="equipped-charm" class="min-h-16 rounded-xl border border-[#36505d] bg-[#091923] p-2" data-slot="charm">
-                <p class="text-[0.58rem] font-bold uppercase tracking-wider text-[#87a1aa]">Charm</p>
-                <p class="mt-1 text-xs font-bold">Empty</p>
-              </div>
-            </div>
-          </section>
-
-          <section class="mt-4" aria-labelledby="pack-heading">
-            <div class="mb-2 flex items-center justify-between gap-2">
-              <h3 id="pack-heading" class="text-xs font-black uppercase tracking-[0.16em] text-[#ffd77d]">Pack</h3>
-              <span id="inventory-count" class="text-[0.65rem] font-bold text-[#9bb3ba]">0 items</span>
-            </div>
-            <div id="inventory-content" class="grid gap-2" aria-live="polite">
-              <p id="inventory-empty" class="rounded-xl border border-dashed border-[#567481] p-4 text-center text-xs font-semibold text-[#9bb3ba]">Your pack is empty.</p>
-            </div>
-          </section>
-
-          <section class="mt-5 border-t border-[#36505d] pt-3" aria-labelledby="run-controls-heading">
-            <h3 id="run-controls-heading" class="sr-only">Run controls</h3>
-            <div class="grid grid-cols-2 gap-2">
-              <button id="new-run" type="button" class="min-h-11 rounded-xl border border-[#4e9b93] bg-[#123c40] px-3 py-2 text-xs font-black text-[#d8fff7] hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]">New Run</button>
-              <button id="reset-data" type="button" class="min-h-11 rounded-xl border border-[#b66f72] bg-[#542f3b] px-3 py-2 text-xs font-black text-[#ffe9e1] hover:bg-[#6b3c48] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d]">Reset All Data</button>
-            </div>
-          </section>
-
-          <section
-            id="debug-checkpoints"
-            class="mt-5 rounded-xl border border-dashed border-[#d8a94d]/60 bg-[#201d26] p-3"
-            aria-labelledby="debug-checkpoints-heading"
-            hidden
-          >
-            <p class="text-[0.58rem] font-black uppercase tracking-[0.18em] text-[#d8a94d]">Local development only</p>
-            <h3 id="debug-checkpoints-heading" class="mt-1 text-sm font-black text-[#fff6e6]">Story checkpoints</h3>
-            <label for="debug-checkpoint-select" class="mt-3 block text-xs font-bold text-[#b9cbd0]">Named beat checkpoint</label>
-            <select
-              id="debug-checkpoint-select"
-              class="mt-1 min-h-11 w-full rounded-lg border border-[#567481] bg-[#091923] px-3 text-sm font-bold text-[#fff6e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]"
-            ></select>
-            <div class="mt-2 grid grid-cols-2 gap-2">
-              <button id="debug-checkpoint-save" type="button" class="min-h-11 rounded-lg border border-[#4e9b93] bg-[#123c40] px-2 text-xs font-black text-[#d8fff7] hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]">Save here</button>
-              <button id="debug-checkpoint-restore" type="button" class="min-h-11 rounded-lg border border-[#d8a94d]/80 bg-[#3b3022] px-2 text-xs font-black text-[#fff1bb] hover:bg-[#514027] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d]">Restore</button>
-            </div>
-            <p id="debug-checkpoint-status" class="mt-2 min-h-4 text-[0.65rem] font-semibold text-[#b9cbd0]" role="status" aria-live="polite"></p>
-          </section>
-        </div>
-      </div>
-    </dialog>
-
-    <dialog id="confirm-dialog" class="confirm-sheet" aria-labelledby="confirm-title" aria-describedby="confirm-message">
-      <div class="w-[min(calc(100vw-2rem),24rem)] rounded-2xl border border-[#567481] bg-[#102633] p-5 text-[#f4ead8] shadow-2xl">
-        <h2 id="confirm-title" class="text-lg font-black">Confirm action</h2>
-        <p id="confirm-message" class="mt-2 text-sm leading-relaxed text-[#b9cbd0]">This cannot be undone.</p>
-        <div class="mt-5 grid grid-cols-2 gap-2">
-          <button id="confirm-cancel" type="button" class="min-h-11 rounded-xl border border-[#567481] bg-[#091923] px-3 text-sm font-bold hover:bg-[#183442] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]">Cancel</button>
-          <button id="confirm-accept" type="button" class="min-h-11 rounded-xl border border-[#b66f72] bg-[#542f3b] px-3 text-sm font-black text-[#ffe9e1] hover:bg-[#6b3c48] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d]">Confirm</button>
-        </div>
-      </div>
-    </dialog>
-
     <noscript>
-      <div class="fixed inset-x-4 top-4 z-50 mx-auto max-w-md rounded-xl border border-[#b66f72] bg-[#291d26] p-4 text-center font-bold text-[#ffe9e1] shadow-2xl">The Ember Crown needs JavaScript enabled to begin an arc.</div>
+      <div class="fixed inset-x-4 top-4 z-50 mx-auto max-w-md rounded-xl border border-[#925f69] bg-[#291d26] p-4 text-center font-bold text-[#ffe9e1] shadow-2xl">Deep South needs JavaScript enabled to begin the expedition.</div>
     </noscript>
   </body>
 </html>

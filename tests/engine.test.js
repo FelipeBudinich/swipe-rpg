@@ -1,365 +1,340 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { EMBER_CROWN_ARC } from "../public/js/data/arcs/ember-crown.js";
+import { DEEP_SOUTH_STORY } from "../public/js/data/deep-south.js";
 import {
   createGame,
   dismissChoiceFeedback,
-  dismissStoryTransition,
+  getCurrentCard,
+  getDestinationDeckId,
   getNextCard,
-  resolveChoice,
   restartGame,
+  resolveChoice,
 } from "../public/js/game/engine.js";
-import { createInitialState, normalizeState, STORY_BEAT_IDS } from "../public/js/game/state.js";
+import { createInitialState, normalizeState } from "../public/js/game/state.js";
 
-function boosted(state) {
-  return {
-    ...state,
-    player: {
-      ...state.player,
-      hp: 999,
-      mp: 100,
-      baseStats: { attack: 150, defense: 100, maxHp: 999, maxMp: 100 },
-    },
-  };
-}
+const deckById = Object.fromEntries(
+  DEEP_SOUTH_STORY.decks.map((deck) => [deck.id, deck]),
+);
 
-function stateAtBeat(beatId, seed = 1) {
-  const index = STORY_BEAT_IDS.indexOf(beatId);
-  const base = createInitialState({ seed });
-  return boosted({
-    ...base,
-    story: {
-      ...base.story,
-      currentBeatId: beatId,
-      currentBeatIndex: index,
-      cardsResolvedInBeat: 0,
-      cardsResolvedByBeat: Object.fromEntries(
-        STORY_BEAT_IDS.slice(0, index).map((id) => [id, 1]),
-      ),
-      completedBeatIds: STORY_BEAT_IDS.slice(0, index),
-      facts: {
-        learnedCrownTruth: true,
-        trustedSerin: true,
-        renewedPurpose: "carryTogether",
-        finalPlan: "infiltrateCitadel",
-      },
-    },
+function resolve(state, card, direction) {
+  return resolveChoice(state, direction, {
+    expectedToken: card?.resolutionToken,
   });
 }
 
-function availableDirection(card, preferred = "left") {
-  if (card?.[preferred] && !card[preferred].disabled) return preferred;
-  const alternate = preferred === "left" ? "right" : "left";
-  if (card?.[alternate] && !card[alternate].disabled) return alternate;
-  throw new Error(`No enabled choice on ${card?.id ?? "unknown card"}`);
+function acknowledge(result) {
+  assert.ok(result.state.pendingFeedback);
+  const dismissed = dismissChoiceFeedback(result.state, {
+    expectedFeedbackId: result.state.pendingFeedback.id,
+  });
+  assert.equal(dismissed.ignored, false);
+  return dismissed;
 }
 
-function damagingDirection(card) {
-  for (const direction of ["right", "left"]) {
-    if (
-      ["strike", "technique", "break"].includes(card?.[direction]?.action) &&
-      !card[direction].disabled
-    ) {
-      return direction;
-    }
+function enterCastro(seed = 17) {
+  let game = createGame({ seed });
+  game = resolve(game.state, game.card, "left");
+  assert.equal(game.state.introSkipPending, true);
+  game = resolve(game.state, game.card, "left");
+  assert.equal(game.state.currentDeckId, "castro");
+  return game;
+}
+
+function stateOnCard(deckId, cardId, resources = {}) {
+  const base = createInitialState({
+    seed: 71,
+    decks: DEEP_SOUTH_STORY.decks,
+  });
+  const state = {
+    ...base,
+    currentDeckId: deckId,
+    currentCardId: cardId,
+    currentCardToken: `0:${deckId}:${cardId}`,
+    resources: { ...base.resources, ...resources },
+  };
+  return { state, card: getCurrentCard(state) };
+}
+
+test("a fresh run starts on the first sequential Intro card with exact resources", () => {
+  const { state, card } = createGame({ seed: 1 });
+  assert.equal(state.storyId, "deep-south");
+  assert.equal(state.status, "playing");
+  assert.equal(state.currentDeckId, "it-begins-here");
+  assert.equal(state.introCardIndex, 0);
+  assert.equal(card.id, "intro-salt-stiff-packet");
+  assert.deepEqual(state.resources, {
+    eldritchLore: 0,
+    crew: 0,
+    sanity: 3,
+  });
+});
+
+test("up reads the Intro sequentially and the final card enters Castro", () => {
+  let game = createGame({ seed: 2 });
+  const introIds = deckById["it-begins-here"].cards.map(({ id }) => id);
+  assert.equal(game.card.id, introIds[0]);
+
+  for (let index = 1; index < introIds.length; index += 1) {
+    game = resolve(game.state, game.card, "up");
+    assert.equal(game.ignored, false);
+    assert.equal(game.state.introCardIndex, index);
+    assert.equal(game.card.id, introIds[index]);
+    assert.equal(game.state.pendingFeedback, null);
   }
-  return availableDirection(card);
-}
 
-function resolveVisible(state, card, preferred = "left") {
-  return resolveChoice(state, availableDirection(card, preferred), undefined, {
-    expectedToken: card.resolutionToken,
-  });
-}
-
-function acknowledgeChoiceFeedback(result) {
-  if (!result.state.pendingChoiceFeedback) return result;
-  return dismissChoiceFeedback(result.state, {
-    expectedFeedbackId: result.state.pendingChoiceFeedback.id,
-  });
-}
-
-test("a new arc always opens on the authored Opening Image entry", () => {
-  const game = createGame({ seed: 44 });
-  assert.equal(game.state.story.currentBeatId, "openingImage");
-  assert.equal(game.card.id, "opening-hearthvale-oath");
-  assert.equal(game.card.story.countsTowardStory, true);
-
-  const resolved = resolveVisible(game.state, game.card);
-  assert.equal(resolved.state.story.currentBeatId, "themeStated");
-  assert.equal(resolved.state.story.totalWorldCardsResolved, 1);
-  assert.deepEqual(resolved.state.story.completedBeatIds, ["openingImage"]);
+  game = resolve(game.state, game.card, "up");
+  assert.equal(game.state.currentDeckId, "castro");
+  assert.equal(game.state.introSkipPending, false);
+  assert.ok(game.card);
+  assert.equal(game.state.pendingFeedback, null);
 });
 
-test("a custom nine-phase arc initializes from its authored phase ordering", () => {
-  const phaseIds = Array.from({ length: 9 }, (_, index) => `phase-${index + 1}`);
-  const openingCard = {
-    id: "nine-phase-opening",
-    category: "story",
-    speaker: "The Test Keeper",
-    title: "A Shorter Road",
-    text: "Nine phases begin here.",
-    baseWeight: 1,
-    cooldown: 0,
-    oncePerRun: false,
-    requirements: [],
-    story: {
-      arcIds: ["nine-phase"],
-      beatWeights: { "phase-1": 1 },
-      role: "entry",
-      completionTags: [],
-      countsTowardStory: true,
-    },
-    left: { label: "Begin", resultText: "The road opens.", effects: [] },
-    right: { label: "Prepare", resultText: "The road waits.", effects: [] },
-  };
-  const arc = {
-    id: "nine-phase",
-    title: "Nine Phase",
-    beats: phaseIds.map((id, index) => ({
-      id,
-      name: `Phase ${index + 1}`,
-      budget: { minimum: 1, target: 1, maximum: 1 },
-      completionObjective: { type: "storyTagResolved", tag: `complete-${id}` },
-      completionCardIds: index === 0 ? [openingCard.id] : [],
-      encounterPolicy: { mode: "none" },
-    })),
-    endings: [],
-  };
+test("Intro skip requires two left swipes and cancel returns to the same card", () => {
+  let game = createGame({ seed: 3 });
+  game = resolve(game.state, game.card, "up");
+  const originalCardId = game.card.id;
+  const originalIndex = game.state.introCardIndex;
 
-  const game = createGame({
-    seed: 43,
-    arcId: arc.id,
-    meta: { furthestBeatIndex: 99 },
-    content: {
-      cards: [openingCard],
-      enemies: [],
-      items: [],
-      arcs: [arc],
-    },
-  });
+  game = resolve(game.state, game.card, "left");
+  assert.equal(game.state.introSkipPending, true);
+  assert.equal(game.card.id, "deep-south-intro-skip-confirmation");
+  assert.match(game.card.text, /Swipe left again to skip to Castro/u);
 
-  assert.equal(game.state.story.arcId, arc.id);
-  assert.equal(game.state.story.currentBeatId, "phase-1");
-  assert.equal(game.state.story.currentBeatIndex, 0);
-  assert.equal(game.state.meta.furthestBeatId, "phase-9");
-  assert.equal(game.state.meta.furthestBeatIndex, 8);
-  assert.equal(game.card.id, openingCard.id);
+  game = resolve(game.state, game.card, "up");
+  assert.equal(game.state.introSkipPending, false);
+  assert.equal(game.state.introCardIndex, originalIndex);
+  assert.equal(game.card.id, originalCardId);
+
+  game = resolve(game.state, game.card, "left");
+  game = resolve(game.state, game.card, "left");
+  assert.equal(game.state.currentDeckId, "castro");
+  assert.ok(game.card);
 });
 
-test("world decisions are atomic, count once, and reject a stale resolution token", () => {
-  const game = createGame({ seed: 45 });
-  const token = game.card.resolutionToken;
-  const resolved = resolveChoice(game.state, "left", undefined, { expectedToken: token });
-  assert.equal(resolved.state.decisionCount, 1);
-  assert.equal(resolved.state.story.totalWorldCardsResolved, 1);
-
-  const acknowledged = acknowledgeChoiceFeedback(resolved);
-  const duplicate = resolveChoice(acknowledged.state, "left", undefined, { expectedToken: token });
-  assert.equal(duplicate.ignored, true);
-  assert.equal(duplicate.reason, "stale-resolution");
-  assert.equal(duplicate.state.story.totalWorldCardsResolved, 1);
+test("right and down are inert throughout the Intro", () => {
+  const game = createGame({ seed: 4 });
+  for (const direction of ["right", "down"]) {
+    const result = resolve(game.state, game.card, direction);
+    assert.equal(result.ignored, true);
+    assert.equal(result.reason, "intro-direction-ignored");
+    assert.deepEqual(result.state, game.state);
+  }
 });
 
-test("death outranks a transition, queued story card, and current card", () => {
-  const base = createInitialState({ seed: 46 });
-  const state = {
-    ...base,
-    mode: "storyTransition",
-    player: { ...base.player, hp: 0 },
-    currentCardId: "opening-hearthvale-oath",
-    currentCardToken: "0:opening-hearthvale-oath",
-    story: { ...base.story, pendingInterstitialBeatId: "midpoint" },
-    run: {
-      ...base.run,
-      forcedCardQueue: [
-        { cardId: "midpoint-wyvern-aftermath", originBeatId: "midpoint", beatLocal: true },
-      ],
-    },
-  };
-  const next = getNextCard(state);
-  assert.equal(next.state.mode, "gameOver");
-  assert.equal(next.card.id, "death");
-  assert.equal(next.state.meta.deathCount, 1);
-  assert.equal(next.state.story.status, "failed");
-  assert.equal(getNextCard(next.state).state.meta.deathCount, 1);
+test("plot navigation is derived centrally and never reaches the Intro", () => {
+  assert.equal(getDestinationDeckId("castro", "up"), "castro");
+  assert.equal(
+    getDestinationDeckId("investigate-church", "up"),
+    "castro",
+  );
+  assert.equal(
+    getDestinationDeckId("investigate-church", "down"),
+    "gather-crew",
+  );
+  assert.equal(
+    getDestinationDeckId("gather-evidence", "down"),
+    "gather-evidence",
+  );
+  assert.equal(getDestinationDeckId("navigate", "left"), "navigate");
+  assert.equal(getDestinationDeckId("navigate", "right"), "navigate");
 });
 
-test("major interstitials block binary cards until explicitly dismissed", () => {
-  const state = {
-    ...stateAtBeat("breakIntoTwo", 47),
-    mode: "storyTransition",
-    story: {
-      ...stateAtBeat("breakIntoTwo", 47).story,
-      pendingInterstitialBeatId: "breakIntoTwo",
-    },
-  };
-  const waiting = getNextCard(state);
-  assert.equal(waiting.card, null);
-  assert.equal(waiting.source, "story-transition");
+test("up at Castro resolves locally and draws another Castro card only after Continue", () => {
+  const game = enterCastro(5);
+  const rngBefore = game.state.rngState;
+  const result = resolve(game.state, game.card, "up");
 
-  const continued = dismissStoryTransition(waiting.state);
-  assert.equal(continued.state.story.pendingInterstitialBeatId, null);
-  assert.ok(continued.state.story.shownInterstitialBeatIds.includes("breakIntoTwo"));
-  assert.equal(continued.card.story.role, "anchor");
+  assert.equal(result.state.currentDeckId, "castro");
+  assert.equal(result.state.currentCardId, null);
+  assert.equal(result.card, null);
+  assert.equal(result.state.rngState, rngBefore);
+  assert.ok(result.state.pendingFeedback);
+
+  const next = acknowledge(result);
+  assert.equal(next.state.currentDeckId, "castro");
+  assert.ok(next.card);
+  assert.notEqual(next.card.id, game.card.id);
 });
 
-test("Midpoint orders intro, Iron Wyvern, battle rewards, level-up, and aftermath", () => {
-  let next = getNextCard(stateAtBeat("midpoint", 48));
-  assert.equal(next.card.story.role, "anchor");
-  assert.match(next.card.id, /^midpoint-/);
+test("down advances, up retreats, and left/right remain within the active Plot Step", () => {
+  let game = enterCastro(6);
+  let result = resolve(game.state, game.card, "down");
+  assert.equal(result.state.currentDeckId, "investigate-church");
+  game = acknowledge(result);
 
-  next = resolveVisible(next.state, next.card);
-  assert.ok(next.state.pendingChoiceFeedback);
-  next = acknowledgeChoiceFeedback(next);
-  assert.equal(next.state.mode, "combat");
-  assert.equal(next.state.encounter.enemyId, EMBER_CROWN_ARC.midbossId);
-  assert.equal(next.state.story.cardsResolvedInBeat, 1);
-  assert.ok(
-    next.state.run.forcedCardQueue.some(
-      (entry) => entry.cardId === "midpoint-wyvern-aftermath" && entry.beatLocal,
-    ),
+  result = resolve(game.state, game.card, "down");
+  assert.equal(result.state.currentDeckId, "gather-crew");
+  game = acknowledge(result);
+
+  result = resolve(game.state, game.card, "up");
+  assert.equal(result.state.currentDeckId, "investigate-church");
+  game = acknowledge(result);
+
+  for (const direction of ["left", "right"]) {
+    result = resolve(game.state, game.card, direction);
+    assert.equal(result.state.currentDeckId, "investigate-church");
+    game = acknowledge(result);
+  }
+});
+
+test("resolution discards in the source deck and preserves destination draw state until Continue", () => {
+  const game = enterCastro(7);
+  const sourceCardId = game.card.id;
+  const destinationBefore = structuredClone(
+    game.state.drawStateByDeck["investigate-church"],
+  );
+  const result = resolve(game.state, game.card, "down");
+
+  assert.equal(
+    result.state.drawStateByDeck.castro.discardPile.includes(sourceCardId),
+    true,
+  );
+  assert.deepEqual(
+    result.state.drawStateByDeck["investigate-church"],
+    destinationBefore,
+  );
+  assert.equal(result.state.currentCardId, null);
+  assert.equal(getNextCard(result.state).card, null);
+
+  const next = acknowledge(result);
+  assert.ok(next.card);
+  assert.notDeepEqual(
+    next.state.drawStateByDeck["investigate-church"],
+    destinationBefore,
+  );
+});
+
+test("draw state survives leaving a Plot Step and returning", () => {
+  let game = enterCastro(8);
+  let result = resolve(game.state, game.card, "down");
+  game = acknowledge(result);
+  const churchAfterFirstDraw = structuredClone(
+    game.state.drawStateByDeck["investigate-church"],
   );
 
-  const defeated = resolveChoice(next.state, damagingDirection(next.card), undefined, {
-    expectedToken: next.card.resolutionToken,
+  result = resolve(game.state, game.card, "down");
+  game = acknowledge(result);
+  result = resolve(game.state, game.card, "up");
+  game = acknowledge(result);
+
+  assert.equal(game.state.currentDeckId, "investigate-church");
+  assert.equal(
+    game.state.drawStateByDeck["investigate-church"].drawPile.length,
+    churchAfterFirstDraw.drawPile.length - 1,
+  );
+});
+
+test("actual applied Crew and Lore changes are clamped and persisted in feedback", () => {
+  const loreCard = deckById.castro.cards.find(
+    (card) => card.choices.left.effects.eldritchLore > 0,
+  );
+  let game = stateOnCard("castro", loreCard.id);
+  let result = resolve(game.state, game.card, "left");
+  assert.equal(result.state.resources.eldritchLore, 1);
+  assert.deepEqual(result.state.pendingFeedback.changes, { eldritchLore: 1 });
+
+  const lossCard = deckById.navigate.cards.find(
+    (card) => card.choices.left.effects.crew < 0,
+  );
+  game = stateOnCard("navigate", lossCard.id, { crew: 0 });
+  result = resolve(game.state, game.card, "left");
+  assert.equal(result.state.resources.crew, 0);
+  assert.deepEqual(result.changes, {});
+  assert.deepEqual(result.state.pendingFeedback.changes, {});
+  assert.equal(result.state.status, "playing");
+});
+
+test("Crew zero and Lore zero remain playable; only Sanity zero causes loss", () => {
+  const neutralCard = deckById.castro.cards[0];
+  let game = stateOnCard("castro", neutralCard.id, {
+    eldritchLore: 0,
+    crew: 0,
+    sanity: 2,
   });
-  assert.equal(defeated.state.story.facts.ironWyvernDefeated, true);
-  assert.equal(defeated.state.run.enemiesDefeated[EMBER_CROWN_ARC.midbossId], 1);
-  assert.equal(defeated.card.category, "combatReward");
-  assert.equal(defeated.card.reward.enemyId, EMBER_CROWN_ARC.midbossId);
-  assert.equal(defeated.card.reward.itemId, "dawn-compass");
+  let result = resolve(game.state, game.card, "up");
+  assert.equal(result.state.status, "playing");
 
-  const rewarded = resolveVisible(defeated.state, defeated.card, "right");
-  assert.equal(rewarded.card.category, "levelUp");
-  assert.ok(rewarded.state.player.inventory.includes("dawn-compass"));
-  const leveled = resolveVisible(rewarded.state, rewarded.card);
-  assert.equal(leveled.card.id, "midpoint-wyvern-aftermath");
-  assert.equal(leveled.state.story.currentBeatId, "midpoint");
+  const sanityCard = deckById.castro.cards.find(
+    (card) => card.choices.right.effects.sanity < 0,
+  );
+  game = stateOnCard("castro", sanityCard.id, { sanity: 1 });
+  result = resolve(game.state, game.card, "right");
+  assert.equal(result.state.resources.sanity, 0);
+  assert.equal(result.state.status, "lost");
+  assert.equal(result.state.pendingFeedback.changes.sanity, -1);
+  assert.equal(result.card, null);
 
-  const aftermath = resolveVisible(leveled.state, leveled.card);
-  assert.equal(aftermath.state.story.currentBeatId, "badGuysCloseIn");
-  assert.equal(aftermath.state.story.cardsResolvedByBeat.midpoint, 2);
+  const terminal = acknowledge(result);
+  assert.equal(terminal.state.status, "lost");
+  assert.equal(terminal.state.pendingFeedback, null);
+  assert.equal(terminal.card, null);
 });
 
-test("Finale reserves two preparations, then resolves Malrec before ending choice", () => {
-  let next = getNextCard(stateAtBeat("finale", 49));
-  const preparations = [];
-  for (let index = 0; index < 2; index += 1) {
-    assert.notEqual(next.card.story.role, "anchor");
-    preparations.push(next.card.id);
-    next = resolveVisible(next.state, next.card);
-    next = acknowledgeChoiceFeedback(next);
-  }
-  assert.equal(new Set(preparations).size, 2);
-  assert.equal(next.card.story.role, "anchor");
-  assert.match(next.card.id, /^finale-malrec-/);
-
-  next = resolveVisible(next.state, next.card);
-  assert.ok(next.state.pendingChoiceFeedback);
-  next = acknowledgeChoiceFeedback(next);
-  assert.equal(next.state.encounter.enemyId, EMBER_CROWN_ARC.finalBossId);
-  const bossResult = resolveChoice(next.state, damagingDirection(next.card), undefined, {
-    expectedToken: next.card.resolutionToken,
+test("pending feedback blocks decisions, survives normalization, and dismisses once", () => {
+  const game = enterCastro(9);
+  const result = resolve(game.state, game.card, "left");
+  const serialized = JSON.parse(JSON.stringify(result.state));
+  const reloaded = normalizeState(serialized, {
+    decks: DEEP_SOUTH_STORY.decks,
   });
-  assert.equal(bossResult.state.story.facts.malrecDefeated, true);
-  assert.notEqual(bossResult.state.mode, "victory");
-  assert.equal(bossResult.card.category, "combatReward");
-  assert.equal(bossResult.card.reward.enemyId, EMBER_CROWN_ARC.finalBossId);
+  assert.deepEqual(reloaded.pendingFeedback, result.state.pendingFeedback);
+  assert.equal(reloaded.currentCardId, null);
 
-  next = resolveVisible(bossResult.state, bossResult.card);
-  while (next.state.mode === "levelUp") {
-    next = resolveVisible(next.state, next.card, "left");
-  }
-  assert.equal(next.card.id, "finale-fate-of-the-crown");
-  assert.notEqual(next.state.mode, "victory");
+  const blocked = resolveChoice(reloaded, "right");
+  assert.equal(blocked.ignored, true);
+  assert.equal(blocked.reason, "feedback-pending");
 
-  next = resolveVisible(next.state, next.card, "left");
-  assert.equal(next.state.story.endingId, "crown-of-dawn");
-  assert.equal(next.state.story.currentBeatId, "finalImage");
-  assert.equal(next.card.id, "final-image-crown-of-dawn");
-  assert.notEqual(next.state.mode, "victory");
-
-  const completed = resolveVisible(next.state, next.card);
-  assert.equal(completed.state.mode, "victory");
-  assert.equal(completed.state.story.completed, true);
-  assert.equal(completed.state.meta.victoryCount, 1);
-  assert.ok(completed.state.meta.discoveredEndingIds.includes("crown-of-dawn"));
-});
-
-test("selected anchor survives serialization and does not reroll after facts change", () => {
-  const base = stateAtBeat("allIsLost", 50);
-  const withFacts = {
-    ...base,
-    player: { ...base.player, gold: 20 },
-    story: { ...base.story, facts: { ...base.story.facts, recoveredSunShard: true } },
-  };
-  const selected = getNextCard(withFacts);
-  const selectedId = selected.state.story.selectedAnchorIdByBeat.allIsLost;
-  assert.equal(selected.card.id, selectedId);
-
-  const loaded = normalizeState(JSON.parse(JSON.stringify(selected.state)));
-  const changed = {
-    ...loaded,
-    player: { ...loaded.player, gold: 0 },
-    story: { ...loaded.story, facts: {} },
-  };
-  const replay = getNextCard(changed);
-  assert.equal(replay.card.id, selectedId);
-  assert.equal(replay.state.rngState, loaded.rngState);
-});
-
-test("version-one journey saves preserve only compatible meta and restart at Opening Image", () => {
-  const migrated = normalizeState({
-    version: 1,
-    runSeed: 88,
-    journeyStep: 19,
-    player: { level: 9, hp: 1 },
-    run: { flags: { incompatible: true } },
-    meta: {
-      bestLevel: 7,
-      deathCount: 3,
-      discoveredEnemyIds: ["iron-wyvern"],
-      discoveredItemIds: ["dawn-compass"],
-    },
+  const dismissed = dismissChoiceFeedback(reloaded, {
+    expectedFeedbackId: reloaded.pendingFeedback.id,
   });
-  assert.equal(migrated.version, 2);
-  assert.equal(migrated.story.currentBeatId, "openingImage");
-  assert.equal(migrated.story.totalWorldCardsResolved, 0);
-  assert.equal(migrated.player.level, 1);
-  assert.deepEqual(migrated.run.flags, {});
-  assert.equal(migrated.meta.bestLevel, 7);
-  assert.equal(migrated.meta.deathCount, 3);
-  assert.deepEqual(migrated.meta.discoveredEnemyIds, ["iron-wyvern"]);
+  assert.equal(dismissed.ignored, false);
+  assert.ok(dismissed.card);
+
+  const duplicate = dismissChoiceFeedback(dismissed.state);
+  assert.equal(duplicate.ignored, true);
+  assert.equal(duplicate.reason, "no-feedback");
 });
 
-test("restart preserves meta discoveries and resets the same arc with an explicit seed", () => {
-  const base = createInitialState({ seed: 51 });
-  const state = {
-    ...base,
-    meta: {
-      ...base.meta,
-      deathCount: 4,
-      discoveredEnemyIds: ["iron-wyvern"],
-      discoveredEndingIds: ["unbound-flame"],
-    },
+test("stale feedback and stale decision tokens cannot mutate a run", () => {
+  const game = enterCastro(10);
+  const stale = resolveChoice(game.state, "left", {
+    expectedToken: "stale-token",
+  });
+  assert.equal(stale.ignored, true);
+  assert.deepEqual(stale.state, game.state);
+
+  const result = resolve(game.state, game.card, "left");
+  const staleDismissal = dismissChoiceFeedback(result.state, {
+    expectedFeedbackId: "stale-feedback",
+  });
+  assert.equal(staleDismissal.ignored, true);
+  assert.deepEqual(staleDismissal.state, result.state);
+});
+
+test("Begin Again is available only after loss and resets every run field", () => {
+  const active = enterCastro(11);
+  const ignored = restartGame(active.state, { seed: 99 });
+  assert.equal(ignored.ignored, true);
+
+  const lostState = {
+    ...active.state,
+    status: "lost",
+    resources: { eldritchLore: 7, crew: 0, sanity: 0 },
+    currentCardId: null,
+    currentCardToken: null,
+    pendingFeedback: null,
   };
-  const restarted = restartGame(state, { seed: 99 });
-  assert.equal(restarted.state.runSeed, 99);
-  assert.equal(restarted.state.story.arcId, "ember-crown");
-  assert.equal(restarted.state.story.currentBeatId, "openingImage");
-  assert.equal(restarted.state.meta.deathCount, 4);
-  assert.deepEqual(restarted.state.meta.discoveredEndingIds, ["unbound-flame"]);
-});
-
-test("serializing a current story card preserves its future seeded result", () => {
-  const game = createGame({ seed: 52 });
-  const loaded = normalizeState(JSON.parse(JSON.stringify(game.state)));
-  const original = resolveVisible(game.state, game.card);
-  const loadedCard = getNextCard(loaded);
-  const replay = resolveVisible(loadedCard.state, loadedCard.card);
-  assert.equal(replay.card.id, original.card.id);
-  assert.equal(replay.state.rngState, original.state.rngState);
-  assert.deepEqual(replay.state.story, original.state.story);
+  const restarted = restartGame(lostState, { seed: 99 });
+  assert.equal(restarted.ignored, false);
+  assert.equal(restarted.state.currentDeckId, "it-begins-here");
+  assert.equal(restarted.state.introCardIndex, 0);
+  assert.equal(restarted.state.introSkipPending, false);
+  assert.equal(restarted.state.status, "playing");
+  assert.deepEqual(restarted.state.resources, {
+    eldritchLore: 0,
+    crew: 0,
+    sanity: 3,
+  });
+  assert.equal(restarted.card.id, "intro-salt-stiff-packet");
 });

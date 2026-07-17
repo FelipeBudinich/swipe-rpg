@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Crew for the southern passage</title>
+  <desc id="desc">Four wary sailors gather around a chart while a cutter waits in the rain beyond them.</desc>
+  <defs>
+    <linearGradient id="night" x2="0" y2="1">
+      <stop stop-color="#07131b"/>
+      <stop offset="1" stop-color="#153941"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="30" fill="url(#night)"/>
+  <path d="M257 112h94l24 91H221Z" fill="#0a2028" stroke="#5da7a1" stroke-width="5"/>
+  <path d="M283 109V50M283 53l47 35h-47" fill="#a65c48" stroke="#d2bd87" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M225 203q64 34 145 0l-24 48h-91Z" fill="#56443a" stroke="#07151c" stroke-width="6"/>
+  <path d="M221 266q57-20 103 2t70-2M211 294q56-18 103 2t81-1" fill="none" stroke="#5da7a1" stroke-width="5" opacity=".55"/>
+  <ellipse cx="183" cy="300" rx="132" ry="50" fill="#4a3b33"/>
+  <path d="M75 291l101-54 112 53-104 45Z" fill="#d8c99f" stroke="#6d5540" stroke-width="5"/>
+  <path d="M120 285q32-18 56-5t57-3M144 261l14 56M196 254l-6 64M243 274l-21 38" fill="none" stroke="#5d8983" stroke-width="4"/>
+  <path d="M92 224q0-29 24-29t24 29v71H92ZM152 187q0-31 25-31t25 31v79h-50ZM230 203q0-30 24-30t24 30v75h-48ZM294 238q0-27 22-27t22 27v62h-44Z" fill="#142a30" stroke="#a65c48" stroke-width="5"/>
+  <circle cx="116" cy="181" r="21" fill="#ad7d62"/>
+  <circle cx="177" cy="141" r="22" fill="#9e715b"/>
+  <circle cx="254" cy="159" r="21" fill="#b68768"/>
+  <circle cx="316" cy="198" r="19" fill="#946852"/>
+  <path d="M98 174q18-24 36 0M157 134q20-25 40 1M235 152q19-24 38 0M299 192q17-22 34 0" fill="#263d40" stroke="#07151c" stroke-width="5"/>
+  <circle cx="184" cy="298" r="9" fill="#a65c48"/>
+  <path d="M184 289l19-31" stroke="#a65c48" stroke-width="5"/>
+</svg>

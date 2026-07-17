@@ -232,7 +232,10 @@ async function verifyModuleReferences(rootDir, errors) {
 }
 
 async function verifyAuthoredArt(rootDir, errors) {
-  for (const relative of ["public/js/data/cards.js", "public/js/data/enemies.js", "public/js/data/items.js"]) {
+  for (const relative of [
+    "public/js/data/deep-south.js",
+    "public/js/data/cards/deep-south-cards.js",
+  ]) {
     const absolute = path.join(rootDir, relative);
     let source;
     try {
@@ -250,7 +253,12 @@ async function verifyAuthoredArt(rootDir, errors) {
       await validateAsset(rootDir, relative, `/assets/art/${artId}.svg`, errors);
     }
   }
-  await validateAsset(rootDir, "render fallback", "/assets/art/player.svg", errors);
+  await validateAsset(
+    rootDir,
+    "render fallback",
+    "/assets/art/deep-south-it-begins-here.svg",
+    errors,
+  );
 }
 
 async function verifyCssReferences(rootDir, errors) {

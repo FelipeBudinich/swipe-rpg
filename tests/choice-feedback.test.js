@@ -5,507 +5,138 @@ import {
   CHOICE_FEEDBACK_CHANGE_FIELDS,
   CHOICE_FEEDBACK_CHANGE_LABELS,
   CHOICE_FEEDBACK_TONES,
-  CHOICE_FEEDBACK_VERSION,
   FEEDBACK_ART_BY_TONE,
   choiceFeedbackId,
   classifyChoiceFeedbackTone,
-  createPendingChoiceFeedback,
-  deriveChoiceFeedbackChanges,
-  feedbackSuccessorIsSuppressed,
-  isFinalImageCard,
-  isTerminalStoryCard,
+  createPendingFeedback,
+  formatFeedbackChange,
   normalizeChoiceFeedbackChanges,
-  normalizeChoiceFeedbackTone,
-  normalizePendingChoiceFeedback,
-  shouldCreateChoiceFeedback,
+  normalizePendingFeedback,
 } from "../public/js/game/choice-feedback.js";
-import { createInitialState } from "../public/js/game/state.js";
 
-const feedbackArc = {
-  beats: [
-    {
-      id: "finalImage",
-      completionCardIds: ["quiet-epilogue"],
-      anchor: {
-        fallbackCardId: "fallback-epilogue",
-        variants: [{ cardId: "variant-epilogue" }],
-      },
-      endingVariants: {
-        "mapped-epilogue": { cardId: "mapped-object-epilogue" },
-      },
-    },
-  ],
-  endings: [
-    { id: "dawn", finalImageCardId: "single-epilogue" },
-    { id: "embers", finalImageCardIds: ["many-epilogue"] },
-  ],
-};
-
-function choice(label = "Choose") {
-  return { label, resultText: `${label} resolves.`, effects: [] };
-}
-
-function card(overrides = {}) {
-  return {
-    id: "next-world-card",
-    category: "story",
-    story: { countsTowardStory: true, role: "ambient" },
-    left: choice("Left"),
-    right: choice("Right"),
-    ...overrides,
-  };
-}
-
-function successor(overrides = {}) {
-  const base = createInitialState({ seed: 101 });
-  const nextCard = card(overrides.card);
-  return {
-    nextCard,
-    nextState: {
-      ...base,
-      mode: overrides.mode ?? "exploration",
-      currentCardId: nextCard.id,
-      currentCardData: nextCard,
-      currentCardToken: overrides.token ?? `1:${nextCard.id}`,
-      story: {
-        ...base.story,
-        ...(overrides.story ?? {}),
-      },
-    },
-  };
-}
-
-function feedbackInput(overrides = {}) {
-  const { nextState, nextCard } = successor(overrides.successor);
-  const beforeState = createInitialState({ seed: 101 });
-  return {
-    beforeState,
-    resolvedMode: "exploration",
-    resolvedCard: card({
-      id: "source-world-card",
-      story: { countsTowardStory: true, role: "ambient" },
-    }),
-    resultText: "The road opens before you.",
-    nextState,
-    nextCard,
-    arc: feedbackArc,
-    ...overrides,
-  };
-}
-
-function payloadFor(nextState, overrides = {}) {
-  return createPendingChoiceFeedback({
-    sourceCard: card({ id: "source-world-card" }),
-    sourceToken: "0:source-world-card",
-    resultText: "The road opens before you.",
-    changes: { xp: 8 },
-    nextState,
+function createFeedback(overrides = {}) {
+  return createPendingFeedback({
+    sourceCardId: "castro-rain",
+    sourceCardToken: "4:castro:castro-rain",
+    sourceDeckId: "castro",
+    direction: "down",
+    destinationDeckId: "investigate-church",
+    resultText: "The chart carries the expedition south.",
+    changes: { eldritchLore: 1 },
     ...overrides,
   });
 }
 
-test("feedback schema exposes only recognized fields, tones, labels, and local art IDs", () => {
-  assert.equal(CHOICE_FEEDBACK_VERSION, 1);
+test("feedback schema contains only new resources and fixed local tone art", () => {
   assert.deepEqual(CHOICE_FEEDBACK_CHANGE_FIELDS, [
-    "level",
-    "xp",
-    "hp",
-    "mp",
-    "gold",
-    "attack",
-    "defense",
-    "maxHp",
-    "maxMp",
-    "inventory",
+    "eldritchLore",
+    "crew",
+    "sanity",
   ]);
+  assert.deepEqual(CHOICE_FEEDBACK_CHANGE_LABELS, {
+    eldritchLore: "Eldritch Lore",
+    crew: "Crew",
+    sanity: "Sanity",
+  });
   assert.deepEqual(CHOICE_FEEDBACK_TONES, [
     "neutral",
     "reward",
-    "recovery",
     "damage",
     "danger",
   ]);
-  assert.deepEqual(Object.keys(CHOICE_FEEDBACK_CHANGE_LABELS), CHOICE_FEEDBACK_CHANGE_FIELDS);
-  assert.deepEqual(Object.keys(FEEDBACK_ART_BY_TONE), CHOICE_FEEDBACK_TONES);
   for (const artId of Object.values(FEEDBACK_ART_BY_TONE)) {
-    assert.match(artId, /^result-(neutral|reward|recovery|damage|danger)$/);
+    assert.match(artId, /^result-/u);
   }
 });
 
-test("Final Image detection uses beat position, story role, and arc metadata", () => {
-  assert.equal(
-    isFinalImageCard(card(), { story: { currentBeatId: "finalImage" } }, feedbackArc),
-    true,
-  );
-  assert.equal(
-    isFinalImageCard(card({ story: { role: "ending" } }), { story: {} }, feedbackArc),
-    true,
-  );
-  for (const id of [
-    "quiet-epilogue",
-    "fallback-epilogue",
-    "variant-epilogue",
-    "mapped-epilogue",
-    "mapped-object-epilogue",
-    "single-epilogue",
-    "many-epilogue",
-  ]) {
-    assert.equal(isFinalImageCard(card({ id }), { story: {} }, feedbackArc), true, id);
-  }
-  assert.equal(isFinalImageCard(card(), { story: { currentBeatId: "setup" } }, feedbackArc), false);
-});
-
-test("terminal feedback suppression follows a data-defined nine-phase story", () => {
-  const arc = {
-    id: "nine-deck-story",
-    storyPhases: Array.from({ length: 9 }, (_, index) => ({
-      id: `deck-${String(index + 1).padStart(2, "0")}`,
-      ...(index === 8 ? { terminal: true } : {}),
-    })),
-  };
-
-  assert.equal(
-    isTerminalStoryCard(card(), { story: { currentBeatId: "deck-09" } }, arc),
-    true,
-  );
-  assert.equal(
-    isTerminalStoryCard(card(), { story: { currentBeatId: "deck-08" } }, arc),
-    false,
-  );
-});
-
-test("eligible world, merchant, shrine, camp, and encounter choices create feedback", () => {
-  for (const category of ["story", "merchant", "shrine", "camp", "encounter"]) {
-    const input = feedbackInput();
-    input.resolvedCard = card({
-      id: `source-${category}`,
-      category,
-      story: { countsTowardStory: true, role: "ambient" },
-    });
-    assert.equal(shouldCreateChoiceFeedback(input), true, category);
-  }
-
-  const encounter = feedbackInput({
-    successor: {
-      mode: "combat",
-      card: { id: "combat:ember-slime:1", category: "combat" },
+test("payload creation is deterministic, serializable, and filters unknown changes", () => {
+  const first = createFeedback({
+    changes: {
+      eldritchLore: 1,
+      crew: 0,
+      sanity: Number.NaN,
+      hp: -9,
     },
   });
-  assert.equal(shouldCreateChoiceFeedback(encounter), true);
-});
-
-test("feedback eligibility requires authored world resolution and a prepared successor", () => {
-  const eligible = feedbackInput();
-  assert.equal(shouldCreateChoiceFeedback(eligible), true);
-  assert.equal(shouldCreateChoiceFeedback({ ...eligible, resolvedMode: "combat" }), false);
-  assert.equal(
-    shouldCreateChoiceFeedback({
-      ...eligible,
-      resolvedCard: card({ story: { countsTowardStory: false, role: "ambient" } }),
-    }),
-    false,
-  );
-  assert.equal(shouldCreateChoiceFeedback({ ...eligible, resultText: "  " }), false);
-  assert.equal(
-    shouldCreateChoiceFeedback({
-      ...eligible,
-      nextState: { ...eligible.nextState, currentCardToken: null },
-    }),
-    false,
-  );
-  assert.equal(
-    shouldCreateChoiceFeedback({
-      ...eligible,
-      nextCard: { ...eligible.nextCard, id: "different-card" },
-    }),
-    false,
-  );
-});
-
-test("dedicated successor surfaces and Final Image suppress generic feedback", () => {
-  for (const mode of [
-    "combatReward",
-    "levelUp",
-    "loot",
-    "storyTransition",
-    "gameOver",
-    "victory",
-  ]) {
-    const input = feedbackInput({ successor: { mode } });
-    assert.equal(shouldCreateChoiceFeedback(input), false, mode);
-  }
-
-  for (const category of ["combatReward", "levelUp", "loot", "gameOver", "victory"]) {
-    const input = feedbackInput({ successor: { card: { category } } });
-    assert.equal(shouldCreateChoiceFeedback(input), false, category);
-  }
-
-  const finalSource = feedbackInput({
-    resolvedCard: card({
-      id: "many-epilogue",
-      story: { countsTowardStory: true, role: "ending" },
-    }),
-  });
-  assert.equal(shouldCreateChoiceFeedback(finalSource), false);
-
-  const finalSuccessor = feedbackInput({
-    successor: { card: { id: "many-epilogue" } },
-  });
-  assert.equal(shouldCreateChoiceFeedback(finalSuccessor), false);
-});
-
-test("structured changes include player, derived stat, and inventory deltas", () => {
-  const before = createInitialState({ seed: 202 });
-  const after = {
-    ...before,
-    player: {
-      ...before.player,
-      level: before.player.level + 1,
-      xp: before.player.xp + 8,
-      hp: before.player.hp - 4,
-      mp: before.player.mp + 2,
-      gold: before.player.gold - 5,
-      baseStats: {
-        attack: before.player.baseStats.attack + 2,
-        defense: before.player.baseStats.defense + 1,
-        maxHp: before.player.baseStats.maxHp + 6,
-        maxMp: before.player.baseStats.maxMp + 4,
-      },
-      inventory: [...before.player.inventory, "bluewake-tonic"],
+  const second = createFeedback({
+    changes: {
+      eldritchLore: 1,
+      crew: 0,
+      sanity: Number.NaN,
+      hp: -9,
     },
-  };
-
-  assert.deepEqual(deriveChoiceFeedbackChanges(before, after), {
-    level: 1,
-    xp: 8,
-    hp: -4,
-    mp: 2,
-    gold: -5,
-    attack: 2,
-    defense: 1,
-    maxHp: 6,
-    maxMp: 4,
-    inventory: 1,
   });
-});
-
-test("structured changes account for equipment-derived stats", () => {
-  const items = [
-    {
-      id: "sun-ward",
-      type: "equipment",
-      slot: "charm",
-      statModifiers: { attack: 1, defense: 2, maxHp: 3, maxMp: 4 },
-    },
-  ];
-  const before = createInitialState({ seed: 203 });
-  const after = {
-    ...before,
-    player: {
-      ...before.player,
-      equipment: { ...before.player.equipment, charm: "sun-ward" },
-      inventory: ["sun-ward"],
-    },
-  };
-
-  assert.deepEqual(deriveChoiceFeedbackChanges(before, after, items), {
-    attack: 1,
-    defense: 2,
-    maxHp: 3,
-    maxMp: 4,
-    inventory: 1,
-  });
-});
-
-test("change normalization omits zero, unknown, NaN, and infinite values", () => {
-  assert.deepEqual(
-    normalizeChoiceFeedbackChanges({
-      hp: -3,
-      mp: 0,
-      xp: Number.NaN,
-      gold: Number.POSITIVE_INFINITY,
-      decisionCount: 2,
-      storyProgress: 8,
-    }),
-    { hp: -3 },
-  );
-  assert.deepEqual(normalizeChoiceFeedbackChanges(null), {});
-});
-
-test("tone classification follows requested priority and explicit recognized overrides", () => {
-  assert.equal(classifyChoiceFeedbackTone({ hp: -1, xp: 10 }), "damage");
-  assert.equal(classifyChoiceFeedbackTone({ gold: -1, hp: 2 }), "danger");
-  assert.equal(classifyChoiceFeedbackTone({ hp: 2, xp: 10 }), "recovery");
-  assert.equal(classifyChoiceFeedbackTone({ mp: 2 }), "recovery");
-  assert.equal(classifyChoiceFeedbackTone({ xp: 8 }), "reward");
-  assert.equal(classifyChoiceFeedbackTone({ inventory: 1 }), "reward");
-  assert.equal(classifyChoiceFeedbackTone({}), "neutral");
-  assert.equal(classifyChoiceFeedbackTone({ hp: -1 }, "reward"), "reward");
-  assert.equal(classifyChoiceFeedbackTone({ hp: -1 }, "legacy-danger-tone"), "damage");
-  assert.equal(normalizeChoiceFeedbackTone("danger"), "danger");
-  assert.equal(normalizeChoiceFeedbackTone("victory"), null);
-});
-
-test("payload creation is deterministic, serializable, filtered, and nonmutating", () => {
-  const { nextState } = successor();
-  const stateSnapshot = JSON.stringify(nextState);
-  const input = {
-    sourceCard: card({ id: "opening-hearthvale-oath" }),
-    sourceToken: "0:opening-hearthvale-oath",
-    resultText: "You accept the oath before the gathered village.",
-    changes: { xp: 8, hp: 0, gold: Number.NaN, rngState: 99 },
-    nextState,
-  };
-
-  const first = createPendingChoiceFeedback(input);
-  const second = createPendingChoiceFeedback(input);
   assert.deepEqual(first, second);
   assert.deepEqual(JSON.parse(JSON.stringify(first)), first);
-  assert.equal(first.id, "choice-feedback:0:opening-hearthvale-oath");
-  assert.equal(first.sourceCardId, "opening-hearthvale-oath");
-  assert.equal(first.sourceResolutionToken, "0:opening-hearthvale-oath");
-  assert.equal(first.resultText, input.resultText);
+  assert.deepEqual(first.changes, { eldritchLore: 1 });
   assert.equal(first.tone, "reward");
-  assert.deepEqual(first.changes, { xp: 8 });
-  assert.equal(first.nextCardId, nextState.currentCardId);
-  assert.equal(first.nextCardToken, nextState.currentCardToken);
-  assert.equal(JSON.stringify(nextState), stateSnapshot);
-  assert.equal(choiceFeedbackId("0:opening-hearthvale-oath"), first.id);
-  assert.equal(choiceFeedbackId(""), null);
+  assert.equal(first.artId, undefined);
 });
 
-test("payload creation requires stable source and successor identity", () => {
-  const { nextState } = successor();
+test("tone classification makes Sanity loss damage and Crew loss danger", () => {
+  assert.equal(classifyChoiceFeedbackTone({ sanity: -1 }), "damage");
+  assert.equal(classifyChoiceFeedbackTone({ crew: -1 }), "danger");
+  assert.equal(classifyChoiceFeedbackTone({ eldritchLore: 1 }), "reward");
+  assert.equal(classifyChoiceFeedbackTone({ crew: 1 }), "reward");
+  assert.equal(classifyChoiceFeedbackTone({}), "neutral");
   assert.equal(
-    createPendingChoiceFeedback({
-      sourceCard: card(),
-      sourceToken: "",
-      resultText: "Result.",
-      nextState,
-    }),
-    null,
+    classifyChoiceFeedbackTone({ sanity: -1 }, "neutral"),
+    "neutral",
   );
   assert.equal(
-    createPendingChoiceFeedback({
-      sourceCard: card(),
-      sourceToken: "0:source",
-      resultText: " ",
-      nextState,
-    }),
-    null,
-  );
-  assert.equal(
-    createPendingChoiceFeedback({
-      sourceCard: card(),
-      sourceToken: "0:source",
-      resultText: "Result.",
-      nextState: { ...nextState, currentCardToken: null },
-    }),
-    null,
+    classifyChoiceFeedbackTone({ sanity: -1 }, "unknown"),
+    "damage",
   );
 });
 
-test("normalization preserves valid feedback over the same exploration or combat successor", () => {
-  for (const mode of ["exploration", "combat"]) {
-    const { nextState } = successor({
-      mode,
-      card: mode === "combat" ? { id: "combat:ember-slime:1", category: "combat" } : {},
-    });
-    const payload = payloadFor(nextState);
-    const normalized = normalizePendingChoiceFeedback(payload, {
-      state: nextState,
-      card: nextState.currentCardData,
-      arc: feedbackArc,
-    });
-    assert.deepEqual(normalized, payload, mode);
-    assert.notEqual(normalized, payload);
-    assert.notEqual(normalized.changes, payload.changes);
-  }
-});
-
-test("normalization rejects malformed, stale, and unsupported payloads without touching state", () => {
-  const { nextState } = successor();
-  const valid = payloadFor(nextState);
-  const cases = [
-    [],
-    { ...valid, version: 99 },
-    { ...valid, id: "" },
-    { ...valid, id: "random-id" },
-    { ...valid, sourceCardId: null },
-    { ...valid, sourceResolutionToken: null },
-    { ...valid, resultText: null },
-    { ...valid, tone: "victory" },
-    { ...valid, changes: { hp: Number.NaN } },
-    { ...valid, changes: { hp: Number.POSITIVE_INFINITY } },
-    { ...valid, changes: { decisionCount: 1 } },
-    { ...valid, nextCardId: "different-card" },
-    { ...valid, nextCardToken: "99:different-token" },
-  ];
-  const stateSnapshot = JSON.stringify(nextState);
-  for (const malformed of cases) {
-    assert.equal(
-      normalizePendingChoiceFeedback(malformed, {
-        state: nextState,
-        card: nextState.currentCardData,
-        arc: feedbackArc,
-      }),
-      null,
-    );
-  }
-  assert.equal(JSON.stringify(nextState), stateSnapshot);
-  assert.equal(normalizePendingChoiceFeedback(undefined, { state: nextState }), null);
-});
-
-test("normalization clears dedicated, terminal, transition, completed, and Final Image successors", () => {
-  for (const mode of [
-    "combatReward",
-    "levelUp",
-    "loot",
-    "storyTransition",
-    "gameOver",
-    "victory",
-  ]) {
-    const { nextState } = successor({ mode });
-    assert.equal(
-      normalizePendingChoiceFeedback(payloadFor(nextState), {
-        state: nextState,
-        card: nextState.currentCardData,
-        arc: feedbackArc,
-      }),
-      null,
-      mode,
-    );
-  }
-
-  const final = successor({ card: { id: "single-epilogue" } });
-  assert.equal(
-    normalizePendingChoiceFeedback(payloadFor(final.nextState), {
-      state: final.nextState,
-      card: final.nextCard,
-      arc: feedbackArc,
-    }),
-    null,
-  );
-
-  const completed = successor({ story: { completed: true, status: "completed" } });
-  assert.equal(
-    feedbackSuccessorIsSuppressed(completed.nextState, completed.nextCard, feedbackArc),
-    true,
-  );
-});
-
-test("normalization returns a canonical copy and omits persisted zero changes", () => {
-  const { nextState } = successor();
-  const valid = {
-    ...payloadFor(nextState),
-    changes: { xp: 8, hp: 0 },
-    ignoredTopLevel: "not copied",
+test("normalization preserves valid feedback only over its destination with no card", () => {
+  const feedback = createFeedback();
+  const state = {
+    currentDeckId: "investigate-church",
+    currentCardId: null,
   };
-  const normalized = normalizePendingChoiceFeedback(valid, {
-    state: nextState,
-    card: nextState.currentCardData,
-    arc: feedbackArc,
-  });
-  assert.deepEqual(normalized.changes, { xp: 8 });
-  assert.equal("ignoredTopLevel" in normalized, false);
+  assert.deepEqual(normalizePendingFeedback(feedback, state), feedback);
+  assert.equal(
+    normalizePendingFeedback(feedback, {
+      ...state,
+      currentDeckId: "castro",
+    }),
+    null,
+  );
+  assert.equal(
+    normalizePendingFeedback(feedback, {
+      ...state,
+      currentCardId: "church-card",
+    }),
+    null,
+  );
+  assert.equal(
+    normalizePendingFeedback({ ...feedback, tone: "unknown" }, state),
+    null,
+  );
+});
+
+test("feedback identifiers and signed text are stable", () => {
+  assert.equal(
+    choiceFeedbackId("4:castro:castro-rain"),
+    "choice-feedback:4:castro:castro-rain",
+  );
+  assert.equal(formatFeedbackChange("eldritchLore", 1), "+1 Eldritch Lore");
+  assert.equal(formatFeedbackChange("crew", -1), "-1 Crew");
+  assert.deepEqual(
+    normalizeChoiceFeedbackChanges({
+      eldritchLore: 1,
+      crew: -1,
+      sanity: 0,
+      internal: 99,
+    }),
+    { eldritchLore: 1, crew: -1 },
+  );
+});
+
+test("malformed feedback cannot be created or normalized", () => {
+  assert.equal(createFeedback({ sourceCardToken: "" }), null);
+  assert.equal(createFeedback({ direction: "forward" }), null);
+  assert.equal(createFeedback({ resultText: " " }), null);
+  assert.equal(normalizePendingFeedback("bad", {}), null);
 });

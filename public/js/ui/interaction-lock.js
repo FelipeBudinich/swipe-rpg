@@ -1,17 +1,9 @@
 export function hasBlockingSurface({
-  drawerPaused = false,
-  storyTransitionActive = false,
   terminalActive = false,
   feedbackActive = false,
   confirmationOpen = false,
 } = {}) {
-  return Boolean(
-    drawerPaused ||
-    storyTransitionActive ||
-    terminalActive ||
-    feedbackActive ||
-    confirmationOpen
-  );
+  return Boolean(terminalActive || feedbackActive || confirmationOpen);
 }
 
 export function isNewInputBlocked(lockState = {}) {

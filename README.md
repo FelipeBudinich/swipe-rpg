@@ -1,224 +1,135 @@
-# The Ember Crown
+# Deep South
 
-The Ember Crown is an original, mobile-first JRPG roguelite played through one recurring decision: drag, swipe, click, or press a key to choose the left or right response. A complete run follows a reusable 15-beat Save the Cat arc, builds a compact equipment loadout, survives deterministic turn-based encounters, defeats the Iron Wyvern and the two-phase crown-bound Malrec, and resolves one of exactly two authored endings.
+Deep South is a mobile-first, four-direction card game about an expedition from Chiloé into an impossible southern sea. It uses static HTML, native JavaScript modules, locally compiled Tailwind CSS, and a small hardened Node.js file server.
 
-The project is intentionally small and local. It uses static HTML, browser-native ES modules, DOM/SVG presentation, locally compiled Tailwind CSS, `localStorage`, and a static server made only with Node's standard library. It has no UI framework, router, game engine, database, API, runtime CDN, or runtime network dependency.
+The expedition begins with four sequential pieces of testimony. After Castro, every location is an independent deterministic card deck. Up moves toward Castro, down moves toward Gather Evidence, and left or right resolves a local action. The run ends only when Sanity reaches zero.
 
 ## Architecture
 
-- `server.js` — dependency-free, traversal- and symlink-safe static server with GET/HEAD support, an allowlisted MIME map, conditional caching, strict browser security headers, host validation, a health endpoint, and graceful shutdown.
-- `src/input.css` — Tailwind import plus the small authored layer needed for swipe transforms, feedback, safe areas, and reduced motion.
-- `public/index.html` — semantic application shell and accessible live regions.
-- `public/js/data/arcs/` — immutable arc structure, beat budgets, anchors, forced sequences, and ending definitions.
-- `public/js/data/cards/` — immutable, arc-scoped story cards with declarative requirements and effects, never executable callbacks.
-- `public/js/data/ember-crown-enemies.js` and `public/js/data/items.js` — immutable combat and equipment content.
-- `public/js/game/story/` — reusable validation, pacing, anchor selection, checkpoints, and beat-completion rules with no DOM dependency.
-- `public/js/game/` — deterministic state, selection, effects, progression, equipment, and combat integration.
-- `public/js/ui/` — rendering, beat interstitials, local checkpoint controls, inventory drawer, feedback, and Pointer Events swipe control.
-- `public/js/rng.js` — serializable 32-bit pseudo-random generator used by all game randomness.
-- `public/js/storage.js` — defensive, versioned local save persistence.
-- `tests/` — Node built-in test-runner coverage for the pure rules and persistence.
+- `public/js/data/deep-south.js` is the canonical story registry and ordered nine-deck definition.
+- `public/js/data/cards/deep-south-cards.js` contains the four Intro cards and forty plot cards.
+- `public/js/game/state.js` owns the serializable run shape and migration.
+- `public/js/game/deck-draw.js` owns deterministic per-deck draw/discard behavior.
+- `public/js/game/engine.js` resolves Intro navigation, plot navigation, choices, feedback acknowledgement, loss, and restart.
+- `public/js/game/effects.js` applies and clamps Eldritch Lore, Crew, and Sanity.
+- `public/js/game/choice-feedback.js` creates and validates persistent outcome payloads.
+- `public/js/ui/render.js` renders the HUD, directional card controls, persistent outcome card, and loss surface.
+- `public/js/ui/swipe-controller.js` implements four-axis Pointer Events gestures.
+- `public/js/main.js` coordinates persistence, input locking, rendering, and focus.
+- `server.js` serves `public/` with strict headers and path containment.
 
-The engine owns all state mutation. UI handlers submit an intent, the engine resolves it atomically, the new state is saved, and the renderer receives the next engine-produced card. The save includes both the original run seed and current PRNG state, so reloading cannot reroll future outcomes.
+There is one state model and one canonical deck order. Rendering and input handlers never choose destination decks or mutate resources directly.
 
-## Install and run
+## Decks
 
-Use Node.js 24.x, npm 11.x, and the dependency versions in `package-lock.json`. For a clean, lockfile-reproducible install, use `npm ci`.
+| Order | Type | ID | Display name |
+| ---: | --- | --- | --- |
+| 0 | Intro | `it-begins-here` | It begins here |
+| 1 | Plot Step 1 | `castro` | Castro |
+| 2 | Plot Step 2 | `investigate-church` | Investigate Church |
+| 3 | Plot Step 3 | `gather-crew` | Gather Crew |
+| 4 | Plot Step 4 | `navigate` | Navigate |
+| 5 | Plot Step 5 | `rest-at-desolate-beach` | Rest at desolate beach |
+| 6 | Plot Step 6 | `reach-the-coordinates` | Reach the coordinates |
+| 7 | Plot Step 7 | `explore-rlyeh` | Explore R'lyeh |
+| 8 | Plot Step 8 | `gather-evidence` | Gather Evidence |
 
-```sh
-npm ci
-npm run build:css
-npm start
-```
-
-Open `http://localhost:3000` unless `PORT` specifies another port.
-
-Development commands:
-
-```sh
-npm run watch:css   # rebuild CSS as source files change
-npm run dev         # development server
-npm test            # node --test
-npm run build       # compile and verify production assets
-npm run check:security
-npm run verify:production
-npm run audit:runs  # replay 256 seeded full runs and report outcomes/soft locks
-```
-
-Development responses use `Cache-Control: no-store`. In production, `index.html` uses `no-cache`; unversioned JavaScript and CSS must revalidate; content-hashed assets may be cached as immutable; and other local images and media receive a conservative finite cache lifetime with revalidation.
+The Intro is sequential. Plot decks draw without replacement, retain their own draw/discard piles when the expedition moves, and reshuffle deterministically when exhausted.
 
 ## Controls
 
-- Drag the central card left or right with touch, pen, or mouse, then pass the visible threshold to commit.
-- Use the two large buttons below the card for the same choices.
-- Press Left Arrow or `A` for the left choice; Right Arrow or `D` for the right choice.
-- Open **Pack** in the HUD to inspect equipment, equip inventory items, or use consumables. `Escape` closes the drawer and returns focus to its opener.
+- Swipe or press **Arrow Up** to move toward Castro.
+- Swipe or press **Arrow Down** to move toward Gather Evidence.
+- Swipe or press **Arrow Left** or **Arrow Right** for a local action.
+- Use the four visible buttons for the same accessible actions.
+- Select **Continue** to acknowledge a persistent choice outcome.
 
-The choice labels, costs, likely effects, enemy HP, and current enemy intent remain visible before commitment. Reduced-motion preferences keep every control functional while removing nonessential movement.
+During the Intro, up reads the next card. Left opens a persisted skip confirmation; left again enters Castro, while up cancels without advancing. Right and down are inert.
 
-## Content schemas
+## Resources and loss
 
-Story cards use the existing concise choice schema plus explicit arc metadata:
+Fresh runs begin with:
 
 ```js
 {
-  id, category, speaker, title, text, artId,
-  baseWeight, cooldown, oncePerRun, tags,
-  requirements: [{ type, ...parameters }],
-  story: {
-    arcIds: ["ember-crown"],
-    beatWeights: { setup: 0.8, funAndGames: 1.2 },
-    role: "ambient",
-    completionTags: [],
-    countsTowardStory: true
-  },
-  left:  { label, resultText, effects: [{ type, ...parameters }] },
-  right: { label, resultText, effects: [{ type, ...parameters }] }
+  eldritchLore: 0,
+  crew: 0,
+  sanity: 3
 }
 ```
 
-Enemies define identity, level and beat eligibility, HP, attack, defense, XP and gold rewards, weighted intents, drops, and local art. Items define a slot or consumable type, rarity, sell value, modifiers/effects, and local art. See [`docs/story-arcs.md`](docs/story-arcs.md) for the complete arc, beat, anchor, persistence, checkpoint, and ending contracts.
+All three values clamp at zero. Zero Crew and zero Eldritch Lore remain playable. Sanity reaching zero is the only loss condition. The final Sanity change remains visible on the persistent outcome card before the loss surface appears.
 
-### Add a card
+## Card data
 
-1. Add a unique object to the appropriate arc-scoped module, such as `public/js/data/cards/ember-crown-cards.js`.
-2. Reuse supported declarative requirement and effect types from `requirements.js` and `effects.js`; never put a function in content.
-3. Declare positive `story.beatWeights`, whether the card counts toward the story budget, and an explicit role. Give repeatable cards a cooldown and sensible base weight.
-4. Use persisted anchor families for conditional mandatory moments and beat-local queues for authored continuations; never advance a beat directly from card content.
-5. Point `artId` at a local file in `public/assets/art/`.
-6. Run `npm test`, `npm run audit:runs`, and play far enough to exercise eligibility and both choices.
+Plot cards contain four authored choices:
 
-### Add an enemy
-
-1. Add the enemy definition in the arc's enemy module, such as `public/js/data/ember-crown-enemies.js`, with a unique ID, level/beat eligibility, stats, intent weights, reward range, and drop table.
-2. Add or reuse an encounter-introduction storylet; its choice starts the enemy through a declarative `startEncounter` effect.
-3. Add a local SVG silhouette and tests for any new combat mechanic.
-
-### Add an item
-
-1. Add the definition in `public/js/data/items.js`.
-2. Equipment must use `weapon`, `armor`, or `charm` and place bonuses under `statModifiers`; consumables use declarative effects.
-3. Add it to an enemy drop table or storylet reward and provide a local SVG.
-4. Do not apply equipment bonuses directly to base stats. `getDerivedStats` is the single source of truth.
-
-## Save behavior
-
-The active run uses save schema version 2 under the existing `jrpg-swipe-save-v1` key and is persisted after every committed card and inventory action. Story state includes the current beat, per-beat and total counted decisions, facts, tags, counters, persisted anchor selections, resolved anchors, interstitial state, selected ending, and completion markers. Reload resumes the exact active card and deterministic random stream. Version 1 saves retain compatible meta progress but begin a fresh Ember Crown run at Opening Image; deprecated linear progress is never guessed into a beat. Death and victory preserve the discovery codex and best-run records; **New Run** resets only run progress, while **Reset All Data** removes both run and meta progress after confirmation.
-
-The save is browser-controlled `localStorage`, not authoritative server state. A player can inspect or modify it. That is acceptable for this single-player MVP, but scores, inventory, levels, drops, gold, equipment, and progression are not tamper-proof and must not be trusted for competitive rankings, trading, purchases, subscriptions, rewards with monetary value, multiplayer state, or server-side entitlements. The application has no accounts, authentication, cookies, server-side saves, database, or state-changing HTTP endpoint.
-
-## Heroku deployment
-
-This repository is prepared for deployment as a single Heroku web process. The application does not require a production secret or a manually configured `PORT`: Heroku supplies `PORT` to the dyno at runtime. Do not add Heroku's dynamic port as a config var. `ALLOWED_HOSTS` is optional, but setting it to every public hostname is recommended; the server continues to serve when it is empty and emits one concise production startup warning.
-
-Heroku runs the production asset build once during its build phase. The root `Procfile` contains the single process declaration `web: node server.js`; dyno startup does not compile Tailwind or wrap Node in an npm process, so operating-system shutdown signals reach the server process. There is no release, worker, or migration process.
-
-The commands in this section are operator instructions. Repository preparation does not create an app, change config or DNS, add a Git remote, commit, push, or deploy anything.
-
-### Current repository and app identity
-
-The GitHub repository is `FelipeBudinich/swipe-rpg`, while the expected existing Heroku app is `swipe-jpg`; do not rename either or infer that their names should match. The supplied deployed hostname is exactly `swipe-jpg-639e96dc89c7.herokuapp.com`. Before any Heroku configuration change, verify the app, its current domains, and the existing allowlist with these read-only commands:
-
-```sh
-APP=swipe-jpg
-heroku apps:info -a "$APP"
-heroku domains -a "$APP"
-heroku config:get ALLOWED_HOSTS -a "$APP"
+```js
+{
+  id: "navigate-wrong-stars",
+  deckId: "navigate",
+  type: "plot",
+  title: "Stars in the wrong water",
+  text: "...",
+  artId: "deep-south-navigate",
+  choices: {
+    up: {
+      label: "Turn toward cloud cover",
+      result: "You seek the last ordinary weather.",
+      effects: { eldritchLore: 0, crew: 0, sanity: 0 }
+    },
+    down: { /* authored outcome */ },
+    left: { /* authored outcome */ },
+    right: { /* authored outcome */ }
+  }
+}
 ```
 
-Confirm that the app identity is `swipe-jpg` and that `heroku domains` reports `swipe-jpg-639e96dc89c7.herokuapp.com`. If either value differs, stop and report the discrepancy; do not guess a hostname or make a configuration change.
+To add a card:
 
-### Preflight
+1. Add it to the appropriate deck array in `public/js/data/cards/deep-south-cards.js`.
+2. Give it a globally unique stable ID.
+3. Supply all four directions.
+4. Limit effects to `eldritchLore`, `crew`, and `sanity`.
+5. Keep navigation out of card data; direction-to-deck movement is centralized in the engine.
+6. Run the content and full test suites.
 
-From a clean checkout, run the checks in this order:
+## Persistence and migration
 
-```sh
+Run state is saved after every navigation, choice, outcome acknowledgement, and restart under the existing local-storage key. Schema version 3 persists:
+
+- Story identity and playing/lost status
+- Current deck and Intro position
+- Intro skip-confirmation state
+- Current card identity and deterministic token
+- Independent draw/discard state for every plot deck
+- Seeded random state
+- The three resources
+- Persistent outcome feedback
+
+Pre-version-3 or foreign-story saves deliberately begin a clean Deep South run. The existing key is retained so those saves can be detected and replaced safely rather than ignored.
+
+## Development
+
+Requirements: Node.js 24 and npm 11.
+
+```bash
 npm ci
+npm run build
 npm test
 npm run check:security
-npm run build
-npm audit --audit-level=high
-NODE_ENV=production PORT=5000 npm start
+npm run audit:runs
+npm start
 ```
 
-The final command stays in the foreground. In another terminal, check `http://127.0.0.1:5000/` and `http://127.0.0.1:5000/healthz`, then stop the process with `Ctrl-C` and confirm that graceful shutdown completes. `npm audit` is intentionally a pre-deployment check rather than a Heroku build step, so audit-service availability cannot make a reproducible asset build fail. Do not use `npm audit fix --force`; assess and update affected packages conservatively, rerun the complete preflight, and commit the refreshed lockfile through the normal review process.
+Development mode:
 
-### Placeholder deployment flow
-
-Replace `<app-name>` with the intended Heroku app name. Run these commands only when the repository owner is ready to create and deploy the app:
-
-```sh
-heroku login
-heroku create <app-name> --stack heroku-26
-heroku domains -a <app-name>
-heroku config:set ALLOWED_HOSTS=<exact-host-reported-by-heroku> -a <app-name>
-heroku features:enable http-router-no-log-query -a <app-name>
-git push heroku main
-heroku ps:scale web=1 -a <app-name>
-heroku ps -a <app-name>
-heroku logs --tail -a <app-name>
-heroku open -a <app-name>
+```bash
+npm run dev
 ```
 
-Copy the default hostname exactly from `heroku domains`; do not derive it from the app name. Current Heroku default domains can use generated forms such as `<app-name>-<identifier>.herokuapp.com` or `<app-name>-<identifier>.<dns-zone>.herokuapp.com`. Set `ALLOWED_HOSTS` to hostname values only, without a URL scheme, port, path, or wildcard. If `heroku domains` reports a hostname different from an expected deployed address, stop and resolve the discrepancy instead of guessing or configuring `<app-name>.herokuapp.com`.
+The game has no runtime packages, remote assets, API, account system, or network-loaded content.
 
-The query-redaction feature is optional but recommended because Heroku router logs are separate from the application's deliberately minimal logs. Application logs should contain only startup, shutdown, fatal process failures, and unexpected server errors—never query strings, request bodies or headers, authorization values, cookies, environment variables, save data, or `localStorage` data. Review both build and runtime logs for accidental secrets before considering the release verified.
+## Current scope
 
-### Deployment verification
-
-Use the HTTPS hostname shown by Heroku:
-
-```sh
-curl --fail --silent --show-error https://<app-host>/healthz
-curl --head https://<app-host>/
-curl --head https://<app-host>/js/main.js
-curl --head https://<app-host>/assets/app.css
-```
-
-The health response must be exactly the minimal service status, without versions, environment data, hostnames, dyno identifiers, commit hashes, or stack traces. Inspect the response headers returned by the `--head` commands and complete this manual checklist:
-
-- The build succeeded and the root `Procfile` was detected as one `web` process.
-- The web dyno is up, `/` returns `200`, and `/healthz` returns `200` with `Cache-Control: no-store`.
-- Security headers are present on HTML, assets, health, and error responses. HSTS appears in production responses only.
-- The CSP produces no console violations during normal gameplay, and no asset is loaded over HTTP or from an external CDN.
-- A complete game run remains playable, and save/reload resumes the current local run.
-- Malformed, encoded, dotfile, backslash, and traversal paths cannot expose any file outside `public/`.
-- A genuinely missing asset returns `404`; arbitrary missing paths do not receive an SPA fallback or directory listing.
-- Heroku build, application, and router logs contain no secrets or query strings.
-
-### Custom domain and TLS
-
-Do not change DNS until the intended domain and app have been approved. Add the custom domain through the Heroku dashboard or CLI, then use the DNS target supplied by Heroku—not an inferred target—when creating the corresponding record with the DNS provider. A representative CLI inspection flow is:
-
-```sh
-heroku domains:add www.example.com -a <app-name>
-heroku domains -a <app-name>
-heroku certs:auto:enable -a <app-name>
-heroku certs:auto -a <app-name>
-heroku config:set ALLOWED_HOSTS=<exact-host-reported-by-heroku>,www.example.com -a <app-name>
-```
-
-Wait until Heroku Automated Certificate Management reports a valid certificate, then access and test the custom domain over HTTPS. Compose `ALLOWED_HOSTS` from the exact default hostname copied from `heroku domains` plus every explicitly served custom hostname, as comma-separated exact values. Never use `*.herokuapp.com` or any other wildcard, and do not use `X-Forwarded-Host` for validation. Verify HSTS only after HTTPS works correctly. Do not automatically add `includeSubDomains` unless every relevant subdomain supports HTTPS, and do not enable HSTS preload automatically.
-
-The application does not treat `X-Forwarded-Proto` as a security boundary or implement a forwarded-header-based redirect. If strict HTTPS is ever required on the very first request, enforce it at a trusted edge and validate that configuration separately.
-
-### Rollback
-
-Inspect the release history, identify the last known-good release, and then explicitly roll back to that release:
-
-```sh
-heroku releases -a <app-name>
-heroku releases:rollback <release-version> -a <app-name>
-```
-
-Do not guess the release identifier. After rollback, repeat the process, log, curl, header, gameplay, and save/reload verification above. A rollback changes the running release; it does not replace investigation and remediation of the failed release.
-
-## Known MVP limitations
-
-- One shipped arc and one local save slot; the engine and schema support additional authored arcs.
-- Discoveries persist as records but do not yet provide a separate full-screen codex browser.
-- Inventory is deliberately compact and has no sorting or stacking controls.
-- Arc pacing targets 35 counted world decisions, with hard bounds of 30–40; combat, rewards, interstitials, and reading time add to the total session length.
-- Combat balance is deliberately demanding and still needs broader human playtesting; the Iron Wyvern is the main difficulty spike in deterministic audit runs.
-- Local save data is device- and browser-specific and is not synchronized.
-- Local save data is player-controlled and this phase does not provide anti-cheat.
+Gather Evidence deliberately has no automatic ending. The expedition can retreat, press deeper, or continue gathering proof until Sanity is exhausted. The current content ships with four Intro cards and five cards in each of the eight plot decks.

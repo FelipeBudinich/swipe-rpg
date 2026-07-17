@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
-  <title id="title">Wayglass charm</title><desc id="desc">A floating compass needle turns inside a many-sided prism pendant.</desc>
-  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101739"/><stop offset="1" stop-color="#31204a"/></linearGradient><linearGradient id="gem" x2="1" y2="1"><stop stop-color="#6fe7dd"/><stop offset=".5" stop-color="#8076d4"/><stop offset="1" stop-color="#ff8d78"/></linearGradient></defs>
-  <rect width="400" height="400" rx="30" fill="url(#bg)"/><circle cx="200" cy="200" r="150" fill="none" stroke="#615a89" stroke-width="5" stroke-dasharray="4 15"/>
-  <path d="M122 43q78 99 156 0" fill="none" stroke="#f5c66d" stroke-width="8"/><path d="M200 88 283 155 249 274 200 350 151 274 117 155Z" fill="url(#gem)" opacity=".8" stroke="#effffb" stroke-width="7"/>
-  <circle cx="200" cy="208" r="57" fill="#1b2043" stroke="#d5d2ff" stroke-width="5"/><path d="M200 157l18 56-18 46-18-46Z" fill="#f5c66d" stroke="#fff0a4" stroke-width="4"/><path d="M147 208h106M200 155v108" stroke="#6fe7dd" stroke-width="3" opacity=".6"/>
-  <circle cx="200" cy="91" r="14" fill="#ff8d78"/>
-</svg>

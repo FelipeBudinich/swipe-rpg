@@ -15,7 +15,7 @@ export function normalizeSeed(seed) {
     return normalized || DEFAULT_SEED;
   }
 
-  const text = String(seed ?? "emberpath");
+  const text = String(seed ?? "deep-south");
   // FNV-1a, with Math.imul so the result is identical in browsers and Node.
   let hash = 0x811c9dc5;
   for (let index = 0; index < text.length; index += 1) {

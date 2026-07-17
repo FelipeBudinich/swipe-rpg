@@ -1,6 +1,21 @@
 const COMMIT_RATIO = 0.28;
 const FLICK_VELOCITY = 0.65;
 const FLICK_MIN_DISTANCE = 34;
+const DIRECTIONS = Object.freeze(["up", "down", "left", "right"]);
+
+function directionFromDelta(dx, dy, deadZone = 3) {
+  if (Math.max(Math.abs(dx), Math.abs(dy)) <= deadZone) return null;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx < 0 ? "left" : "right";
+  return dy < 0 ? "up" : "down";
+}
+
+function axisValue(direction, x, y) {
+  return direction === "left" || direction === "right" ? x : y;
+}
+
+function directionSign(direction) {
+  return direction === "left" || direction === "up" ? -1 : 1;
+}
 
 function waitForExit(element) {
   const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
@@ -43,8 +58,10 @@ export function createSwipeController({
   let latestY = 0;
   let latestTime = 0;
   let previousX = 0;
+  let previousY = 0;
   let previousTime = 0;
   let cardWidth = 1;
+  let cardHeight = 1;
   let frameId = 0;
   let committing = false;
   let destroyed = false;
@@ -53,6 +70,8 @@ export function createSwipeController({
     card.style.removeProperty("--card-x");
     card.style.removeProperty("--card-y");
     card.style.removeProperty("--card-rotation");
+    card.style.removeProperty("--choice-up-opacity");
+    card.style.removeProperty("--choice-down-opacity");
     card.style.removeProperty("--choice-left-opacity");
     card.style.removeProperty("--choice-right-opacity");
   };
@@ -61,18 +80,33 @@ export function createSwipeController({
     frameId = 0;
     if (pointerId === null) return;
     const dx = latestX - startX;
-    const dy = Math.max(-20, Math.min(20, (latestY - startY) * 0.18));
-    const width = cardWidth;
-    const strength = Math.min(1, Math.abs(dx) / (width * COMMIT_RATIO));
-    const rotation = Math.max(-7, Math.min(7, (dx / width) * 10));
+    const dy = latestY - startY;
+    const direction = directionFromDelta(dx, dy);
+    const previewDirection =
+      direction && canCommit(direction) ? direction : null;
+    const horizontal = direction === "left" || direction === "right";
+    const primaryDistance = horizontal ? dx : dy;
+    const primarySize = horizontal ? cardWidth : cardHeight;
+    const strength = direction
+      ? Math.min(1, Math.abs(primaryDistance) / (primarySize * COMMIT_RATIO))
+      : 0;
+    const renderedX = horizontal ? dx : Math.max(-20, Math.min(20, dx * 0.18));
+    const renderedY = horizontal ? Math.max(-20, Math.min(20, dy * 0.18)) : dy;
+    const rotation = horizontal
+      ? Math.max(-7, Math.min(7, (dx / cardWidth) * 10))
+      : Math.max(-2, Math.min(2, (dx / cardWidth) * 3));
 
-    card.style.setProperty("--card-x", `${dx}px`);
-    card.style.setProperty("--card-y", `${dy}px`);
+    card.style.setProperty("--card-x", `${renderedX}px`);
+    card.style.setProperty("--card-y", `${renderedY}px`);
     card.style.setProperty("--card-rotation", `${rotation}deg`);
-    card.style.setProperty("--choice-left-opacity", dx < 0 ? String(strength) : "0");
-    card.style.setProperty("--choice-right-opacity", dx > 0 ? String(strength) : "0");
-    card.dataset.previewDirection = dx < -3 ? "left" : dx > 3 ? "right" : "none";
-    onPreview(dx < -3 ? "left" : dx > 3 ? "right" : null, strength);
+    for (const candidate of DIRECTIONS) {
+      card.style.setProperty(
+        `--choice-${candidate}-opacity`,
+        candidate === previewDirection ? String(strength) : "0",
+      );
+    }
+    card.dataset.previewDirection = previewDirection ?? "none";
+    onPreview(previewDirection, previewDirection ? strength : 0);
   };
 
   const requestDragFrame = () => {
@@ -104,7 +138,7 @@ export function createSwipeController({
 
   const commit = async (direction) => {
     if (destroyed || committing || isInputLocked()) return false;
-    if (direction !== "left" && direction !== "right") return false;
+    if (!DIRECTIONS.includes(direction)) return false;
     if (!canCommit(direction)) {
       resetToCenter();
       onBlocked(direction);
@@ -117,13 +151,27 @@ export function createSwipeController({
     if (frameId) globalThis.cancelAnimationFrame(frameId);
     frameId = 0;
     card.dataset.swipeState = "committing";
-    const exitDistance = Math.max(globalThis.innerWidth || 0, card.getBoundingClientRect().width * 1.7) + 80;
-    card.style.setProperty("--card-x", `${direction === "left" ? -exitDistance : exitDistance}px`);
-    card.style.setProperty("--card-y", "-12px");
-    card.style.setProperty("--card-rotation", `${direction === "left" ? -7 : 7}deg`);
+    const bounds = card.getBoundingClientRect();
+    const horizontal = direction === "left" || direction === "right";
+    const viewportSize = horizontal
+      ? globalThis.innerWidth || 0
+      : globalThis.innerHeight || 0;
+    const cardSize = horizontal ? bounds.width : bounds.height;
+    const exitDistance = Math.max(viewportSize, cardSize * 1.7) + 80;
+    const signedExit = directionSign(direction) * exitDistance;
+    card.style.setProperty("--card-x", `${horizontal ? signedExit : 0}px`);
+    card.style.setProperty("--card-y", `${horizontal ? -12 : signedExit}px`);
+    card.style.setProperty(
+      "--card-rotation",
+      `${direction === "left" ? -7 : direction === "right" ? 7 : 0}deg`,
+    );
     card.dataset.previewDirection = direction;
-    card.style.setProperty("--choice-left-opacity", direction === "left" ? "1" : "0");
-    card.style.setProperty("--choice-right-opacity", direction === "right" ? "1" : "0");
+    for (const candidate of DIRECTIONS) {
+      card.style.setProperty(
+        `--choice-${candidate}-opacity`,
+        candidate === direction ? "1" : "0",
+      );
+    }
     onPreview(direction, 1);
 
     await waitForExit(card);
@@ -148,9 +196,11 @@ export function createSwipeController({
     if (destroyed || committing || isInputLocked() || event.button > 0) return;
     pointerId = event.pointerId;
     startX = latestX = previousX = event.clientX;
-    startY = latestY = event.clientY;
+    startY = latestY = previousY = event.clientY;
     startTime = latestTime = previousTime = event.timeStamp;
-    cardWidth = Math.max(1, card.offsetWidth || card.getBoundingClientRect().width);
+    const bounds = card.getBoundingClientRect();
+    cardWidth = Math.max(1, card.offsetWidth || bounds.width);
+    cardHeight = Math.max(1, card.offsetHeight || bounds.height);
     card.dataset.swipeState = "dragging";
     card.setPointerCapture?.(event.pointerId);
     event.preventDefault();
@@ -159,6 +209,7 @@ export function createSwipeController({
   const onPointerMove = (event) => {
     if (event.pointerId !== pointerId || committing) return;
     previousX = latestX;
+    previousY = latestY;
     previousTime = latestTime;
     latestX = event.clientX;
     latestY = event.clientY;
@@ -173,20 +224,37 @@ export function createSwipeController({
     latestY = event.clientY;
     latestTime = event.timeStamp;
     const dx = latestX - startX;
+    const dy = latestY - startY;
+    const direction = directionFromDelta(dx, dy, 0);
+    if (!direction) {
+      resetToCenter();
+      event.preventDefault();
+      return;
+    }
+    const overallDistance = axisValue(direction, dx, dy);
+    const recentDistance = axisValue(
+      direction,
+      latestX - previousX,
+      latestY - previousY,
+    );
     const elapsed = Math.max(1, latestTime - previousTime);
-    const recentVelocity = (latestX - previousX) / elapsed;
-    const overallVelocity = dx / Math.max(1, latestTime - startTime);
+    const recentVelocity = recentDistance / elapsed;
+    const overallVelocity = overallDistance / Math.max(1, latestTime - startTime);
     const velocity = Math.abs(recentVelocity) > Math.abs(overallVelocity) ? recentVelocity : overallVelocity;
-    const threshold = Math.max(64, cardWidth * COMMIT_RATIO);
-    const crossedDistance = Math.abs(dx) >= threshold;
-    const deliberateFlick = Math.abs(dx) >= FLICK_MIN_DISTANCE && Math.abs(velocity) >= FLICK_VELOCITY;
+    const primarySize =
+      direction === "left" || direction === "right" ? cardWidth : cardHeight;
+    const threshold = Math.max(64, primarySize * COMMIT_RATIO);
+    const crossedDistance = Math.abs(overallDistance) >= threshold;
+    const deliberateFlick =
+      Math.abs(overallDistance) >= FLICK_MIN_DISTANCE &&
+      Math.abs(velocity) >= FLICK_VELOCITY;
 
     if (!card.hasPointerCapture || card.hasPointerCapture(event.pointerId)) {
       card.releasePointerCapture?.(event.pointerId);
     }
     pointerId = null;
     if (allowCommit && (crossedDistance || deliberateFlick)) {
-      void commit(dx < 0 ? "left" : "right").then((didCommit) => {
+      void commit(direction).then((didCommit) => {
         if (!didCommit && !committing) resetToCenter();
       });
     } else {
@@ -198,14 +266,15 @@ export function createSwipeController({
   const onPointerUp = (event) => finishPointer(event, true);
   const onPointerCancel = (event) => finishPointer(event, false);
   const preventDrag = (event) => event.preventDefault();
+  const onLostPointerCapture = (event) => {
+    if (event.pointerId === pointerId && !committing) resetToCenter();
+  };
 
   card.addEventListener("pointerdown", onPointerDown);
   card.addEventListener("pointermove", onPointerMove);
   card.addEventListener("pointerup", onPointerUp);
   card.addEventListener("pointercancel", onPointerCancel);
-  card.addEventListener("lostpointercapture", (event) => {
-    if (event.pointerId === pointerId && !committing) resetToCenter();
-  });
+  card.addEventListener("lostpointercapture", onLostPointerCapture);
   card.addEventListener("dragstart", preventDrag);
 
   return {
@@ -229,6 +298,7 @@ export function createSwipeController({
       card.removeEventListener("pointermove", onPointerMove);
       card.removeEventListener("pointerup", onPointerUp);
       card.removeEventListener("pointercancel", onPointerCancel);
+      card.removeEventListener("lostpointercapture", onLostPointerCapture);
       card.removeEventListener("dragstart", preventDrag);
     },
   };
