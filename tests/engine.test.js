@@ -110,12 +110,138 @@ test("a fresh run starts on the first sequential Intro card with exact resources
   assert.equal(state.status, "playing");
   assert.equal(state.currentDeckId, "it-begins-here");
   assert.equal(state.introCardIndex, 0);
-  assert.equal(card.id, "intro-salt-stiff-packet");
+  assert.equal(state.introCardFace, "front");
+  assert.deepEqual(state.discoveries, { fatherDiaryReverse: false });
+  assert.equal(card.id, "intro-fathers-diary");
+  assert.equal(card.introFace, "front");
+  assert.equal(card.title, "My father’s photograph");
+  assert.equal(card.artId, "intro-01-fathers-photograph");
+  assert.match(card.artAlt, /aged photograph/u);
+  assert.equal(card.detail, "");
+  assert.ok(card.choices.left);
+  assert.ok(card.choices.right);
   assert.deepEqual(state.resources, {
     eldritchLore: 0,
     crew: 0,
     sanity: 3,
   });
+});
+
+test("the diary toggles both ways and records its reverse discovery exactly once", () => {
+  const front = createGame({ seed: 101 });
+  const frontToken = front.card.resolutionToken;
+  const decisionCount = front.state.decisionCount;
+  const rngState = front.state.rngState;
+  const drawStateByDeck = structuredClone(front.state.drawStateByDeck);
+
+  let game = resolve(front.state, front.card, "left");
+  assert.equal(game.ignored, false);
+  assert.equal(game.state.introCardFace, "reverse");
+  assert.deepEqual(game.state.discoveries, { fatherDiaryReverse: true });
+  assert.equal(game.state.resources.eldritchLore, 1);
+  assert.equal(game.state.decisionCount, decisionCount);
+  assert.equal(game.state.introCardIndex, 0);
+  assert.equal(game.state.currentDeckId, "it-begins-here");
+  assert.equal(game.state.rngState, rngState);
+  assert.deepEqual(game.state.drawStateByDeck, drawStateByDeck);
+  assert.equal(game.state.pendingFeedback, null);
+  assert.deepEqual(game.changes, { eldritchLore: 1 });
+  assert.equal(game.card.id, "intro-fathers-diary");
+  assert.equal(game.card.introFace, "reverse");
+  assert.equal(game.card.title, "The map on the reverse");
+  assert.equal(game.card.artId, "intro-01-chiloe-map");
+  assert.match(game.card.artAlt, /hand-drawn nautical map/u);
+  assert.equal(game.card.artLabel, "42°36′S, 73°57′W");
+  assert.equal(
+    game.card.detail,
+    "Discovery recorded · +1 Eldritch Lore",
+  );
+  assert.notEqual(game.card.resolutionToken, frontToken);
+
+  const stale = resolveChoice(game.state, "right", {
+    expectedToken: frontToken,
+  });
+  assert.equal(stale.ignored, true);
+  assert.equal(stale.reason, "stale-resolution");
+  assert.strictEqual(stale.state, game.state);
+
+  game = resolve(game.state, game.card, "right");
+  assert.equal(game.state.introCardFace, "front");
+  assert.equal(game.state.resources.eldritchLore, 1);
+  assert.deepEqual(game.changes, {});
+  assert.equal(game.card.title, "My father’s photograph");
+  assert.equal(game.card.introFace, "front");
+
+  game = resolve(game.state, game.card, "right");
+  assert.equal(game.state.introCardFace, "reverse");
+  assert.equal(game.card.introFace, "reverse");
+  assert.equal(game.state.resources.eldritchLore, 1);
+  assert.deepEqual(game.state.discoveries, { fatherDiaryReverse: true });
+  assert.deepEqual(game.changes, {});
+  assert.equal(game.state.pendingFeedback, null);
+  assert.equal(game.state.decisionCount, decisionCount);
+});
+
+test("up advances from the reverse diary without changing its face or replaying its reward", () => {
+  let game = createGame({ seed: 102 });
+  game = resolve(game.state, game.card, "left");
+  assert.equal(game.state.introCardFace, "reverse");
+  assert.equal(game.state.resources.eldritchLore, 1);
+
+  game = resolve(game.state, game.card, "up");
+  assert.equal(game.ignored, false);
+  assert.equal(game.state.introCardIndex, 1);
+  assert.equal(game.state.introCardFace, "reverse");
+  assert.equal(game.state.resources.eldritchLore, 1);
+  assert.equal(game.state.decisionCount, 0);
+  assert.equal(game.state.pendingFeedback, null);
+  assert.equal(game.card.id, "intro-eldritch-lore");
+  assert.equal(game.card.choices.left, undefined);
+  assert.equal(game.card.choices.right, undefined);
+});
+
+test("a reloaded diary discovery cannot award Eldritch Lore again", () => {
+  let game = createGame({ seed: 104 });
+  game = resolve(game.state, game.card, "left");
+  assert.equal(game.state.resources.eldritchLore, 1);
+
+  const reloadedState = normalizeState(
+    JSON.parse(JSON.stringify(game.state)),
+    { decks: DEEP_SOUTH_STORY.decks },
+  );
+  game = getNextCard(reloadedState);
+  assert.equal(game.state.introCardFace, "reverse");
+  assert.deepEqual(game.state.discoveries, { fatherDiaryReverse: true });
+
+  game = resolve(game.state, game.card, "right");
+  game = resolve(game.state, game.card, "left");
+  assert.equal(game.state.introCardFace, "reverse");
+  assert.equal(game.state.resources.eldritchLore, 1);
+  assert.deepEqual(game.changes, {});
+  assert.equal(game.state.pendingFeedback, null);
+});
+
+test("an undiscovered persisted reverse repairs to front and keeps its reward earnable", () => {
+  const base = createInitialState({
+    seed: 105,
+    decks: DEEP_SOUTH_STORY.decks,
+  });
+  const loaded = normalizeState(
+    {
+      ...base,
+      introCardFace: "reverse",
+      discoveries: { fatherDiaryReverse: false },
+    },
+    { decks: DEEP_SOUTH_STORY.decks },
+  );
+  let game = getNextCard(loaded);
+
+  assert.equal(game.state.introCardFace, "front");
+  assert.equal(game.card.introFace, "front");
+  game = resolve(game.state, game.card, "left");
+  assert.equal(game.state.introCardFace, "reverse");
+  assert.deepEqual(game.state.discoveries, { fatherDiaryReverse: true });
+  assert.equal(game.state.resources.eldritchLore, 1);
 });
 
 test("up reads the Intro sequentially and the final card enters Castro", () => {
@@ -160,13 +286,50 @@ test("Intro skip requires two down swipes and cancel returns to the same card", 
   assert.ok(game.card);
 });
 
-test("left and right are inert on Intro cards and skip confirmation", () => {
+test("skip confirmation retains the reverse face and cancel restores it", () => {
+  let game = createGame({ seed: 103 });
+  game = resolve(game.state, game.card, "left");
+  assert.equal(game.state.introCardFace, "reverse");
+  const reverseToken = game.card.resolutionToken;
+
+  game = resolve(game.state, game.card, "down");
+  assert.equal(game.state.introSkipPending, true);
+  assert.equal(game.state.introCardFace, "reverse");
+
+  game = resolve(game.state, game.card, "up");
+  assert.equal(game.state.introSkipPending, false);
+  assert.equal(game.state.introCardIndex, 0);
+  assert.equal(game.state.introCardFace, "reverse");
+  assert.equal(game.card.title, "The map on the reverse");
+  assert.equal(game.state.resources.eldritchLore, 1);
+  assert.equal(game.state.pendingFeedback, null);
+  assert.equal(game.state.decisionCount, 0);
+  assert.equal(game.card.resolutionToken, reverseToken);
+
+  game = resolve(game.state, game.card, "down");
+  game = resolve(game.state, game.card, "down");
+  assert.equal(game.state.currentDeckId, "castro");
+  assert.equal(game.state.introCardFace, "reverse");
+  assert.deepEqual(game.state.discoveries, { fatherDiaryReverse: true });
+  assert.equal(game.state.resources.eldritchLore, 1);
+});
+
+test("left and right are unavailable on Intro cards 2–8 and skip confirmation", () => {
   let game = createGame({ seed: 4 });
-  for (const direction of ["left", "right"]) {
-    const introResult = resolve(game.state, game.card, direction);
-    assert.equal(introResult.ignored, true);
-    assert.equal(introResult.reason, "intro-direction-ignored");
-    assert.deepEqual(introResult.state, game.state);
+  game = resolve(game.state, game.card, "up");
+  const introCards = deckById["it-begins-here"].cards;
+
+  for (let index = 1; index < introCards.length; index += 1) {
+    assert.equal(game.state.introCardIndex, index);
+    for (const direction of ["left", "right"]) {
+      const introResult = resolve(game.state, game.card, direction);
+      assert.equal(introResult.ignored, true);
+      assert.equal(introResult.reason, "intro-direction-ignored");
+      assert.strictEqual(introResult.state, game.state);
+    }
+    if (index < introCards.length - 1) {
+      game = resolve(game.state, game.card, "up");
+    }
   }
 
   game = resolve(game.state, game.card, "down");
@@ -175,7 +338,7 @@ test("left and right are inert on Intro cards and skip confirmation", () => {
     const confirmationResult = resolve(game.state, game.card, direction);
     assert.equal(confirmationResult.ignored, true);
     assert.equal(confirmationResult.reason, "intro-direction-ignored");
-    assert.deepEqual(confirmationResult.state, game.state);
+    assert.strictEqual(confirmationResult.state, game.state);
   }
 });
 
@@ -527,6 +690,26 @@ test("stale feedback and stale decision tokens cannot mutate a run", () => {
   assert.deepEqual(staleDismissal.state, result.state);
 });
 
+test("normalization repairs a self-equal replay token before resolution", () => {
+  const card = deckById.castro.cards[0];
+  const active = stateOnCard("castro", card.id);
+  const loaded = normalizeState(
+    {
+      ...active.state,
+      lastResolvedToken: active.state.currentCardToken,
+    },
+    { decks: DEEP_SOUTH_STORY.decks },
+  );
+  const prepared = getNextCard(loaded);
+  const result = resolveChoice(prepared.state, "up", {
+    expectedToken: prepared.card.resolutionToken,
+  });
+
+  assert.equal(loaded.lastResolvedToken, null);
+  assert.equal(result.ignored, false);
+  assert.ok(result.state.pendingFeedback);
+});
+
 test("Begin Again is available only after loss and resets every run field", () => {
   const active = enterCastro(11);
   const ignored = restartGame(active.state, { seed: 99 });
@@ -535,6 +718,8 @@ test("Begin Again is available only after loss and resets every run field", () =
   const lostState = {
     ...active.state,
     status: "lost",
+    introCardFace: "reverse",
+    discoveries: { fatherDiaryReverse: true },
     resources: { eldritchLore: 7, crew: 0, sanity: 0 },
     currentCardId: null,
     currentCardToken: null,
@@ -545,11 +730,16 @@ test("Begin Again is available only after loss and resets every run field", () =
   assert.equal(restarted.state.currentDeckId, "it-begins-here");
   assert.equal(restarted.state.introCardIndex, 0);
   assert.equal(restarted.state.introSkipPending, false);
+  assert.equal(restarted.state.introCardFace, "front");
+  assert.deepEqual(restarted.state.discoveries, {
+    fatherDiaryReverse: false,
+  });
   assert.equal(restarted.state.status, "playing");
   assert.deepEqual(restarted.state.resources, {
     eldritchLore: 0,
     crew: 0,
     sanity: 3,
   });
-  assert.equal(restarted.card.id, "intro-salt-stiff-packet");
+  assert.equal(restarted.card.id, "intro-fathers-diary");
+  assert.equal(restarted.card.title, "My father’s photograph");
 });

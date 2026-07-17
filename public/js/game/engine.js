@@ -10,9 +10,13 @@ import {
 import { createPendingFeedback } from "./choice-feedback.js";
 import { discardToDeck, drawFromDeck } from "./deck-draw.js";
 import { applyResourceEffects, resourceChanges } from "./effects.js";
-import { createInitialState } from "./state.js";
+import {
+  PLOT_DIRECTIONS,
+  getPlotDestinationDeckId,
+} from "./plot-navigation.js";
+import { createInitialState, INITIAL_DISCOVERIES } from "./state.js";
 
-export const DIRECTIONS = Object.freeze(["up", "down", "left", "right"]);
+export const DIRECTIONS = PLOT_DIRECTIONS;
 
 export const INTRO_SKIP_CARD = DEEP_SOUTH_INTRO_SKIP_CONFIRMATION;
 
@@ -51,18 +55,15 @@ export function getDestinationDeckId(
   direction,
   story = DEEP_SOUTH_STORY,
 ) {
-  const plotDecks = getPlotDecks(story);
-  const index = plotDecks.findIndex((deck) => deck.id === currentDeckId);
-  if (index < 0 || !DIRECTIONS.includes(direction)) return null;
-  if (direction === "up") return plotDecks[Math.max(0, index - 1)].id;
-  if (direction === "down") {
-    return plotDecks[Math.min(plotDecks.length - 1, index + 1)].id;
-  }
-  return currentDeckId;
+  return getPlotDestinationDeckId(
+    decksOf(story),
+    currentDeckId,
+    direction,
+  );
 }
 
-function tokenForIntro(index, cardId) {
-  return `intro:${index}:${cardId}`;
+function tokenForIntro(index, cardId, face) {
+  return `intro:${index}:${cardId}:${face}`;
 }
 
 function tokenForPlot(state, cardId) {
@@ -73,17 +74,61 @@ function presentCard(card, token) {
   return card ? { ...card, resolutionToken: token } : null;
 }
 
-function presentIntroCard(card, token) {
-  return card
-    ? {
-        ...card,
-        resolutionToken: token,
-        choices: {
-          up: { label: "Keep reading", result: "", effects: {} },
-          down: { label: "Skip toward Castro", result: "", effects: {} },
-        },
-      }
+function asRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function introFace(value) {
+  return value === "reverse" ? "reverse" : "front";
+}
+
+function reversibleIntroFaces(card) {
+  const faces = asRecord(card?.faces);
+  const front = asRecord(faces.front);
+  const reverse = asRecord(faces.reverse);
+  return Object.keys(front).length > 0 && Object.keys(reverse).length > 0
+    ? { front, reverse }
     : null;
+}
+
+function introNavigationChoice(label) {
+  return { label, result: "", effects: {} };
+}
+
+function presentIntroCard(card, token, state) {
+  if (!card) return null;
+
+  const faces = reversibleIntroFaces(card);
+  const selectedFace = faces ? introFace(state?.introCardFace) : "front";
+  const face = faces?.[selectedFace] ?? card;
+  const toggleLabel =
+    selectedFace === "front"
+      ? "Turn the photograph over"
+      : "Return to the photograph";
+  const choices = {
+    up: introNavigationChoice("Keep reading"),
+    down: introNavigationChoice("Skip toward Castro"),
+    ...(faces
+      ? {
+          left: introNavigationChoice(toggleLabel),
+          right: introNavigationChoice(toggleLabel),
+        }
+      : {}),
+  };
+
+  return {
+    ...card,
+    ...face,
+    title: face.title ?? card.title ?? "",
+    text: face.text ?? card.text ?? "",
+    artId: face.artId ?? card.artId ?? "",
+    artAlt: face.artAlt ?? card.artAlt ?? "",
+    artLabel: face.artLabel ?? card.artLabel ?? "",
+    detail: face.detail ?? face.rewardLabel ?? card.detail ?? "",
+    ...(faces ? { introFace: selectedFace } : {}),
+    resolutionToken: token,
+    choices,
+  };
 }
 
 function cardBelongsToDeck(cardId, deck) {
@@ -99,9 +144,10 @@ function prepareIntro(inputState, story) {
   );
   const card = intro.cards[index];
   const skipPending = inputState.introSkipPending === true;
+  const face = introFace(inputState.introCardFace);
   const token = skipPending
-    ? `intro-skip:${index}:${card.id}`
-    : tokenForIntro(index, card.id);
+    ? `intro-skip:${index}:${card.id}:${face}`
+    : tokenForIntro(index, card.id, face);
   const state = {
     ...inputState,
     currentDeckId: intro.id,
@@ -113,7 +159,7 @@ function prepareIntro(inputState, story) {
     state,
     card: skipPending
       ? presentCard(INTRO_SKIP_CARD, token)
-      : presentIntroCard(card, token),
+      : presentIntroCard(card, token, state),
   };
 }
 
@@ -183,7 +229,7 @@ export function getCurrentCard(state, story = DEEP_SOUTH_STORY) {
       : deck.cards?.[state.introCardIndex] ?? null;
     return state.introSkipPending
       ? presentCard(card, state.currentCardToken)
-      : presentIntroCard(card, state.currentCardToken);
+      : presentIntroCard(card, state.currentCardToken, state);
   }
   const card = cardBelongsToDeck(state.currentCardId, deck)
     ? getCardById(state.currentCardId, story)
@@ -222,12 +268,16 @@ function ignored(state, story, reason) {
   };
 }
 
-function resolveIntro(state, direction, story, unchangedState = state) {
+function resolveIntro(state, card, direction, story, unchangedState = state) {
   const intro = getIntroDeck(story);
   const index = Math.min(
     Math.max(0, Number(state.introCardIndex) || 0),
     Math.max(0, (intro?.cards?.length ?? 1) - 1),
   );
+  const availability = getDirectionAvailability(state, card, direction);
+  if (!availability.available) {
+    return ignored(unchangedState, story, "intro-direction-ignored");
+  }
 
   if (state.introSkipPending) {
     if (direction === "down") {
@@ -250,6 +300,49 @@ function resolveIntro(state, direction, story, unchangedState = state) {
       return { ...next, ignored: false, resultText: "", changes: {} };
     }
     return ignored(unchangedState, story, "intro-direction-ignored");
+  }
+
+  if (direction === "left" || direction === "right") {
+    const faces = reversibleIntroFaces(card);
+    if (!faces) {
+      return ignored(unchangedState, story, "intro-direction-ignored");
+    }
+
+    const nextFace = introFace(state.introCardFace) === "front"
+      ? "reverse"
+      : "front";
+    let nextState = {
+      ...state,
+      introCardFace: nextFace,
+      currentCardToken: null,
+    };
+    let changes = {};
+
+    if (nextFace === "reverse") {
+      const discoveryId = faces.reverse.discoveryId;
+      const knownDiscovery =
+        typeof discoveryId === "string" &&
+        Object.hasOwn(INITIAL_DISCOVERIES, discoveryId);
+      const alreadyDiscovered =
+        knownDiscovery && state.discoveries?.[discoveryId] === true;
+      if (knownDiscovery && !alreadyDiscovered) {
+        const applied = applyResourceEffects(
+          nextState,
+          faces.reverse.firstRevealEffects,
+        );
+        nextState = {
+          ...applied.state,
+          discoveries: {
+            ...INITIAL_DISCOVERIES,
+            [discoveryId]: true,
+          },
+        };
+        changes = applied.changes;
+      }
+    }
+
+    const next = getNextCard(nextState, story);
+    return { ...next, ignored: false, resultText: "", changes };
   }
 
   if (direction === "down") {
@@ -384,7 +477,7 @@ export function resolveChoice(
 
   const deck = getDeckById(state.currentDeckId, story);
   return deck?.type === "intro"
-    ? resolveIntro(state, inputDirection, story, inputState)
+    ? resolveIntro(state, card, inputDirection, story, inputState)
     : resolvePlot(state, card, inputDirection, story, inputState);
 }
 

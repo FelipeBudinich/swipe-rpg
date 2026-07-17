@@ -43,6 +43,15 @@ function pointerEvent(type, properties) {
   return event;
 }
 
+function endTransform(card) {
+  const event = new Event("transitionend");
+  Object.defineProperty(event, "propertyName", {
+    configurable: true,
+    value: "transform",
+  });
+  card.dispatchEvent(event);
+}
+
 function installBrowserStubs(t, { reducedMotion = true } = {}) {
   const priorMatchMedia = globalThis.matchMedia;
   const priorRaf = globalThis.requestAnimationFrame;
@@ -115,6 +124,164 @@ test("programmatic commits accept all four directions and animate along the matc
   assert.doesNotMatch(observed[3].x, /^-/);
   assert.equal(card.dataset.swipeState, "idle");
   assert.equal(card.values.size, 0);
+});
+
+test("reduced-motion horizontal flips swap in place without hiding the card", async (t) => {
+  installBrowserStubs(t, { reducedMotion: true });
+  const card = new FakeCard();
+  const observed = [];
+  const settled = [];
+  const controller = createSwipeController({
+    card,
+    getCommitMode: (direction) =>
+      direction === "left" || direction === "right" ? "flip" : "exit",
+    async onCommit(direction, context) {
+      observed.push({
+        direction,
+        context,
+        state: card.dataset.swipeState,
+        rotation: card.style.getPropertyValue("--card-flip-rotation"),
+        x: card.style.getPropertyValue("--card-x"),
+      });
+      return true;
+    },
+    onCommitSettled: (mode, didCommit) => settled.push([mode, didCommit]),
+  });
+
+  assert.equal(await controller.commit("left"), true);
+  assert.equal(await controller.commit("right"), true);
+  assert.deepEqual(observed, [
+    {
+      direction: "left",
+      context: { mode: "flip" },
+      state: "flipping-swap",
+      rotation: "",
+      x: "",
+    },
+    {
+      direction: "right",
+      context: { mode: "flip" },
+      state: "flipping-swap",
+      rotation: "",
+      x: "",
+    },
+  ]);
+  assert.deepEqual(settled, [["flip", true], ["flip", true]]);
+  assert.equal(card.dataset.swipeState, "idle");
+  assert.equal(card.dataset.previewDirection, "none");
+  assert.equal(card.style.getPropertyValue("--card-flip-rotation"), "");
+  assert.equal(card.style.getPropertyValue("--card-x"), "");
+  assert.equal(Object.hasOwn(card.dataset, "flipDirection"), false);
+});
+
+test("horizontal flip mode swaps at the edge after each transform phase", async (t) => {
+  installBrowserStubs(t, { reducedMotion: false });
+  const card = new FakeCard();
+  const midpoint = [];
+  const settled = [];
+  const controller = createSwipeController({
+    card,
+    getCommitMode: () => "flip",
+    onCommit: async (direction, context) => {
+      midpoint.push({
+        direction,
+        mode: context.mode,
+        state: card.dataset.swipeState,
+        rotation: card.style.getPropertyValue("--card-flip-rotation"),
+      });
+      return true;
+    },
+    onCommitSettled: (mode, didCommit) => settled.push([mode, didCommit]),
+  });
+
+  const pending = controller.commit("left");
+  assert.equal(card.dataset.swipeState, "flipping-out");
+  assert.equal(card.style.getPropertyValue("--card-flip-rotation"), "-90deg");
+  assert.deepEqual(midpoint, []);
+
+  endTransform(card);
+  await settle();
+  assert.deepEqual(midpoint, [
+    {
+      direction: "left",
+      mode: "flip",
+      state: "flipping-out",
+      rotation: "-90deg",
+    },
+  ]);
+  assert.equal(card.dataset.swipeState, "flipping-in");
+  assert.equal(card.style.getPropertyValue("--card-flip-rotation"), "0deg");
+  assert.equal(controller.isCommitting, true);
+
+  endTransform(card);
+  assert.equal(await pending, true);
+  assert.deepEqual(settled, [["flip", true]]);
+  assert.equal(card.dataset.swipeState, "idle");
+  assert.equal(card.style.getPropertyValue("--card-flip-rotation"), "");
+});
+
+test("a failed flip recenters and reports unsuccessful settlement", async (t) => {
+  installBrowserStubs(t, { reducedMotion: true });
+  const card = new FakeCard();
+  const settled = [];
+  const controller = createSwipeController({
+    card,
+    getCommitMode: () => "flip",
+    onCommit: async () => false,
+    onCommitSettled: (mode, didCommit) => settled.push([mode, didCommit]),
+  });
+
+  assert.equal(await controller.commit("right"), false);
+  assert.deepEqual(settled, [["flip", false]]);
+  assert.equal(controller.isCommitting, false);
+  assert.equal(card.dataset.swipeState, "idle");
+  assert.equal(card.dataset.previewDirection, "none");
+  assert.equal(card.values.size, 0);
+});
+
+test("a horizontal drag reaches the same flip commit path", async (t) => {
+  installBrowserStubs(t, { reducedMotion: true });
+  const card = new FakeCard();
+  const commits = [];
+  createSwipeController({
+    card,
+    getCommitMode: (direction) =>
+      direction === "left" || direction === "right" ? "flip" : "exit",
+    onCommit: async (direction, context) => {
+      commits.push([direction, context.mode]);
+      return true;
+    },
+  });
+
+  card.dispatchEvent(
+    pointerEvent("pointerdown", {
+      pointerId: 12,
+      button: 0,
+      clientX: 220,
+      clientY: 180,
+      timeStamp: 0,
+    }),
+  );
+  card.dispatchEvent(
+    pointerEvent("pointermove", {
+      pointerId: 12,
+      clientX: 100,
+      clientY: 185,
+      timeStamp: 180,
+    }),
+  );
+  card.dispatchEvent(
+    pointerEvent("pointerup", {
+      pointerId: 12,
+      clientX: 100,
+      clientY: 185,
+      timeStamp: 200,
+    }),
+  );
+  await settle();
+
+  assert.deepEqual(commits, [["left", "flip"]]);
+  assert.equal(card.dataset.swipeState, "idle");
 });
 
 test("unsupported directions never invoke resolution", async (t) => {

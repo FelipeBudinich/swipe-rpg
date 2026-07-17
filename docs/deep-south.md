@@ -4,16 +4,20 @@
 
 ## State
 
-The version-3 run state is serializable:
+The version-4 run state is serializable:
 
 ```js
 {
-  saveVersion: 3,
+  saveVersion: 4,
   storyId: "deep-south",
   status: "playing",
   currentDeckId: "it-begins-here",
   introCardIndex: 0,
   introSkipPending: false,
+  introCardFace: "front",
+  discoveries: {
+    fatherDiaryReverse: false
+  },
   currentCardId: null,
   currentCardToken: null,
   lastResolvedToken: null,
@@ -34,7 +38,9 @@ The ordered deck index is derived from the story definition and is not persisted
 
 ## Navigation
 
-Intro cards are read in sequence with up. A first down action shows the special skip-confirmation surface; a second down enters Castro. Up from that surface returns to the same Intro card. Left and right remain present but disabled throughout the Intro.
+Intro cards are read in sequence with up. A first down action shows the special skip-confirmation surface; a second down enters Castro. Up from that surface returns to the same Intro card and face.
+
+The first Intro card is reversible. Left or right toggles its front and reverse without changing the Intro index or cards-left count. Its first reverse reveal records `discoveries.fatherDiaryReverse` and grants one Eldritch Lore exactly once; subsequent flips and reloads cannot repeat the reward. Cards 2–8 keep left and right present but disabled.
 
 For plot cards, the engine alone maps direction to destination:
 
@@ -103,7 +109,7 @@ If Sanity reaches zero, `status` is already `lost`, but the outcome remains the 
 ## Content invariants
 
 - Exactly one Intro deck and eight numbered plot decks exist.
-- Intro content has at least four sequential cards.
+- Intro content has exactly eight sequential primary cards; the first card's reverse is a face, not a ninth card.
 - Every plot deck has at least five cards.
 - Card IDs are globally unique.
 - Every plot card defines up and down; left and right are optional.

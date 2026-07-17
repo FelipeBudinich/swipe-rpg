@@ -90,7 +90,12 @@ test("ArrowDown requests and confirms Intro skipping through the real resolver",
 });
 
 test("disabled Intro arrows are consumed without choice, state, or feedback mutation", () => {
-  const input = gameBackedHandler(createGame({ seed: 902 }));
+  const firstCard = createGame({ seed: 902 });
+  const secondCard = resolveChoice(firstCard.state, "up", {
+    expectedToken: firstCard.card.resolutionToken,
+  });
+  assert.equal(secondCard.state.introCardIndex, 1);
+  const input = gameBackedHandler(secondCard);
   const before = JSON.parse(JSON.stringify(input.game.state));
 
   for (const key of ["ArrowLeft", "ArrowRight"]) {
@@ -131,7 +136,11 @@ test("blocked, repeated, editable, and unrelated key events are ignored", () => 
 });
 
 test("delegated disabled and stale button clicks cannot mutate the real game", () => {
-  let game = createGame({ seed: 903 });
+  const firstCard = createGame({ seed: 903 });
+  let game = resolveChoice(firstCard.state, "up", {
+    expectedToken: firstCard.card.resolutionToken,
+  });
+  assert.equal(game.state.introCardIndex, 1);
   const blockedDirections = [];
   let commitCount = 0;
   const container = {

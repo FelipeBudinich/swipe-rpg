@@ -56,6 +56,19 @@ test("buttons, swipes, and arrow keys share canonical direction availability", (
   assert.doesNotMatch(source, /choice\.disabled|choiceForDirection/u);
 });
 
+test("reversible face art joins the allowlist and horizontal Card 1 commits use flip mode", () => {
+  assert.match(source, /Object\.values\(card\.faces \?\? \{\}\)/u);
+  assert.match(source, /\.map\(\(face\) => face\.artId\)/u);
+  assert.match(source, /function getCardCommitMode\(direction\)/u);
+  assert.match(
+    source,
+    /currentCard\?\.introFace === "front" \|\| currentCard\?\.introFace === "reverse"/u,
+  );
+  assert.match(source, /return horizontal && reversibleFace \? "flip" : "exit"/u);
+  assert.match(source, /getCommitMode: getCardCommitMode/u);
+  assert.match(source, /onCommitSettled: \(mode\) =>/u);
+});
+
 test("direction buttons use one guarded group handler rather than active handlers on unavailable slots", () => {
   assert.match(
     source,
@@ -93,6 +106,15 @@ test("primary-surface focus occurs after controls unlock", () => {
     assert.ok(unlock >= 0, `${name} never unlocks`);
     assert.ok(focus > unlock, `${name} focuses a disabled primary action`);
   }
+});
+
+test("flip commits let the controller finish presentation before resetting controls", () => {
+  const body = functionSource("commitChoice", "dismissCurrentFeedback");
+  assert.match(body, /async function commitChoice\(direction, \{ mode = "exit" \} = \{\}\)/u);
+  assert.match(body, /if \(mode !== "flip"\) swipeController\.resetForNextCard\(\)/u);
+  assert.match(body, /if \(mode !== "flip"\) renderer\.focusPrimarySurface\(\)/u);
+  assert.match(body, /onCommitSettled: \(mode\) =>/u);
+  assert.match(body, /if \(mode !== "flip"\) return/u);
 });
 
 test("startup normalizes, prepares, persists, renders, and focuses the restored surface", () => {

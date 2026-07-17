@@ -17,9 +17,14 @@ function directionSign(direction) {
   return direction === "left" || direction === "up" ? -1 : 1;
 }
 
-function waitForExit(element) {
-  const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  if (reducedMotion) return Promise.resolve();
+function prefersReducedMotion() {
+  return (
+    globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true
+  );
+}
+
+function waitForTransform(element, timeout = 360) {
+  if (prefersReducedMotion()) return Promise.resolve();
 
   return new Promise((resolve) => {
     let settled = false;
@@ -33,7 +38,7 @@ function waitForExit(element) {
     const onEnd = (event) => {
       if (event.target === element && event.propertyName === "transform") finish();
     };
-    const timeoutId = globalThis.setTimeout(finish, 360);
+    const timeoutId = globalThis.setTimeout(finish, timeout);
     element.addEventListener("transitionend", onEnd);
   });
 }
@@ -42,6 +47,8 @@ export function createSwipeController({
   card,
   onCommit,
   onCommitStart = () => {},
+  getCommitMode = () => "exit",
+  onCommitSettled = () => {},
   onPreview = () => {},
   isInputLocked = () => false,
   canCommit = () => true,
@@ -70,6 +77,7 @@ export function createSwipeController({
     card.style.removeProperty("--card-x");
     card.style.removeProperty("--card-y");
     card.style.removeProperty("--card-rotation");
+    card.style.removeProperty("--card-flip-rotation");
     card.style.removeProperty("--choice-up-opacity");
     card.style.removeProperty("--choice-down-opacity");
     card.style.removeProperty("--choice-left-opacity");
@@ -120,13 +128,17 @@ export function createSwipeController({
     card.dataset.swipeState = "idle";
     clearVariables();
     card.dataset.previewDirection = "none";
+    delete card.dataset.flipDirection;
     onPreview(null, 0);
   };
 
   const releaseCommittedCard = () => {
     if (!committing) return;
     committing = false;
-    if (card.dataset.swipeState === "committing") {
+    if (
+      card.dataset.swipeState === "committing" ||
+      card.dataset.swipeState?.startsWith("flipping-")
+    ) {
       resetToCenter();
       return;
     }
@@ -150,9 +162,81 @@ export function createSwipeController({
     pointerId = null;
     if (frameId) globalThis.cancelAnimationFrame(frameId);
     frameId = 0;
+    const horizontal = direction === "left" || direction === "right";
+    const mode =
+      horizontal && getCommitMode(direction) === "flip" ? "flip" : "exit";
+
+    if (mode === "flip") {
+      const reducedMotion = prefersReducedMotion();
+      clearVariables();
+      card.dataset.swipeState = reducedMotion ? "flipping-swap" : "flipping-out";
+      card.dataset.flipDirection = direction;
+      card.dataset.previewDirection = direction;
+      if (!reducedMotion) {
+        card.style.setProperty(
+          "--card-flip-rotation",
+          `${directionSign(direction) * 90}deg`,
+        );
+      }
+      for (const candidate of DIRECTIONS) {
+        card.style.setProperty(
+          `--choice-${candidate}-opacity`,
+          candidate === direction ? "1" : "0",
+        );
+      }
+      onPreview(direction, 1);
+
+      if (!reducedMotion) await waitForTransform(card, 220);
+      if (destroyed || !committing) {
+        committing = false;
+        return false;
+      }
+      try {
+        const result = await onCommit(direction, { mode });
+        if (destroyed) return false;
+        if (result === false) {
+          committing = false;
+          resetToCenter();
+          onCommitSettled(mode, false);
+          return false;
+        }
+
+        if (reducedMotion) {
+          committing = false;
+          resetToCenter();
+          onCommitSettled(mode, true);
+          return true;
+        }
+
+        card.dataset.swipeState = "flipping-swap";
+        card.style.setProperty(
+          "--card-flip-rotation",
+          `${directionSign(direction) * -90}deg`,
+        );
+        void card.offsetWidth;
+        card.dataset.swipeState = "flipping-in";
+        card.style.setProperty("--card-flip-rotation", "0deg");
+        await waitForTransform(card, 220);
+        if (destroyed || !committing) {
+          committing = false;
+          return false;
+        }
+
+        committing = false;
+        resetToCenter();
+        onCommitSettled(mode, true);
+        return true;
+      } catch (error) {
+        committing = false;
+        resetToCenter();
+        onCommitSettled(mode, false);
+        onError(error);
+        return false;
+      }
+    }
+
     card.dataset.swipeState = "committing";
     const bounds = card.getBoundingClientRect();
-    const horizontal = direction === "left" || direction === "right";
     const viewportSize = horizontal
       ? globalThis.innerWidth || 0
       : globalThis.innerHeight || 0;
@@ -174,19 +258,22 @@ export function createSwipeController({
     }
     onPreview(direction, 1);
 
-    await waitForExit(card);
+    await waitForTransform(card);
     if (destroyed || !committing) {
       committing = false;
       return false;
     }
     try {
-      const result = await onCommit(direction);
+      const result = await onCommit(direction, { mode });
       if (destroyed) return false;
       releaseCommittedCard();
-      return result !== false;
+      const didCommit = result !== false;
+      onCommitSettled(mode, didCommit);
+      return didCommit;
     } catch (error) {
       committing = false;
       resetToCenter();
+      onCommitSettled(mode, false);
       onError(error);
       return false;
     }

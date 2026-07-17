@@ -49,7 +49,7 @@ test("document identity uses one visible Deep South h1 and a wrapping chapter h2
   assert.equal(storyTitle.replace(/<[^>]+>/g, "").trim(), "Deep South");
   assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
   assert.match(openingTagById(html, "hud-deck-title"), /^<h2\b/u);
-  assert.match(deckTitle, /It begins here - 4 cards left in deck/u);
+  assert.match(deckTitle, /It begins here - 8 cards left in deck/u);
   assert.doesNotMatch(openingTagById(html, "hud-deck-title"), /\btruncate\b/u);
   assert.doesNotMatch(html, /Plot Step \d+ of \d+/u);
   assert.match(openingTagById(html, "player-hud"), /aria-label="Deep South expedition status"/);
@@ -108,6 +108,7 @@ test("retired story and resource presentation is absent from production HTML", (
 test("decision card has four directional overlays and text-safe accessible copy targets", () => {
   const card = elementSourceById(html, "card");
   assert.match(openingTagById(html, "card"), /aria-describedby="card-text card-detail"/);
+  assert.match(openingTagById(html, "card"), /data-intro-face="front"/);
   for (const direction of ["up", "down", "left", "right"]) {
     assert.match(card, new RegExp(`id="choice-${direction}-overlay"`));
     assert.match(card, new RegExp(`id="choice-${direction}-overlay-label"`));
@@ -115,6 +116,9 @@ test("decision card has four directional overlays and text-safe accessible copy 
   assert.match(card, /id="card-title"/);
   assert.match(card, /id="card-text"/);
   assert.match(card, /id="card-detail"/);
+  assert.match(card, /id="card-art-label"/);
+  assert.match(openingTagById(card, "card-art-label"), /aria-hidden="true"/);
+  assert.match(openingTagById(card, "card-art-label"), /\shidden(?:\s|>)/);
   assert.doesNotMatch(card, /reward|combat|enemy/i);
 });
 
@@ -150,21 +154,30 @@ test("all four accessible directional buttons use their matching arrow shortcut"
   );
 });
 
-test("Intro starts with Up and Down actions while permanent Left and Right slots are disabled", () => {
-  assert.doesNotMatch(openingTagById(html, "choice-up"), /\shidden(?:\s|>)/);
-  assert.doesNotMatch(openingTagById(html, "choice-down"), /\shidden(?:\s|>)/);
-  assert.doesNotMatch(openingTagById(html, "choice-left"), /\shidden(?:\s|>)/);
-  assert.doesNotMatch(openingTagById(html, "choice-right"), /\shidden(?:\s|>)/);
-  assert.doesNotMatch(openingTagById(html, "choice-up"), /\sdisabled(?:\s|>)/);
-  assert.doesNotMatch(openingTagById(html, "choice-down"), /\sdisabled(?:\s|>)/);
-  for (const direction of ["left", "right"]) {
-    assert.match(openingTagById(html, `choice-${direction}`), /\sdisabled(?:\s|>)/);
-    assert.match(
-      elementSourceById(html, `choice-${direction}`),
-      /No option/u,
-    );
+test("the first Intro face starts with four stable accessible controls", () => {
+  for (const direction of ["up", "down", "left", "right"]) {
+    const button = openingTagById(html, `choice-${direction}`);
+    assert.doesNotMatch(button, /\shidden(?:\s|>)/);
+    assert.doesNotMatch(button, /\sdisabled(?:\s|>)/);
   }
   assert.match(elementSourceById(html, "choice-down"), /Skip toward Castro/u);
+  for (const direction of ["left", "right"]) {
+    assert.match(
+      elementSourceById(html, `choice-${direction}`),
+      /Turn the photograph over/u,
+    );
+  }
+});
+
+test("both first-card PNG faces are preloaded locally without scripts or remote URLs", () => {
+  const preloads = [...html.matchAll(
+    /<link rel="preload" as="image" href="([^"]+)" type="image\/png">/g,
+  )].map((match) => match[1]);
+  assert.deepEqual(preloads, [
+    "/assets/art/intro-01-fathers-photograph.png",
+    "/assets/art/intro-01-chiloe-map.png",
+  ]);
+  assert.ok(preloads.every((source) => source.startsWith("/assets/art/")));
 });
 
 test("the visible direction reminder/footer and its placeholder are removed", () => {
@@ -254,6 +267,18 @@ test("CSS supports four-axis previews and a responsive two-column action grid", 
   assert.match(
     css,
     /#card\[data-deck-type="intro"\] #card-text\s*\{[^}]*white-space:\s*pre-line;/s,
+  );
+  assert.match(css, /--card-flip-rotation:\s*0deg/u);
+  assert.match(
+    css,
+    /rotateY\(var\(--card-flip-rotation\)\)/u,
+  );
+  assert.match(css, /#card\[data-swipe-state\^="flipping-"\]/u);
+  assert.match(css, /#card\[data-swipe-state="flipping-swap"\]/u);
+  assert.match(css, /#card\[data-swipe-state="flipping-in"\]/u);
+  assert.match(
+    css,
+    /#card\[data-intro-face="reverse"\] #card-detail:not\(\[hidden\]\)/u,
   );
   assert.match(
     openingTagById(html, "choice-controls"),

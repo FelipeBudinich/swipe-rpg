@@ -18,14 +18,15 @@ const outcome = (
   ...(costs ? { costs } : {}),
 });
 
-const introCard = (sequence, id, title, text) => ({
+const introCard = (sequence, id, title, text, artId, artAlt) => ({
   id,
   deckId: "it-begins-here",
   type: "intro",
   sequence,
   title,
   text,
-  artId: "deep-south-it-begins-here",
+  artId,
+  artAlt,
 });
 
 const plotCard = (deckId, slug, title, text, choices) => ({
@@ -39,29 +40,87 @@ const plotCard = (deckId, slug, title, text, choices) => ({
 });
 
 export const DEEP_SOUTH_INTRO_CARDS = deepFreeze([
-  introCard(
-    0,
-    "intro-salt-stiff-packet",
-    "The salt-stiff packet",
-    "At dusk, a courier leaves a packet wrapped in sailcloth. Inside: a waterlogged logbook, a torn chart, and your name written in another hand.",
-  ),
+  {
+    id: "intro-fathers-diary",
+    deckId: "it-begins-here",
+    type: "intro",
+    sequence: 0,
+    faces: {
+      front: {
+        title: "My father’s photograph",
+        text: "47°9′S, 126°43′W—these coordinates were inscribed above an enigmatic photograph in my father’s diary. The image depicted an indescribable horror.",
+        artId: "intro-01-fathers-photograph",
+        artAlt:
+          "An aged photograph of a colossal tentacled horror rising from a storm-darkened sea.",
+      },
+      reverse: {
+        title: "The map on the reverse",
+        text: "On the reverse, another set of coordinates—42°36′S, 73°57′W—beckoned me toward the Deep South.",
+        artId: "intro-01-chiloe-map",
+        artAlt:
+          "A hand-drawn nautical map of Chiloé Island marked with the coordinates 42 degrees 36 minutes south, 73 degrees 57 minutes west.",
+        artLabel: "42°36′S, 73°57′W",
+        discoveryId: "fatherDiaryReverse",
+        firstRevealEffects: { eldritchLore: 1 },
+        rewardLabel: "Discovery recorded · +1 Eldritch Lore",
+      },
+    },
+  },
   introCard(
     1,
-    "intro-last-photograph",
-    "The last photograph",
-    "A blurred photograph shows the cutter Calypso beneath a lightless noon. Its expedition vanished south of the Golfo de Penas with every radio still calling.",
+    "intro-eldritch-lore",
+    "Eldritch Lore",
+    "To unravel the mystery before me, I will need more than courage. I must gather Eldritch Lore from forbidden sources and whispered warnings to pierce the veil concealing what lies beyond human comprehension.",
+    "intro-02-eldritch-lore",
+    "Forbidden books, damp journals, and annotated nautical charts arranged on a candlelit desk.",
   ),
   introCard(
     2,
-    "intro-wandering-coordinates",
-    "Coordinates that wander",
-    "The chart marks coordinates beyond ordinary southern routes. Each time you measure them, the ink drifts closer to a coast no Chilean map records.",
+    "intro-crew",
+    "Crew",
+    "An able Crew—stalwart companions to steady me through the descent—will be indispensable on this journey.",
+    "intro-03-crew",
+    "Prospective crewmembers waiting beneath the rain at a dim southern harbor.",
   ),
   introCard(
     3,
-    "intro-testimony-for-castro",
-    "A road to Castro",
-    "One surviving testimony names Castro, wet bells, and sailors who heard stone breathing below the sea. By morning, you are aboard the bus to Chiloé.",
+    "intro-sanity",
+    "Sanity",
+    "Most vital of all is Sanity, that fragile tether to the waking world. I begin with 3 Sanity. If it falls to 0, the investigation ends before the final truth can be revealed.",
+    "intro-04-sanity",
+    "A lone investigator clings to a fragile thread of light as shapes gather in the darkness.",
+  ),
+  introCard(
+    4,
+    "intro-paths",
+    "Paths through the dark",
+    "To proceed, I must let fate guide my steps. I may investigate where I stand, press forward into the unknown, or retreat toward familiar ground.",
+    "intro-05-paths",
+    "A nautical chart presents paths toward local investigation, unknown southern waters, and a distant safe shore.",
+  ),
+  introCard(
+    5,
+    "intro-consequences",
+    "Consequences",
+    "Some places will offer respite; others will test my resolve. The choices I make may cost me members of my Crew or fragments of my Sanity—or reveal Eldritch Lore.",
+    "intro-06-consequences",
+    "An expedition ship rests in a silent cove beside an abandoned coat, a broken compass, and unnatural markings.",
+  ),
+  introCard(
+    6,
+    "intro-locked-trials",
+    "Locked trials",
+    "Certain trials will remain beyond my reach until I have succeeded in other chapters.",
+    "intro-07-locked-trials",
+    "A sealed ancient doorway bears several carved locks, only some of which have begun to glow.",
+  ),
+  introCard(
+    7,
+    "intro-departure",
+    "Departure",
+    "There is no certainty on this path—only fate, hope, and the dark truths waiting to be uncovered.",
+    "intro-08-departure",
+    "A small vessel leaves the lights of Chiloé and sails toward a wall of darkness over the southern sea.",
   ),
 ]);
 

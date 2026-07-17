@@ -2,12 +2,13 @@
 
 Deep South is a mobile-first, four-direction card game about an expedition from Chiloé into an impossible southern sea. It uses static HTML, native JavaScript modules, locally compiled Tailwind CSS, and a small hardened Node.js file server.
 
-The expedition begins with four sequential pieces of testimony. After Castro, every chapter is an independent deterministic card deck. Up moves toward Castro, down moves toward Gather Evidence, and left or right resolves an available local action. The run ends only when Sanity reaches zero.
+The expedition begins with eight sequential pieces of testimony. After Castro, every chapter is an independent deterministic card deck. Up moves toward Castro, down moves toward Gather Evidence, and left or right resolves an available local action. The run ends only when Sanity reaches zero.
 
 ## Architecture
 
 - `public/js/data/deep-south.js` is the canonical story registry and ordered nine-deck definition.
-- `public/js/data/cards/deep-south-cards.js` contains the four Intro cards and forty plot cards.
+- `public/js/data/cards/deep-south-cards.js` contains the eight Intro cards and forty plot cards.
+- `public/js/data/art-assets.js` maps allowlisted art IDs to local raster or SVG assets.
 - `public/js/game/state.js` owns the serializable run shape and migration.
 - `public/js/game/deck-draw.js` owns deterministic per-deck draw/discard behavior.
 - `public/js/game/engine.js` resolves Intro navigation, plot navigation, choices, feedback acknowledgement, loss, and restart.
@@ -46,7 +47,7 @@ The Intro is sequential. Plot decks draw without replacement, retain their own d
 - Use the four visible buttons for the same accessible actions.
 - Select **Continue** to acknowledge a persistent choice outcome.
 
-During the Intro, up reads the next card. Down opens a persisted skip confirmation; down again enters Castro, while up cancels without advancing. Left and right remain visible but disabled.
+During the Intro, up reads the next card. Down opens a persisted skip confirmation; down again enters Castro, while up cancels without advancing. The first card is reversible: left or right turns the photograph over, revealing a second coordinate and granting one Eldritch Lore exactly once per run. Cards 2–8 keep left and right visible but disabled.
 
 The HUD derives its chapter heading and unresolved-card count from the
 canonical deck draw state. For example:
@@ -115,18 +116,19 @@ To add a card:
 
 ## Persistence and migration
 
-Run state is saved after every navigation, choice, outcome acknowledgement, and restart under the existing local-storage key. Schema version 3 persists:
+Run state is saved after every navigation, choice, outcome acknowledgement, and restart under the existing local-storage key. Schema version 4 persists:
 
 - Story identity and playing/lost status
 - Current deck and Intro position
 - Intro skip-confirmation state
+- The reversible diary face and its one-time discovery flag
 - Current card identity and deterministic token
 - Independent draw/discard state for every plot deck
 - Seeded random state
 - The three resources
 - Persistent outcome feedback
 
-Pre-version-3 or foreign-story saves deliberately begin a clean Deep South run. The existing key is retained so those saves can be detected and replaced safely rather than ignored.
+Compatible version-3 Deep South saves migrate in place with the diary face set to front and the discovery unclaimed, preserving plot progress and resources. Older or foreign-story saves deliberately begin a clean Deep South run. The existing key is retained so those saves can be detected and replaced safely rather than ignored.
 
 ## Development
 
@@ -151,4 +153,4 @@ The game has no runtime packages, remote assets, API, account system, or network
 
 ## Current scope
 
-Gather Evidence deliberately has no automatic ending. The expedition can retreat, press deeper, or continue gathering proof until Sanity is exhausted. The current content ships with four Intro cards and five cards in each of the eight plot decks.
+Gather Evidence deliberately has no automatic ending. The expedition can retreat, press deeper, or continue gathering proof until Sanity is exhausted. The current content ships with eight Intro cards and five cards in each of the eight plot decks.

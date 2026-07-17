@@ -6,6 +6,7 @@
   --card-x: 0px;
   --card-y: 0px;
   --card-rotation: 0deg;
+  --card-flip-rotation: 0deg;
   --card-scale: 1;
   --choice-up-opacity: 0;
   --choice-down-opacity: 0;
@@ -27,9 +28,12 @@
 }
 
 #card {
-  transform: translate3d(var(--card-x), var(--card-y), 0)
-    rotate(var(--card-rotation)) scale(var(--card-scale));
+  transform: perspective(900px) translate3d(var(--card-x), var(--card-y), 0)
+    rotate(var(--card-rotation)) rotateY(var(--card-flip-rotation))
+    scale(var(--card-scale));
   transform-origin: 50% 88%;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -66,6 +70,21 @@
   transition-duration: 180ms;
 }
 
+#card[data-swipe-state^="flipping-"] {
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  transition-duration: 130ms;
+  transition-timing-function: ease-in;
+}
+
+#card[data-swipe-state="flipping-swap"] {
+  transition: none;
+}
+
+#card[data-swipe-state="flipping-in"] {
+  transition-timing-function: ease-out;
+}
+
 #card[data-swipe-state="entering"] {
   animation: card-enter 180ms ease-out both;
 }
@@ -74,6 +93,15 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 60ms linear;
+}
+
+#card-art-label {
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#card[data-intro-face="reverse"] #card-detail:not([hidden]) {
+  color: #275d59;
 }
 
 #choice-up-overlay {

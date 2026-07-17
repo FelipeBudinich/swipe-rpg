@@ -91,9 +91,9 @@ test("deck HUD derives Intro and all chapter headings from canonical state", () 
     },
     story,
   );
-  assert.equal(intro.deckLabel, "It begins here - 4 cards left in deck");
+  assert.equal(intro.deckLabel, "It begins here - 8 cards left in deck");
   assert.equal(intro.chapterNumber, null);
-  assert.equal(intro.cardsLeft, 4);
+  assert.equal(intro.cardsLeft, 8);
 
   for (const deck of story.decks.filter(({ type }) => type === "plot")) {
     const hud = deriveDeckHud(stateForDeck(deck.id, deck.cards.length), story);
@@ -137,7 +137,7 @@ test("card counts include the current card, use singular grammar, and retain sou
       },
       story,
     ).deckLabel,
-    "It begins here - 2 cards left in deck",
+    "It begins here - 6 cards left in deck",
   );
 });
 
@@ -181,12 +181,21 @@ test("card count changes only after Continue and survives chapter navigation", (
   );
 });
 
-test("Intro presentation uses Up and Down while Left and Right are unavailable", () => {
+test("the reversible Intro face exposes horizontal flips while ordinary cards do not", () => {
   const state = {
     currentDeckId: "it-begins-here",
     resources: { eldritchLore: 0, crew: 0, sanity: 3 },
   };
-  const normalCard = {
+  const reversibleCard = {
+    introFace: "front",
+    choices: {
+      up: { label: "Keep reading", effects: {} },
+      down: { label: "Skip toward Castro", effects: {} },
+      left: { label: "Turn the photograph over", effects: {} },
+      right: { label: "Turn the photograph over", effects: {} },
+    },
+  };
+  const ordinaryCard = {
     choices: {
       up: { label: "Keep reading", effects: {} },
       down: { label: "Skip toward Castro", effects: {} },
@@ -198,13 +207,21 @@ test("Intro presentation uses Up and Down while Left and Right are unavailable",
       down: { label: "Skip to Castro", effects: {} },
     },
   };
-  assert.equal(choiceForDirection(state, normalCard, "up").label, "Keep reading");
+  assert.equal(choiceForDirection(state, reversibleCard, "up").label, "Keep reading");
   assert.equal(
-    choiceForDirection(state, normalCard, "down").label,
+    choiceForDirection(state, reversibleCard, "down").label,
     "Skip toward Castro",
   );
-  assert.equal(choiceForDirection(state, normalCard, "left"), null);
-  assert.equal(choiceForDirection(state, normalCard, "right"), null);
+  assert.equal(
+    choiceForDirection(state, reversibleCard, "left").label,
+    "Turn the photograph over",
+  );
+  assert.equal(
+    choiceForDirection(state, reversibleCard, "right").label,
+    "Turn the photograph over",
+  );
+  assert.equal(choiceForDirection(state, ordinaryCard, "left"), null);
+  assert.equal(choiceForDirection(state, ordinaryCard, "right"), null);
   assert.equal(
     choiceForDirection(state, confirmationCard, "down").label,
     "Skip to Castro",
@@ -302,6 +319,29 @@ test("card announcements name every available direction and its actual effects",
   assert.doesNotMatch(announcement, /\.\./u);
 });
 
+test("reverse-face announcements include the coordinate and internal discovery annotation", () => {
+  const announcement = cardAnnouncement(
+    {
+      currentDeckId: "it-begins-here",
+      resources: { eldritchLore: 1, crew: 0, sanity: 3 },
+    },
+    {
+      title: "The map on the reverse",
+      text: "On the reverse, 42°36′S, 73°57′W beckoned.",
+      artLabel: "42°36′S, 73°57′W",
+      detail: "Discovery recorded · +1 Eldritch Lore",
+      choices: {
+        up: { label: "Keep reading", effects: {} },
+        down: { label: "Skip toward Castro", effects: {} },
+        left: { label: "Return to the photograph", effects: {} },
+        right: { label: "Return to the photograph", effects: {} },
+      },
+    },
+  );
+  assert.match(announcement, /42°36′S, 73°57′W/u);
+  assert.match(announcement, /Discovery recorded · \+1 Eldritch Lore/u);
+});
+
 test("feedback presentation shows only actual nonzero expedition changes", () => {
   const presentation = deriveFeedbackPresentation({
     id: "feedback:castro-bells:down",
@@ -390,10 +430,15 @@ test("art sources accept only fixed-format IDs in the local allowlist", () => {
   const allowed = new Set([
     "deep-south-castro",
     "deep-south-it-begins-here",
+    "intro-01-fathers-photograph",
   ]);
   assert.equal(
     resolveArtSource("deep-south-castro", allowed),
     "/assets/art/deep-south-castro.svg",
+  );
+  assert.equal(
+    resolveArtSource("intro-01-fathers-photograph", allowed),
+    "/assets/art/intro-01-fathers-photograph.png",
   );
   assert.equal(
     resolveArtSource("../../server", allowed),
@@ -452,4 +497,19 @@ test("renderer binds every directional slot to shared availability and previews 
   assert.doesNotMatch(setChoiceSource, /detail\.hidden\s*=\s*!/);
   assert.doesNotMatch(source, /directionHint|Plot Step/);
   assert.doesNotMatch(source, /inventory|combat|rewardSummary|storyTransition/);
+});
+
+test("renderer safely binds face state, coordinate overlay, and the existing detail slot", async () => {
+  const source = await readFile(
+    new URL("../public/js/ui/render.js", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /cardArtLabel:\s*byId\("card-art-label"\)/u);
+  assert.match(source, /elements\.cardArtLabel\.textContent = artLabel/u);
+  assert.match(source, /elements\.cardArtLabel\.hidden = !artLabel/u);
+  assert.match(source, /elements\.detail\.textContent = detail/u);
+  assert.match(source, /elements\.detail\.hidden = !detail/u);
+  assert.match(source, /elements\.card\.dataset\.introFace = introFace/u);
+  assert.match(source, /delete elements\.card\.dataset\.introFace/u);
+  assert.doesNotMatch(source, /\.innerHTML\s*=|insertAdjacentHTML/u);
 });

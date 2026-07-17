@@ -34,7 +34,10 @@ function randomSeed() {
 
 const authoredArtIds = DEEP_SOUTH_STORY.decks.flatMap((deck) => [
   deck.artId,
-  ...(deck.cards ?? []).map((card) => card.artId),
+  ...(deck.cards ?? []).flatMap((card) => [
+    card.artId,
+    ...Object.values(card.faces ?? {}).map((face) => face.artId),
+  ]),
 ]);
 const allowedArtIds = new Set(
   [
@@ -124,7 +127,14 @@ async function settleCardArt() {
   }
 }
 
-async function commitChoice(direction) {
+function getCardCommitMode(direction) {
+  const horizontal = direction === "left" || direction === "right";
+  const reversibleFace =
+    currentCard?.introFace === "front" || currentCard?.introFace === "reverse";
+  return horizontal && reversibleFace ? "flip" : "exit";
+}
+
+async function commitChoice(direction, { mode = "exit" } = {}) {
   if (isActiveCommitResolutionBlocked()) return false;
   inputLocked = true;
   updateControlLocks();
@@ -157,20 +167,26 @@ async function commitChoice(direction) {
     return false;
   } finally {
     inputLocked = false;
-    swipeController.resetForNextCard();
+    if (mode !== "flip") swipeController.resetForNextCard();
     updateControlLocks();
-    renderer.focusPrimarySurface();
+    if (mode !== "flip") renderer.focusPrimarySurface();
   }
 }
 
 swipeController = createSwipeController({
   card: elements.card,
   isInputLocked: isNewInputBlocked,
+  getCommitMode: getCardCommitMode,
   canCommit: (direction) =>
     getDirectionAvailability(state, currentCard, direction).available,
   onBlocked: announceUnavailableDirection,
   onPreview: (direction) => renderer.previewChoice(direction),
   onCommit: commitChoice,
+  onCommitSettled: (mode) => {
+    if (mode !== "flip") return;
+    updateControlLocks();
+    renderer.focusPrimarySurface();
+  },
   onError: (error) => {
     updateControlLocks();
     feedback.announce("The southern sea shifted. Try that action again.");

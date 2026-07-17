@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
+  artSourceForId,
+  INTRO_RASTER_ART_IDS,
+} from "../public/js/data/art-assets.js";
+import {
   DEEP_SOUTH_CARD_BY_ID,
   DEEP_SOUTH_CARDS,
   DEEP_SOUTH_DECK_BY_ID,
@@ -52,6 +56,110 @@ const EXPECTED_DECKS = [
   { id: "explore-rlyeh", title: "Explore R'lyeh", type: "plot", plotStep: 7 },
   { id: "gather-evidence", title: "Gather Evidence", type: "plot", plotStep: 8 },
 ];
+const EXPECTED_INTRO_CARDS = [
+  {
+    id: "intro-fathers-diary",
+    deckId: "it-begins-here",
+    type: "intro",
+    sequence: 0,
+    faces: {
+      front: {
+        title: "My father’s photograph",
+        text: "47°9′S, 126°43′W—these coordinates were inscribed above an enigmatic photograph in my father’s diary. The image depicted an indescribable horror.",
+        artId: "intro-01-fathers-photograph",
+        artAlt:
+          "An aged photograph of a colossal tentacled horror rising from a storm-darkened sea.",
+      },
+      reverse: {
+        title: "The map on the reverse",
+        text: "On the reverse, another set of coordinates—42°36′S, 73°57′W—beckoned me toward the Deep South.",
+        artId: "intro-01-chiloe-map",
+        artAlt:
+          "A hand-drawn nautical map of Chiloé Island marked with the coordinates 42 degrees 36 minutes south, 73 degrees 57 minutes west.",
+        artLabel: "42°36′S, 73°57′W",
+        discoveryId: "fatherDiaryReverse",
+        firstRevealEffects: { eldritchLore: 1 },
+        rewardLabel: "Discovery recorded · +1 Eldritch Lore",
+      },
+    },
+  },
+  {
+    id: "intro-eldritch-lore",
+    deckId: "it-begins-here",
+    type: "intro",
+    sequence: 1,
+    title: "Eldritch Lore",
+    text: "To unravel the mystery before me, I will need more than courage. I must gather Eldritch Lore from forbidden sources and whispered warnings to pierce the veil concealing what lies beyond human comprehension.",
+    artId: "intro-02-eldritch-lore",
+    artAlt:
+      "Forbidden books, damp journals, and annotated nautical charts arranged on a candlelit desk.",
+  },
+  {
+    id: "intro-crew",
+    deckId: "it-begins-here",
+    type: "intro",
+    sequence: 2,
+    title: "Crew",
+    text: "An able Crew—stalwart companions to steady me through the descent—will be indispensable on this journey.",
+    artId: "intro-03-crew",
+    artAlt: "Prospective crewmembers waiting beneath the rain at a dim southern harbor.",
+  },
+  {
+    id: "intro-sanity",
+    deckId: "it-begins-here",
+    type: "intro",
+    sequence: 3,
+    title: "Sanity",
+    text: "Most vital of all is Sanity, that fragile tether to the waking world. I begin with 3 Sanity. If it falls to 0, the investigation ends before the final truth can be revealed.",
+    artId: "intro-04-sanity",
+    artAlt:
+      "A lone investigator clings to a fragile thread of light as shapes gather in the darkness.",
+  },
+  {
+    id: "intro-paths",
+    deckId: "it-begins-here",
+    type: "intro",
+    sequence: 4,
+    title: "Paths through the dark",
+    text: "To proceed, I must let fate guide my steps. I may investigate where I stand, press forward into the unknown, or retreat toward familiar ground.",
+    artId: "intro-05-paths",
+    artAlt:
+      "A nautical chart presents paths toward local investigation, unknown southern waters, and a distant safe shore.",
+  },
+  {
+    id: "intro-consequences",
+    deckId: "it-begins-here",
+    type: "intro",
+    sequence: 5,
+    title: "Consequences",
+    text: "Some places will offer respite; others will test my resolve. The choices I make may cost me members of my Crew or fragments of my Sanity—or reveal Eldritch Lore.",
+    artId: "intro-06-consequences",
+    artAlt:
+      "An expedition ship rests in a silent cove beside an abandoned coat, a broken compass, and unnatural markings.",
+  },
+  {
+    id: "intro-locked-trials",
+    deckId: "it-begins-here",
+    type: "intro",
+    sequence: 6,
+    title: "Locked trials",
+    text: "Certain trials will remain beyond my reach until I have succeeded in other chapters.",
+    artId: "intro-07-locked-trials",
+    artAlt:
+      "A sealed ancient doorway bears several carved locks, only some of which have begun to glow.",
+  },
+  {
+    id: "intro-departure",
+    deckId: "it-begins-here",
+    type: "intro",
+    sequence: 7,
+    title: "Departure",
+    text: "There is no certainty on this path—only fate, hope, and the dark truths waiting to be uncovered.",
+    artId: "intro-08-departure",
+    artAlt:
+      "A small vessel leaves the lights of Chiloé and sails toward a wall of darkness over the southern sea.",
+  },
+];
 
 function assertDeeplyFrozenData(value, path = "deepSouth") {
   assert.notEqual(typeof value, "function", `${path} contains executable content`);
@@ -88,6 +196,10 @@ function authoredChoices(card) {
   });
 }
 
+function introSurfaces(card) {
+  return card.faces ? Object.values(card.faces) : [card];
+}
+
 test("Deep South publishes the exact ordered nine-deck story contract", () => {
   assert.equal(DEEP_SOUTH_STORY_ID, "deep-south");
   assert.equal(DEEP_SOUTH_TITLE, "Deep South");
@@ -113,15 +225,49 @@ test("Deep South publishes the exact ordered nine-deck story contract", () => {
   }
 });
 
-test("the intro is four immutable sequential cards and skip confirmation stays out of the deck", () => {
-  assert.equal(DEEP_SOUTH_INTRO_CARDS.length, 4);
-  assert.deepEqual(DEEP_SOUTH_INTRO_CARDS.map(({ sequence }) => sequence), [0, 1, 2, 3]);
+test("the Intro has exactly eight primary cards with exact UTF-8 copy and metadata", () => {
+  assert.equal(DEEP_SOUTH_INTRO_CARDS.length, 8);
+  assert.deepEqual(DEEP_SOUTH_INTRO_CARDS, EXPECTED_INTRO_CARDS);
+  assert.deepEqual(
+    DEEP_SOUTH_INTRO_CARDS.map(({ sequence }) => sequence),
+    [0, 1, 2, 3, 4, 5, 6, 7],
+  );
 
-  for (const card of DEEP_SOUTH_INTRO_CARDS) {
+  const [firstCard, ...ordinaryCards] = DEEP_SOUTH_INTRO_CARDS;
+  assert.deepEqual(Object.keys(firstCard).sort(), [
+    "deckId",
+    "faces",
+    "id",
+    "sequence",
+    "type",
+  ]);
+  assert.deepEqual(Object.keys(firstCard.faces), ["front", "reverse"]);
+  assert.deepEqual(Object.keys(firstCard.faces.front).sort(), [
+    "artAlt",
+    "artId",
+    "text",
+    "title",
+  ]);
+  assert.deepEqual(Object.keys(firstCard.faces.reverse).sort(), [
+    "artAlt",
+    "artId",
+    "artLabel",
+    "discoveryId",
+    "firstRevealEffects",
+    "rewardLabel",
+    "text",
+    "title",
+  ]);
+  assert.deepEqual(firstCard.faces.reverse.firstRevealEffects, {
+    eldritchLore: 1,
+  });
+
+  for (const card of ordinaryCards) {
     assert.equal(card.deckId, "it-begins-here");
     assert.equal(card.type, "intro");
-    assert.equal(card.artId, "deep-south-it-begins-here");
+    assert.equal(Object.hasOwn(card, "faces"), false);
     assert.deepEqual(Object.keys(card).sort(), [
+      "artAlt",
       "artId",
       "deckId",
       "id",
@@ -132,6 +278,24 @@ test("the intro is four immutable sequential cards and skip confirmation stays o
     ]);
   }
 
+  const surfaces = DEEP_SOUTH_INTRO_CARDS.flatMap(introSurfaces);
+  assert.equal(surfaces.length, 9);
+  assert.equal(new Set(surfaces.map(({ artId }) => artId)).size, 9);
+  assert.equal(new Set(surfaces.map(({ artAlt }) => artAlt)).size, 9);
+  assert.ok(surfaces.every(({ artAlt }) => artAlt.trim().length > 0));
+  assert.equal(
+    DEEP_SOUTH_INTRO_CARDS.includes(firstCard.faces.reverse),
+    false,
+    "the reverse must not become a ninth primary card",
+  );
+  assert.equal(
+    Object.hasOwn(DEEP_SOUTH_CARD_BY_ID, firstCard.faces.reverse.discoveryId),
+    false,
+    "the reverse discovery ID must not enter the primary card registry",
+  );
+});
+
+test("the canonical down-skip confirmation stays outside the eight-card Intro", () => {
   assert.deepEqual(DEEP_SOUTH_INTRO_SKIP_CONFIRMATION, {
     id: "deep-south-intro-skip-confirmation",
     type: "intro-confirmation",
@@ -215,13 +379,13 @@ test("all eight plot decks contain five unique cards with required vertical navi
   assert.ok(missingLocalChoices.some(({ representedAsNull }) => !representedAsNull));
 
   assert.equal(DEEP_SOUTH_PLOT_CARDS.length, 40);
-  assert.equal(DEEP_SOUTH_CARDS.length, 44);
+  assert.equal(DEEP_SOUTH_CARDS.length, 48);
   assert.deepEqual(
     DEEP_SOUTH_CARDS,
     [...DEEP_SOUTH_INTRO_CARDS, ...DEEP_SOUTH_PLOT_CARDS],
   );
-  assert.equal(new Set(DEEP_SOUTH_CARDS.map(({ id }) => id)).size, 44);
-  assert.equal(Object.keys(DEEP_SOUTH_CARD_BY_ID).length, 44);
+  assert.equal(new Set(DEEP_SOUTH_CARDS.map(({ id }) => id)).size, 48);
+  assert.equal(Object.keys(DEEP_SOUTH_CARD_BY_ID).length, 48);
   for (const card of DEEP_SOUTH_CARDS) {
     assert.strictEqual(DEEP_SOUTH_CARD_BY_ID[card.id], card);
   }
@@ -301,9 +465,11 @@ test("plot outcomes use bounded effects and explicit payable costs without doubl
 });
 
 test("cards are concise, locally grounded, and contain no unrelated hard-gate schema", () => {
-  for (const card of DEEP_SOUTH_INTRO_CARDS) {
-    assert.ok(card.title.length <= 40);
-    assert.ok(card.text.length <= 180);
+  const allIntroSurfaces = DEEP_SOUTH_INTRO_CARDS.flatMap(introSurfaces);
+  for (const surface of allIntroSurfaces) {
+    assert.ok(surface.title.length <= 40);
+    assert.ok(surface.text.length <= 220);
+    assert.ok(surface.artAlt.length <= 160);
   }
   for (const card of DEEP_SOUTH_PLOT_CARDS) {
     assert.ok(card.title.length <= 40, `${card.id} has an overlong title`);
@@ -314,8 +480,11 @@ test("cards are concise, locally grounded, and contain no unrelated hard-gate sc
     }
   }
 
-  const fullCorpus = DEEP_SOUTH_CARDS.map(({ title, text }) => `${title} ${text}`).join(" ");
-  for (const localAnchor of ["Castro", "Chiloé", "Golfo de Penas", "palafitos"]) {
+  const fullCorpus = [
+    ...allIntroSurfaces.map(({ title, text, artAlt }) => `${title} ${text} ${artAlt}`),
+    ...DEEP_SOUTH_PLOT_CARDS.map(({ title, text }) => `${title} ${text}`),
+  ].join(" ");
+  for (const localAnchor of ["Castro", "Chiloé", "42°36′S, 73°57′W", "palafitos"]) {
     assert.match(fullCorpus, new RegExp(localAnchor, "u"));
   }
 
@@ -390,4 +559,33 @@ test("every deck resolves to one safe, local, accessible SVG asset", () => {
     );
     assert.doesNotMatch(contentWithoutSvgNamespace, /(?:https?:|data:|javascript:)/ui);
   }
+});
+
+test("every Intro surface resolves to one consistent local raster asset", () => {
+  const introSurfaces = [
+    ...Object.values(DEEP_SOUTH_INTRO_CARDS[0].faces),
+    ...DEEP_SOUTH_INTRO_CARDS.slice(1),
+  ];
+  const expectedIds = introSurfaces.map(({ artId }) => artId);
+  assert.deepEqual(INTRO_RASTER_ART_IDS, expectedIds);
+  assert.equal(new Set(expectedIds).size, 9);
+
+  for (const artId of expectedIds) {
+    assert.equal(artSourceForId(artId), `/assets/art/${artId}.png`);
+    const path = join(artDirectory, `${artId}.png`);
+    assert.equal(existsSync(path), true, `${artId}.png is missing`);
+    const bytes = readFileSync(path);
+    assert.deepEqual(
+      [...bytes.subarray(0, 8)],
+      [137, 80, 78, 71, 13, 10, 26, 10],
+      `${artId}.png is not a PNG`,
+    );
+    assert.equal(bytes.readUInt32BE(16), 960, `${artId}.png has the wrong width`);
+    assert.equal(bytes.readUInt32BE(20), 540, `${artId}.png has the wrong height`);
+  }
+
+  assert.equal(
+    artSourceForId("deep-south-it-begins-here"),
+    "/assets/art/deep-south-it-begins-here.svg",
+  );
 });

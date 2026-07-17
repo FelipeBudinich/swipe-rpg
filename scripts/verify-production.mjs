@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { assertProjectSecurity, REMOTE_OR_ACTIVE_URL } from "./security-checks.mjs";
+import { artSourceForId } from "../public/js/data/art-assets.js";
 
 const REQUIRED_FILES = [
   "Procfile",
@@ -250,7 +251,7 @@ async function verifyAuthoredArt(rootDir, errors) {
         errors.push(`${relative}:${lineNumber(source, match.index)} contains invalid art ID ${JSON.stringify(artId)}`);
         continue;
       }
-      await validateAsset(rootDir, relative, `/assets/art/${artId}.svg`, errors);
+      await validateAsset(rootDir, relative, artSourceForId(artId), errors);
     }
   }
   await validateAsset(

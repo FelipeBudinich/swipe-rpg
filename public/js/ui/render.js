@@ -1,4 +1,5 @@
 import { FEEDBACK_ART_BY_TONE } from "../game/choice-feedback.js";
+import { artSourceForId } from "../data/art-assets.js";
 import {
   CHOICE_COST_KEYS,
   CHOICE_COST_LABELS,
@@ -62,7 +63,7 @@ export function resolveArtSource(
     allowlist.has(artId)
       ? artId
       : safeFallback;
-  return `/assets/art/${candidate}.svg`;
+  return artSourceForId(candidate);
 }
 
 export function deriveDeckHud(state, story) {
@@ -181,6 +182,7 @@ export function cardAnnouncement(state, card) {
     card?.speaker ? String(card.speaker) : "",
     String(card?.title ?? "The southern sea"),
     String(card?.text ?? "The expedition waits."),
+    card?.detail ? String(card.detail) : "",
   ];
   for (const direction of DIRECTIONS) {
     const presentation = deriveChoicePresentation(state, card, direction);
@@ -283,6 +285,7 @@ export function createRenderer({
     cardBackdrop: byId("card-backdrop"),
     card: byId("card"),
     cardArt: byId("card-art"),
+    cardArtLabel: byId("card-art-label"),
     speaker: byId("card-speaker"),
     title: byId("card-title"),
     text: byId("card-text"),
@@ -392,12 +395,18 @@ export function createRenderer({
     activeCard = card;
     const title = String(card?.title ?? "The southern sea");
     const text = String(card?.text ?? "The expedition waits.");
+    const detail = String(card?.detail ?? "").trim();
+    const artLabel = String(card?.artLabel ?? "").trim();
+    const introFace =
+      card?.introFace === "front" || card?.introFace === "reverse"
+        ? card.introFace
+        : null;
     const hud = deriveDeckHud(state, story);
     elements.speaker.textContent = String(card?.speaker ?? hud.deck.title);
     elements.title.textContent = title;
     elements.text.textContent = text;
-    elements.detail.textContent = String(card?.detail ?? "");
-    elements.detail.hidden = !elements.detail.textContent;
+    elements.detail.textContent = detail;
+    elements.detail.hidden = !detail;
     elements.cardArt.src = resolveArtSource(
       card?.artId,
       allowedArtIds,
@@ -405,8 +414,12 @@ export function createRenderer({
     );
     elements.cardArt.alt = String(card?.artAlt ?? "");
     elements.cardArt.draggable = false;
+    elements.cardArtLabel.textContent = artLabel;
+    elements.cardArtLabel.hidden = !artLabel;
     elements.card.dataset.cardId = String(card?.id ?? "deep-south-card");
     elements.card.dataset.deckType = hud.isIntro ? "intro" : "plot";
+    if (introFace) elements.card.dataset.introFace = introFace;
+    else delete elements.card.dataset.introFace;
     for (const direction of DIRECTIONS) {
       setChoice(state, card, direction);
     }
@@ -414,7 +427,7 @@ export function createRenderer({
     elements.card.setAttribute("aria-label", announcement);
     const announcementKey = `${String(state.currentCardToken ?? card?.id ?? "card")}:${
       state.introSkipPending ? "skip" : "normal"
-    }`;
+    }:${introFace ?? "single"}`;
     if (lastAnnouncementKey !== announcementKey) {
       lastAnnouncementKey = announcementKey;
       elements.cardLive.textContent = announcement;

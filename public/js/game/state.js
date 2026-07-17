@@ -9,15 +9,22 @@ import {
   normalizeDrawStateByDeck,
 } from "./deck-draw.js";
 import { normalizeResources } from "./effects.js";
+import { getPlotDestinationDeckId } from "./plot-navigation.js";
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const STORY_ID = DEEP_SOUTH_STORY_ID;
 export const INITIAL_RESOURCES = Object.freeze({
   eldritchLore: 0,
   crew: 0,
   sanity: 3,
 });
+export const INTRO_CARD_FACES = Object.freeze(["front", "reverse"]);
+export const INITIAL_DISCOVERIES = Object.freeze({
+  fatherDiaryReverse: false,
+});
 export const RUN_STATUSES = Object.freeze(["playing", "lost"]);
+
+const COMPATIBLE_PREVIOUS_SAVE_VERSION = 3;
 
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -70,11 +77,28 @@ function introIndex(value, deck) {
   return Math.min(maximum, nonNegativeInteger(value));
 }
 
+function normalizedIntroCardFace(value) {
+  return INTRO_CARD_FACES.includes(value) ? value : "front";
+}
+
+function normalizedDiscoveries(value) {
+  const source = asRecord(value);
+  return {
+    fatherDiaryReverse: source.fatherDiaryReverse === true,
+  };
+}
+
 function normalizedPersistedResources(value) {
   const source = asRecord(value);
   const repaired = Object.fromEntries(
     Object.entries(INITIAL_RESOURCES).map(([key, fallback]) => {
-      const number = Number(source[key]);
+      const raw = source[key];
+      const number =
+        typeof raw === "number"
+          ? raw
+          : typeof raw === "string" && raw.trim().length > 0
+            ? Number(raw)
+            : Number.NaN;
       return [key, Number.isFinite(number) ? number : fallback];
     }),
   );
@@ -135,6 +159,8 @@ export function createInitialState(options = {}) {
     currentDeckId: firstDeck?.id ?? "it-begins-here",
     introCardIndex: 0,
     introSkipPending: false,
+    introCardFace: "front",
+    discoveries: { ...INITIAL_DISCOVERIES },
     currentCardId: null,
     currentCardToken: null,
     lastResolvedToken: null,
@@ -150,16 +176,19 @@ export function createInitialState(options = {}) {
 /**
  * Defensively normalize persisted Deep South state.
  *
- * Earlier story schemas and mixed old/new payloads are intentionally incompatible:
- * they restart from a clean Intro rather than guessing a deck or retaining
- * obsolete cards, resources, feedback, or progression.
+ * Version 3 Deep South saves have the same plot/deck contract and migrate
+ * losslessly with the new Intro fields defaulted. Earlier story schemas and
+ * mixed old/new payloads remain intentionally incompatible.
  */
 export function normalizeState(raw, options = {}) {
   const source = asRecord(raw);
   const normalizedOptions = asRecord(options);
   const decks = configuredDecks(normalizedOptions);
+  const compatibleSaveVersion =
+    source.saveVersion === SAVE_VERSION ||
+    source.saveVersion === COMPATIBLE_PREVIOUS_SAVE_VERSION;
   if (
-    source.saveVersion !== SAVE_VERSION ||
+    !compatibleSaveVersion ||
     source.storyId !== STORY_ID ||
     hasIncompatibleLegacyState(source)
   ) {
@@ -192,6 +221,18 @@ export function normalizeState(raw, options = {}) {
     currentCardId && nonemptyString(source.currentCardToken)
       ? source.currentCardToken
       : null;
+  const isCurrentSave = source.saveVersion === SAVE_VERSION;
+  const discoveries = isCurrentSave
+    ? normalizedDiscoveries(source.discoveries)
+    : { ...fallback.discoveries };
+  const candidateIntroCardFace = isCurrentSave
+    ? normalizedIntroCardFace(source.introCardFace)
+    : fallback.introCardFace;
+  const introCardFace =
+    candidateIntroCardFace === "reverse" &&
+    discoveries.fatherDiaryReverse !== true
+      ? "front"
+      : candidateIntroCardFace;
 
   const normalized = {
     ...fallback,
@@ -202,6 +243,8 @@ export function normalizeState(raw, options = {}) {
       currentDeck?.type === "intro" &&
       status === "playing" &&
       source.introSkipPending === true,
+    introCardFace,
+    discoveries,
     currentCardId,
     currentCardToken,
     lastResolvedToken: nonemptyString(source.lastResolvedToken)
@@ -225,10 +268,24 @@ export function normalizeState(raw, options = {}) {
     );
     if (
       sourceDeck?.type !== "plot" ||
-      !cardIdsForDeck(sourceDeck).has(normalized.pendingFeedback.sourceCardId)
+      !cardIdsForDeck(sourceDeck).has(normalized.pendingFeedback.sourceCardId) ||
+      normalized.pendingFeedback.destinationDeckId !==
+        getPlotDestinationDeckId(
+          decks,
+          normalized.pendingFeedback.sourceDeckId,
+          normalized.pendingFeedback.direction,
+        )
     ) {
       normalized.pendingFeedback = null;
     }
+  }
+  if (
+    normalized.status === "playing" &&
+    !normalized.pendingFeedback &&
+    (!normalized.currentCardToken ||
+      normalized.lastResolvedToken === normalized.currentCardToken)
+  ) {
+    normalized.lastResolvedToken = null;
   }
   return normalized;
 }
