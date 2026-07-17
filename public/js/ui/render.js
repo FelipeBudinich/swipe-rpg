@@ -345,6 +345,7 @@ export function createRenderer({
     mpHud: byId("mp-hud"),
     mp: byId("hud-mp"),
     mpBar: byId("hud-mp-bar"),
+    storyHeading: byId("story-heading"),
     arcTitle: byId("arc-title"),
     beatName: byId("hud-beat-name"),
     beatNumber: byId("hud-beat-number"),
@@ -522,6 +523,10 @@ export function createRenderer({
     elements.mp.textContent = `${state.player.mp} / ${derivedStats.maxMp}`;
     elements.arcTitle.textContent = storyHud.arcTitle;
     elements.beatName.textContent = storyHud.beatName;
+    elements.storyHeading.setAttribute(
+      "aria-label",
+      `${storyHud.arcTitle} - ${storyHud.beatName}`,
+    );
     elements.beatNumber.textContent = `${storyHud.beatNumber} / ${storyHud.beatCount}`;
     setBar(elements.xpBar, state.player.xp, xpNeeded);
     setBar(elements.hpBar, state.player.hp, derivedStats.maxHp);

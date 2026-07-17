@@ -150,6 +150,7 @@ test("renderer source uses explicit preview targets and text-safe reward renderi
 
 test("HUD renderer updates every preserved value, meter, and accessible label", async () => {
   const source = await readFile(new URL("../public/js/ui/render.js", import.meta.url), "utf8");
+  assert.match(source, /storyHeading: byId\("story-heading"\)/);
   const start = source.indexOf("const renderHud =");
   const end = source.indexOf("const setInteractiveSurface", start);
   assert.ok(start >= 0 && end > start);
@@ -167,6 +168,13 @@ test("HUD renderer updates every preserved value, meter, and accessible label", 
   assert.match(renderHud, /elements\.xpBar\.setAttribute\("aria-label", `Experience:/);
   assert.match(renderHud, /elements\.hpBar\.setAttribute\("aria-label", `Health:/);
   assert.match(renderHud, /elements\.mpBar\.setAttribute\("aria-label", `Magic points:/);
+  assert.match(renderHud, /elements\.arcTitle\.textContent\s*=\s*storyHud\.arcTitle/);
+  assert.match(renderHud, /elements\.beatName\.textContent\s*=\s*storyHud\.beatName/);
+  assert.match(
+    renderHud,
+    /elements\.storyHeading\.setAttribute\(\s*"aria-label",\s*`\$\{storyHud\.arcTitle\} - \$\{storyHud\.beatName\}`,\s*\)/,
+  );
+  assert.match(renderHud, /elements\.storyProgress\.setAttribute\("aria-label", storyHud\.progressLabel\)/);
 
   const setBarStart = source.indexOf("function setBar(");
   const setBarEnd = source.indexOf("function lookupById", setBarStart);

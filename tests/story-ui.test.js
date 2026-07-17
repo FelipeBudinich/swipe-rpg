@@ -239,6 +239,7 @@ test("debug checkpoint controls require both a local host and explicit URL opt-i
 test("document exposes the compact story, progression, combat, reward, and Pack surfaces", async () => {
   const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
   for (const id of [
+    "story-heading",
     "arc-title",
     "hud-beat-number",
     "hud-beat-name",
@@ -258,6 +259,9 @@ test("document exposes the compact story, progression, combat, reward, and Pack 
     "hud-mp-delta",
     "hud-mp-bar",
     "inventory-open",
+    "choice-controls",
+    "choice-left",
+    "choice-right",
     "inventory-gold",
     "card-combat-status",
     "card-enemy-hp",
@@ -285,13 +289,9 @@ test("document exposes the compact story, progression, combat, reward, and Pack 
     assert.doesNotMatch(html, new RegExp(`id=["']${removedId}["']`));
   }
 
-  const storyHudStart = html.indexOf('id="story-hud"');
-  const storyHudEnd = html.indexOf("</section>", storyHudStart);
-  const arcTitle = html.indexOf('id="arc-title"');
-  const packButton = html.indexOf('id="inventory-open"');
-  assert.ok(storyHudStart >= 0 && storyHudEnd > storyHudStart);
-  assert.ok(arcTitle > storyHudStart && arcTitle < storyHudEnd);
-  assert.ok(packButton > storyHudStart && packButton < storyHudEnd);
+  const storyHud = elementSourceById(html, "story-hud");
+  assert.match(storyHud, /id="arc-title"/);
+  assert.doesNotMatch(storyHud, /id="inventory-open"/);
 
   const progressionStart = html.indexOf('id="level-xp-hud"');
   const progressionEnd = html.indexOf("</section>", progressionStart);
@@ -311,6 +311,67 @@ test("document exposes the compact story, progression, combat, reward, and Pack 
   assert.match(html, /id="card-reward-summary"[\s\S]*?aria-label="Battle rewards"[\s\S]*?hidden/);
   assert.doesNotMatch(html, /hud-journey|>Depth</);
   assert.doesNotMatch(html, /on(?:click|load|error|submit)=/i);
+});
+
+test("document places the single Pack action between equal-width choices", async () => {
+  const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const storyHud = elementSourceById(html, "story-hud");
+  const controls = elementSourceById(html, "choice-controls");
+  const controlsOpeningTag = controls.slice(0, controls.indexOf(">") + 1);
+  const pack = elementSourceById(html, "inventory-open");
+  const packOpeningTag = pack.slice(0, pack.indexOf(">") + 1);
+  const packClasses = /\bclass=(["'])([^"']*)\1/.exec(packOpeningTag)?.[2].split(/\s+/) ?? [];
+  const buttonIds = [...controls.matchAll(/<button\b[^>]*\bid=(["'])([^"']+)\1[^>]*>/gi)]
+    .map((match) => match[2]);
+
+  assert.equal((html.match(/\bid=(["'])inventory-open\1/g) ?? []).length, 1);
+  assert.doesNotMatch(storyHud, /\bid=(["'])inventory-open\1/);
+  assert.match(controls, /\bid=(["'])inventory-open\1/);
+  assert.deepEqual(buttonIds, ["choice-left", "inventory-open", "choice-right"]);
+  assert.equal((controls.match(/<button\b/gi) ?? []).length, 3);
+  assert.match(controlsOpeningTag, /\brole=(["'])group\1/);
+  assert.match(controlsOpeningTag, /\baria-label=(["'])Actions\1/);
+  assert.ok(
+    controlsOpeningTag.includes("grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"),
+    "Expected equal flexible choice tracks around an intrinsic Pack track",
+  );
+  assert.match(packOpeningTag, /\btype=(["'])button\1/);
+  assert.match(packOpeningTag, /\bdata-resource=(["'])gold\1/);
+  assert.match(packOpeningTag, /\baria-controls=(["'])inventory-drawer\1/);
+  assert.match(packOpeningTag, /\baria-expanded=(["'])false\1/);
+  assert.match(packOpeningTag, /\baria-label=(["'])Open equipment and Pack\1/);
+  assert.ok(packClasses.includes("min-h-14"));
+  assert.ok(packClasses.includes("min-w-16"));
+  assert.equal(pack.replace(/<[^>]+>/g, "").trim(), "Pack");
+
+  for (const choiceId of ["choice-left", "choice-right"]) {
+    const choiceOpeningTag = elementSourceById(controls, choiceId).split(">")[0];
+    assert.match(choiceOpeningTag, /\bclass=(["'])[^"']*\bmin-w-0\b[^"']*\1/);
+  }
+});
+
+test("story HUD exposes arc title and beat in one labelled heading line", async () => {
+  const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const storyHud = elementSourceById(html, "story-hud");
+  const storyOpeningTag = storyHud.slice(0, storyHud.indexOf(">") + 1);
+  const heading = elementSourceById(storyHud, "story-heading");
+  const headingOpeningTag = heading.slice(0, heading.indexOf(">") + 1);
+  const arcPosition = heading.indexOf('id="arc-title"');
+  const beatPosition = heading.indexOf('id="hud-beat-name"');
+
+  assert.match(storyOpeningTag, /\baria-labelledby=(["'])story-heading\1/);
+  assert.match(headingOpeningTag, /^<h1\b/i);
+  assert.match(headingOpeningTag, /\bclass=(["'])[^"']*\btruncate\b[^"']*\1/);
+  assert.match(headingOpeningTag, /\baria-label=(["'])The Ember Crown - Opening Image\1/);
+  assert.match(heading, /<span\s+id="arc-title">The Ember Crown<\/span>/);
+  assert.match(heading, /<span\s+aria-hidden="true"> - <\/span>/);
+  assert.match(heading, /<span\s+id="hud-beat-name"[^>]*>Opening Image<\/span>/);
+  assert.ok(arcPosition >= 0 && beatPosition > arcPosition);
+  assert.equal(heading.replace(/<[^>]+>/g, "").trim(), "The Ember Crown - Opening Image");
+  assert.doesNotMatch(storyHud, /<h[1-6]\b[^>]*\bid=(["'])(?:arc-title|hud-beat-name)\1/i);
+  assert.match(storyHud, /\bid=(["'])hud-beat-number\1/);
+  assert.match(storyHud, /<\/div>\s*<progress\s+id="hud-story-progress"/);
+  assert.ok(storyHud.indexOf('id="hud-story-progress"') > storyHud.indexOf('id="story-heading"'));
 });
 
 test("document keeps Level and XP, HP, and MP in one weighted resource row", async () => {
@@ -383,7 +444,22 @@ test("short-height CSS compacts one resource row without hiding its values or me
     "mp-hud",
     "hud-mp",
     "hud-mp-bar",
+    "choice-controls",
+    "choice-left",
+    "inventory-open",
+    "choice-right",
   ]) {
     assert.ok(hiddenSelectors.every((selector) => !selector.includes(`#${id}`)), `#${id} must remain visible`);
   }
+});
+
+test("narrow-width CSS compacts the three action columns without stacking them", async () => {
+  const css = await readFile(new URL("../src/input.css", import.meta.url), "utf8");
+  const narrowWidth = cssBlock(css, "@media (max-width: 359px)");
+
+  assert.match(narrowWidth, /#choice-controls\s*\{[^}]*gap:\s*0\.25rem;/s);
+  assert.match(narrowWidth, /#inventory-open\s*\{[^}]*min-width:\s*4rem;/s);
+  assert.match(narrowWidth, /#inventory-open\s*\{[^}]*padding-right:\s*0\.5rem;[^}]*padding-left:\s*0\.5rem;/s);
+  assert.match(narrowWidth, /#choice-left,\s*#choice-right\s*\{[^}]*min-width:\s*0;/s);
+  assert.doesNotMatch(narrowWidth, /#choice-controls\s*\{[^}]*(?:grid-template-columns|flex-direction|display:\s*block)/s);
 });

@@ -289,6 +289,23 @@
 }
 
 @media (max-width: 359px) {
+  #choice-controls {
+    gap: 0.25rem;
+  }
+
+  #inventory-open {
+    min-width: 4rem;
+    padding-right: 0.5rem;
+    padding-left: 0.5rem;
+  }
+
+  #choice-left,
+  #choice-right {
+    min-width: 0;
+    padding-right: 0.5rem;
+    padding-left: 0.5rem;
+  }
+
   #player-resource-row {
     gap: 0.25rem;
   }
@@ -321,6 +338,11 @@
 
   #story-hud > div {
     margin-bottom: 0.15rem;
+  }
+
+  #choice-controls {
+    margin-top: 0.25rem;
+    gap: 0.25rem;
   }
 
   #player-resource-row {

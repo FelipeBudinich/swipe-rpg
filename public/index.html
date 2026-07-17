@@ -22,20 +22,15 @@
       aria-busy="true"
     >
       <header id="player-hud" class="shrink-0 rounded-2xl border border-[#36505d] bg-[#102633]/95 p-2.5 shadow-lg" aria-label="Player status">
-        <section id="story-hud" class="rounded-lg bg-[#091923] px-2 py-1.5" aria-labelledby="arc-title hud-beat-name">
-          <div class="mb-1 flex items-center justify-between gap-3">
-            <h1 id="arc-title" class="min-w-0 truncate text-sm font-black tracking-wide text-[#fff6e6]">The Ember Crown</h1>
-            <button
-              id="inventory-open"
-              type="button"
-              class="min-h-11 shrink-0 rounded-xl border border-[#d8a94d]/70 bg-[#201d26] px-3 text-xs font-extrabold uppercase tracking-wider text-[#ffd77d] shadow-sm transition hover:bg-[#332b2e] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#102633] active:translate-y-px"
-              aria-controls="inventory-drawer"
-              aria-expanded="false"
-              data-resource="gold"
-            >Pack</button>
-          </div>
-          <div class="mb-1 flex items-baseline justify-between gap-3">
-            <h2 id="hud-beat-name" class="min-w-0 truncate text-xs font-black text-[#b9cbd0]">Opening Image</h2>
+        <section id="story-hud" class="rounded-lg bg-[#091923] px-2 py-1.5" aria-labelledby="story-heading">
+          <div class="mb-1 flex min-w-0 items-baseline justify-between gap-2">
+            <h1
+              id="story-heading"
+              class="min-w-0 truncate text-sm font-black tracking-wide text-[#fff6e6]"
+              aria-label="The Ember Crown - Opening Image"
+            >
+              <span id="arc-title">The Ember Crown</span><span aria-hidden="true"> - </span><span id="hud-beat-name" class="text-[#b9cbd0]">Opening Image</span>
+            </h1>
             <p class="shrink-0 text-[0.62rem] font-black uppercase tracking-wider text-[#ffd77d]">Beat <span id="hud-beat-number" class="tabular-nums">1 / 15</span></p>
           </div>
           <progress
@@ -203,11 +198,16 @@
           </article>
         </section>
 
-        <div id="choice-controls" class="mt-2 grid shrink-0 grid-cols-2 gap-2" aria-label="Available choices">
+        <div
+          id="choice-controls"
+          class="mt-2 grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2"
+          role="group"
+          aria-label="Actions"
+        >
           <button
             id="choice-left"
             type="button"
-            class="min-h-14 rounded-xl border border-[#4e9b93] bg-[#123c40] px-3 py-2 text-left text-[#d8fff7] shadow-md transition hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+            class="min-h-14 min-w-0 rounded-xl border border-[#4e9b93] bg-[#123c40] px-3 py-2 text-left text-[#d8fff7] shadow-md transition hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Choose left"
           >
             <span class="block text-[0.58rem] font-bold uppercase tracking-[0.16em] text-[#86cfc5]">Left · A / ←</span>
@@ -215,9 +215,18 @@
             <span id="choice-left-detail" class="mt-0.5 block text-[0.62rem] font-bold leading-tight text-[#b4dfd9]"></span>
           </button>
           <button
+            id="inventory-open"
+            type="button"
+            class="min-h-14 min-w-16 shrink-0 rounded-xl border border-[#d8a94d]/70 bg-[#201d26] px-2 py-2 text-xs font-extrabold uppercase tracking-wider text-[#ffd77d] shadow-sm transition hover:bg-[#332b2e] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Open equipment and Pack"
+            aria-controls="inventory-drawer"
+            aria-expanded="false"
+            data-resource="gold"
+          >Pack</button>
+          <button
             id="choice-right"
             type="button"
-            class="min-h-14 rounded-xl border border-[#b66f72] bg-[#542f3b] px-3 py-2 text-right text-[#ffe9e1] shadow-md transition hover:bg-[#6b3c48] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+            class="min-h-14 min-w-0 rounded-xl border border-[#b66f72] bg-[#542f3b] px-3 py-2 text-right text-[#ffe9e1] shadow-md transition hover:bg-[#6b3c48] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffd77d] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Choose right"
           >
             <span class="block text-[0.58rem] font-bold uppercase tracking-[0.16em] text-[#e0a9a9]">Right · D / →</span>

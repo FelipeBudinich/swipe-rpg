@@ -95,6 +95,37 @@ test("button and keyboard routes enter through the guarded controller commit", (
     MAIN_SOURCE,
     /document\.addEventListener\("keydown",[\s\S]*?commitNewChoice\(direction\);\s+\}\);/,
   );
+  assert.doesNotMatch(
+    MAIN_SOURCE,
+    /getElementById\("inventory-open"\)\.addEventListener\("click"/,
+  );
+  assert.match(
+    MAIN_SOURCE,
+    /createInventoryDrawer\(\{[\s\S]*?openButton: document\.getElementById\("inventory-open"\)/,
+  );
+});
+
+test("Pack uses the shared commit lock while remaining outside choice routing", () => {
+  const lockStart = MAIN_SOURCE.indexOf("function updateControlLocks()");
+  const lockEnd = MAIN_SOURCE.indexOf("function beginCommitLock()", lockStart);
+  const lockSource = MAIN_SOURCE.slice(lockStart, lockEnd);
+  const keyStart = MAIN_SOURCE.indexOf('document.addEventListener("keydown"');
+  const keyEnd = MAIN_SOURCE.indexOf(
+    'document.getElementById("inventory-content").addEventListener',
+    keyStart,
+  );
+  const keySource = MAIN_SOURCE.slice(keyStart, keyEnd);
+
+  assert.ok(lockStart >= 0 && lockEnd > lockStart);
+  assert.match(lockSource, /getElementById\("inventory-open"\)\.disabled = blocked/);
+  assert.equal(isNewInputBlocked({ controllerCommitting: true }), true);
+  assert.match(keySource, /ArrowLeft[\s\S]*?"left"[\s\S]*?ArrowRight[\s\S]*?"right"/);
+  assert.doesNotMatch(keySource, /inventory-open|drawerController|\.open\(/);
+
+  const leftBindings = MAIN_SOURCE.match(/leftButton\.addEventListener\("click"/g) ?? [];
+  const rightBindings = MAIN_SOURCE.match(/rightButton\.addEventListener\("click"/g) ?? [];
+  assert.equal(leftBindings.length, 1);
+  assert.equal(rightBindings.length, 1);
 });
 
 test("successor entry uses a generation-guarded bounded timer", () => {
