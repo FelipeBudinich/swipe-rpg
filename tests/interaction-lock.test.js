@@ -32,6 +32,7 @@ test("application locks and blocking surfaces stop both entry paths", () => {
     "storyTransitionActive",
     "terminalActive",
     "confirmationOpen",
+    "feedbackActive",
   ];
 
   for (const blocker of blockers) {
@@ -43,6 +44,18 @@ test("application locks and blocking surfaces stop both entry paths", () => {
       `${blocker} blocks active resolution`,
     );
   }
+});
+
+test("pending choice feedback blocks generic input while its dedicated acknowledgement stays separate", () => {
+  const lockState = {
+    feedbackActive: true,
+    controllerCommitting: false,
+    inputLocked: false,
+  };
+
+  assert.equal(hasBlockingSurface(lockState), true);
+  assert.equal(isNewInputBlocked(lockState), true);
+  assert.equal(isActiveCommitResolutionBlocked(lockState), true);
 });
 
 test("an idle interactive surface permits new input and active resolution", () => {
@@ -103,6 +116,37 @@ test("button and keyboard routes enter through the guarded controller commit", (
     MAIN_SOURCE,
     /createInventoryDrawer\(\{[\s\S]*?openButton: document\.getElementById\("inventory-open"\)/,
   );
+});
+
+test("choice-feedback Continue uses its dedicated dismissal path, never choice commit routing", () => {
+  const start = MAIN_SOURCE.indexOf("async function dismissCurrentChoiceFeedback()");
+  const end = MAIN_SOURCE.indexOf("\nasync function restartFromTerminal()", start);
+  const dismissalSource = MAIN_SOURCE.slice(start, end);
+  const keyStart = MAIN_SOURCE.indexOf('document.addEventListener("keydown"');
+  const keyEnd = MAIN_SOURCE.indexOf(
+    'document.getElementById("inventory-content").addEventListener',
+    keyStart,
+  );
+  const keySource = MAIN_SOURCE.slice(keyStart, keyEnd);
+
+  assert.ok(start >= 0 && end > start);
+  assert.match(dismissalSource, /!state\.pendingChoiceFeedback/);
+  assert.match(dismissalSource, /feedbackDismissalActive/);
+  assert.match(dismissalSource, /document\.getElementById\("confirm-dialog"\)\?\.open/);
+  assert.match(
+    dismissalSource,
+    /Engine\.dismissChoiceFeedback\(state, \{ expectedFeedbackId \}\)/,
+  );
+  assert.match(dismissalSource, /saveState\(state\)/);
+  assert.match(dismissalSource, /renderer\.focusPrimarySurface\(\)/);
+  assert.doesNotMatch(dismissalSource, /resolveChoice|swipeController\.commit|commitNewChoice/);
+
+  const continueBindings =
+    MAIN_SOURCE.match(
+      /choiceFeedbackContinue\.addEventListener\("click", \(\) => void dismissCurrentChoiceFeedback\(\)\)/g,
+    ) ?? [];
+  assert.equal(continueBindings.length, 1);
+  assert.doesNotMatch(keySource, /dismissCurrentChoiceFeedback|choiceFeedbackContinue/);
 });
 
 test("Pack uses the shared commit lock while remaining outside choice routing", () => {

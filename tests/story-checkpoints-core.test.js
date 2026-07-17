@@ -52,6 +52,20 @@ function state() {
   };
 }
 
+function pendingFeedback() {
+  return {
+    version: 1,
+    id: "choice-feedback:5:a",
+    sourceCardId: "a",
+    sourceResolutionToken: "5:a",
+    resultText: "You choose the northern road.",
+    tone: "neutral",
+    changes: { xp: 3 },
+    nextCardId: "b",
+    nextCardToken: "6:b",
+  };
+}
+
 test("all named checkpoint IDs are stable", () => {
   assert.equal(getCheckpointIdForBeat("openingImage"), "01-opening-image");
   assert.equal(getCheckpointIdForBeat("darkNightOfTheSoul"), "12-dark-night-of-the-soul");
@@ -78,6 +92,31 @@ test("restoring a checkpoint reproduces future seeded selection", () => {
   const repeated = selectStoryCard(restored, deck, beat);
   assert.equal(repeated.card.id, first.card.id);
   assert.equal(repeated.state.rngState, first.state.rngState);
+});
+
+test("checkpoint save and restore preserves pending choice feedback and its prepared successor", () => {
+  const feedback = pendingFeedback();
+  const original = {
+    ...state(),
+    currentCardId: feedback.nextCardId,
+    currentCardToken: feedback.nextCardToken,
+    currentCardData: deck[1],
+    pendingChoiceFeedback: feedback,
+  };
+  const checkpoint = createStoryCheckpoint(original, "03-setup");
+
+  assert.deepEqual(checkpoint.snapshot.pendingChoiceFeedback, feedback);
+  assert.equal(checkpoint.snapshot.currentCardId, feedback.nextCardId);
+  assert.equal(checkpoint.snapshot.currentCardToken, feedback.nextCardToken);
+  assert.equal(checkpoint.snapshot.rngState, original.rngState);
+
+  const restored = restoreStoryCheckpoint(checkpoint, {
+    meta: { discoveredEndingIds: ["new-ending"], bestLevel: 9 },
+  });
+  assert.deepEqual(restored.pendingChoiceFeedback, feedback);
+  assert.equal(restored.currentCardId, feedback.nextCardId);
+  assert.equal(restored.currentCardToken, feedback.nextCardToken);
+  assert.equal(restored.rngState, original.rngState);
 });
 
 test("checkpoint controls require both localhost and explicit opt-in", () => {

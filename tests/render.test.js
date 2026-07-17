@@ -4,9 +4,11 @@ import test from "node:test";
 
 import { diffHud } from "../public/js/ui/feedback.js";
 import {
+  FEEDBACK_ART_BY_TONE,
   affectedResources,
   cardAnnouncement,
   choiceDetail,
+  deriveChoiceFeedbackPresentation,
   deriveCombatCardStatus,
   deriveRewardSummary,
   resolveArtSource,
@@ -57,6 +59,84 @@ test("art sources resolve only through the bundled local allowlist", () => {
   assert.equal(resolveArtSource("../../server", allowed), "/assets/art/player.svg");
   assert.equal(resolveArtSource("https://example.com/tracker", allowed), "/assets/art/player.svg");
   assert.equal(resolveArtSource("unknown-art", allowed), "/assets/art/player.svg");
+});
+
+test("choice feedback presentation maps fixed tones to local art and signed resource rows", () => {
+  assert.deepEqual(FEEDBACK_ART_BY_TONE, {
+    neutral: "result-neutral",
+    reward: "result-reward",
+    recovery: "result-recovery",
+    damage: "result-damage",
+    danger: "result-danger",
+  });
+
+  const expectedTitles = {
+    neutral: "Your Choice",
+    reward: "Reward",
+    recovery: "Recovery",
+    damage: "The Cost",
+    danger: "Consequence",
+  };
+  for (const [tone, artId] of Object.entries(FEEDBACK_ART_BY_TONE)) {
+    const presentation = deriveChoiceFeedbackPresentation({
+      id: `feedback:${tone}`,
+      tone,
+      resultText: "The road answers.",
+      changes: {},
+    });
+    assert.equal(presentation.tone, tone);
+    assert.equal(presentation.title, expectedTitles[tone]);
+    assert.equal(presentation.artId, artId);
+    assert.deepEqual(presentation.rows, []);
+    assert.equal(presentation.announcement, `${expectedTitles[tone]}. The road answers. Continue.`);
+  }
+
+  const presentation = deriveChoiceFeedbackPresentation({
+    id: "feedback:structured",
+    tone: "damage",
+    resultText: "The ward breaks",
+    changes: {
+      level: 1,
+      xp: 8,
+      hp: -4,
+      mp: 2,
+      gold: -5,
+      attack: 1,
+      defense: 1,
+      maxHp: 6,
+      maxMp: 3,
+      inventory: 1,
+      decisionCount: 99,
+      malformed: Number.NaN,
+    },
+  });
+
+  assert.deepEqual(
+    presentation.rows.map(({ key, label, value, direction }) => ({ key, label, value, direction })),
+    [
+      { key: "level", label: "Level", value: "+1 Level", direction: "gain" },
+      { key: "xp", label: "XP", value: "+8 XP", direction: "gain" },
+      { key: "hp", label: "HP", value: "-4 HP", direction: "loss" },
+      { key: "mp", label: "MP", value: "+2 MP", direction: "gain" },
+      { key: "gold", label: "Gold", value: "-5 Gold", direction: "loss" },
+      { key: "attack", label: "Attack", value: "+1 Attack", direction: "gain" },
+      { key: "defense", label: "Defense", value: "+1 Defense", direction: "gain" },
+      { key: "maxHp", label: "Max HP", value: "+6 Max HP", direction: "gain" },
+      { key: "maxMp", label: "Max MP", value: "+3 Max MP", direction: "gain" },
+      { key: "inventory", label: "Items", value: "+1 Item", direction: "gain" },
+    ],
+  );
+  assert.match(presentation.announcement, /HP minus 4/);
+  assert.match(presentation.announcement, /Item plus 1/);
+  assert.equal(
+    deriveChoiceFeedbackPresentation({
+      id: "feedback:unknown-tone",
+      tone: "injected-class",
+      resultText: "Safe text",
+      changes: { inventory: 2 },
+    }).artId,
+    "result-neutral",
+  );
 });
 
 test("combat-card status derives the enemy name and a text-equivalent HP meter", () => {
@@ -194,28 +274,150 @@ test("renderer source uses explicit preview targets and text-safe reward renderi
   const previewEnd = source.indexOf("\n    },\n  };", previewStart);
   const previewSource = source.slice(previewStart, previewEnd);
   assert.ok(previewStart >= 0 && previewEnd > previewStart);
-  assert.match(previewSource, /delete target\.dataset\.previewed/);
+  assert.match(previewSource, /clearPreviewTargets\(\)/);
   assert.match(previewSource, /target\.dataset\.previewed = "true"/);
   assert.match(previewSource, /const affected = new Set\(affectedResources\(choice\)\)/);
   assert.doesNotMatch(previewSource, /textContent|choiceDetail|resourcePreview/);
+
+  const clearStart = source.indexOf("const clearPreviewTargets =");
+  const clearEnd = source.indexOf("const renderCombatCardStatus =", clearStart);
+  const clearSource = source.slice(clearStart, clearEnd);
+  assert.match(clearSource, /delete target\.dataset\.previewed/);
 });
 
-test("renderer shows the action row only on interactive cards", async () => {
+test("renderer switches between interactive, special, and feedback controls safely", async () => {
   const source = await readFile(new URL("../public/js/ui/render.js", import.meta.url), "utf8");
   const interactiveStart = source.indexOf("const setInteractiveSurface =");
   const specialStart = source.indexOf("const setSpecialSurface =", interactiveStart);
-  const announceStart = source.indexOf("const announceSpecial =", specialStart);
+  const feedbackStart = source.indexOf("const setFeedbackSurface =", specialStart);
+  const announceStart = source.indexOf("const announceSpecial =", feedbackStart);
   const interactiveSource = source.slice(interactiveStart, specialStart);
-  const specialSource = source.slice(specialStart, announceStart);
+  const specialSource = source.slice(specialStart, feedbackStart);
+  const feedbackSource = source.slice(feedbackStart, announceStart);
 
-  assert.ok(interactiveStart >= 0 && specialStart > interactiveStart && announceStart > specialStart);
+  assert.ok(
+    interactiveStart >= 0 &&
+      specialStart > interactiveStart &&
+      feedbackStart > specialStart &&
+      announceStart > feedbackStart,
+  );
   assert.match(interactiveSource, /elements\.choiceControls\.hidden\s*=\s*false/);
+  assert.match(interactiveSource, /elements\.choiceFeedbackControls\.hidden\s*=\s*true/);
+  assert.match(interactiveSource, /elements\.card\.removeAttribute\("inert"\)/);
   assert.match(specialSource, /elements\.choiceControls\.hidden\s*=\s*true/);
+  assert.match(specialSource, /elements\.choiceFeedbackControls\.hidden\s*=\s*true/);
+  assert.match(feedbackSource, /elements\.card\.hidden\s*=\s*true/);
+  assert.match(feedbackSource, /elements\.card\.setAttribute\("inert", ""\)/);
+  assert.match(feedbackSource, /elements\.card\.tabIndex\s*=\s*-1/);
+  assert.match(feedbackSource, /elements\.choiceControls\.hidden\s*=\s*true/);
+  assert.match(feedbackSource, /elements\.choiceFeedbackCard\.hidden\s*=\s*false/);
+  assert.match(feedbackSource, /elements\.choiceFeedbackControls\.hidden\s*=\s*false/);
+  assert.match(feedbackSource, /elements\.leftButton\.disabled\s*=\s*true/);
+  assert.match(feedbackSource, /elements\.rightButton\.disabled\s*=\s*true/);
+  assert.match(feedbackSource, /elements\.inventoryOpen\.disabled\s*=\s*true/);
+  assert.match(feedbackSource, /elements\.choiceFeedbackContinue\.disabled\s*=\s*false/);
+  assert.match(feedbackSource, /clearPreviewTargets\(\)/);
   assert.match(source, /setSpecialSurface\("transition", `Story transition:/);
   assert.match(source, /setSpecialSurface\("terminal", presentation\.kind/);
   assert.match(source, /setInteractiveSurface\(\);\s*renderCard\(/);
   assert.doesNotMatch(interactiveSource, /choiceHelp|choice-help/);
   assert.doesNotMatch(specialSource, /choiceHelp|choice-help/);
+});
+
+test("renderer prioritizes terminal, transition, feedback, then the interactive card", async () => {
+  const source = await readFile(new URL("../public/js/ui/render.js", import.meta.url), "utf8");
+  const renderStart = source.indexOf("render(state, card,");
+  const focusStart = source.indexOf("focusPrimarySurface()", renderStart);
+  const renderSource = source.slice(renderStart, focusStart);
+  const terminalIndex = renderSource.indexOf("const terminal =");
+  const transitionIndex = renderSource.indexOf("const transition =");
+  const feedbackIndex = renderSource.indexOf("const choiceFeedback =");
+  const interactiveIndex = renderSource.indexOf("setInteractiveSurface()");
+
+  assert.ok(terminalIndex >= 0);
+  assert.ok(transitionIndex > terminalIndex);
+  assert.ok(feedbackIndex > transitionIndex);
+  assert.ok(interactiveIndex > feedbackIndex);
+  assert.match(renderSource.slice(terminalIndex, transitionIndex), /renderTerminal\(terminal\);\s*return;/);
+  assert.match(renderSource.slice(transitionIndex, feedbackIndex), /renderTransition\(transition\);\s*return;/);
+  assert.match(
+    renderSource.slice(feedbackIndex, interactiveIndex),
+    /renderChoiceFeedback\(choiceFeedback\);\s*return;/,
+  );
+  assert.ok(renderSource.indexOf("renderCard(", interactiveIndex) > interactiveIndex);
+});
+
+test("feedback renderer builds semantic rows with text-safe DOM operations and fixed local art", async () => {
+  const source = await readFile(new URL("../public/js/ui/render.js", import.meta.url), "utf8");
+  for (const [binding, id] of Object.entries({
+    choiceFeedbackCard: "choice-feedback-card",
+    choiceFeedbackKicker: "choice-feedback-kicker",
+    choiceFeedbackTitle: "choice-feedback-title",
+    choiceFeedbackText: "choice-feedback-text",
+    choiceFeedbackArt: "choice-feedback-art",
+    choiceFeedbackChanges: "choice-feedback-changes",
+    choiceFeedbackControls: "choice-feedback-controls",
+    choiceFeedbackContinue: "choice-feedback-continue",
+  })) {
+    assert.match(source, new RegExp(`${binding}: byId\\("${id}"\\)`));
+  }
+
+  const renderStart = source.indexOf("const renderChoiceFeedback =");
+  const renderEnd = source.indexOf("\n  return {", renderStart);
+  const renderSource = source.slice(renderStart, renderEnd);
+  assert.match(renderSource, /choiceFeedbackTitle\.textContent = presentation\.title/);
+  assert.match(renderSource, /choiceFeedbackText\.textContent = presentation\.text/);
+  assert.match(renderSource, /choiceFeedbackChanges\.replaceChildren\(\)/);
+  assert.match(renderSource, /document\.createElement\("dt"\)/);
+  assert.match(renderSource, /document\.createElement\("dd"\)/);
+  assert.match(renderSource, /term\.textContent = row\.label/);
+  assert.match(renderSource, /value\.textContent = row\.value/);
+  assert.match(renderSource, /resolveArtSource\(\s*presentation\.artId,\s*allowedArtIds,\s*"result-neutral"/);
+  assert.doesNotMatch(renderSource, /\.innerHTML\s*=|insertAdjacentHTML|src\s*=\s*presentation\.tone/);
+});
+
+test("focus follows transition, terminal, feedback Continue, then the normal card", async () => {
+  const source = await readFile(new URL("../public/js/ui/render.js", import.meta.url), "utf8");
+  const focusStart = source.indexOf("focusPrimarySurface()");
+  const focusEnd = source.indexOf("renderInventory(", focusStart);
+  const focusSource = source.slice(focusStart, focusEnd);
+
+  const transitionIndex = focusSource.indexOf("elements.transitionContinue.focus()");
+  const terminalIndex = focusSource.indexOf("elements.terminalRestart.focus()");
+  const feedbackIndex = focusSource.indexOf("elements.choiceFeedbackContinue.focus()");
+  const cardIndex = focusSource.indexOf("elements.card.focus()");
+  assert.ok(transitionIndex >= 0);
+  assert.ok(terminalIndex > transitionIndex);
+  assert.ok(feedbackIndex > terminalIndex);
+  assert.ok(cardIndex > feedbackIndex);
+});
+
+test("feedback Continue uses its narrow dismissal path and direction shortcuts stay blocked", async () => {
+  const source = await readFile(new URL("../public/js/main.js", import.meta.url), "utf8");
+  const dismissStart = source.indexOf("async function dismissCurrentChoiceFeedback()");
+  const dismissEnd = source.indexOf("async function restartFromTerminal()", dismissStart);
+  const dismissSource = source.slice(dismissStart, dismissEnd);
+  assert.ok(dismissStart >= 0 && dismissEnd > dismissStart);
+  assert.match(dismissSource, /state\.pendingChoiceFeedback/);
+  assert.match(dismissSource, /feedbackDismissalActive/);
+  assert.match(dismissSource, /confirm-dialog/);
+  assert.match(dismissSource, /Engine\.dismissChoiceFeedback\(state, \{ expectedFeedbackId \}\)/);
+  assert.match(dismissSource, /saveState\(state\)/);
+  assert.match(dismissSource, /swipeController\.resetForNextCard\(\)/);
+  assert.match(dismissSource, /prepareNextCard\(\)/);
+  assert.match(dismissSource, /renderer\.focusPrimarySurface\(\)/);
+  assert.doesNotMatch(dismissSource, /swipeController\.commit|commitNewChoice|decisionCount/);
+
+  const keyStart = source.indexOf('document.addEventListener("keydown"');
+  const keyEnd = source.indexOf('document.getElementById("inventory-content")', keyStart);
+  const keySource = source.slice(keyStart, keyEnd);
+  assert.match(keySource, /isNewInputBlocked\(\)/);
+  assert.match(source, /feedbackActive: Boolean\(state\.pendingChoiceFeedback\)/);
+  assert.doesNotMatch(keySource, /dismissCurrentChoiceFeedback/);
+  assert.equal(
+    (source.match(/choiceFeedbackContinue\.addEventListener\("click"/g) ?? []).length,
+    1,
+  );
 });
 
 test("HUD renderer updates every preserved value, meter, and accessible label", async () => {

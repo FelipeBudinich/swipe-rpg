@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="damage-bg" x2="1" y2="1">
+      <stop stop-color="#24172a"/>
+      <stop offset="1" stop-color="#542a38"/>
+    </linearGradient>
+    <radialGradient id="damage-glow">
+      <stop stop-color="#ffb09a" stop-opacity=".66"/>
+      <stop offset=".48" stop-color="#d95f66" stop-opacity=".26"/>
+      <stop offset="1" stop-color="#d95f66" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="damage-shield" x2="0" y2="1">
+      <stop stop-color="#9d7080"/>
+      <stop offset="1" stop-color="#4b3d59"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="240" rx="24" fill="url(#damage-bg)"/>
+  <circle cx="198" cy="112" r="113" fill="url(#damage-glow)"/>
+  <path d="M200 31c31 22 66 30 96 31v57c0 43-27 75-96 96-69-21-96-53-96-96V62c31-1 65-9 96-31Z" fill="url(#damage-shield)" stroke="#ffc0ac" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m209 47-26 54 28 14-35 47 22 43" fill="none" stroke="#2d233d" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m208 48-15 48 27 16-31 47 11 43" fill="none" stroke="#ff8c78" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M110 75 76 53M102 107l-43-3M290 75l34-22M298 107l43-3" stroke="#f27a6e" stroke-width="7" stroke-linecap="round"/>
+  <path d="M139 44 125 20M261 44l14-24" stroke="#ffc0ac" stroke-width="5" stroke-linecap="round"/>
+  <path d="M62 171c21 2 36 14 45 34M338 171c-21 2-36 14-45 34" fill="none" stroke="#7f4353" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="77" cy="135" r="5" fill="#ffb09a"/>
+  <circle cx="323" cy="136" r="5" fill="#ff8c78"/>
+  <path d="M26 219h348" stroke="#ff9d87" stroke-width="3" stroke-dasharray="3 14" opacity=".65"/>
+</svg>

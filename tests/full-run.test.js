@@ -13,6 +13,10 @@ function decisionTurns(run) {
   return run.transcript.filter(({ kind }) => kind === "decision");
 }
 
+function feedbackTurns(run) {
+  return run.transcript.filter(({ kind }) => kind === "feedback");
+}
+
 function visitedBeatIds(run) {
   const ordered = [];
   for (const { beatId } of decisionTurns(run)) {
@@ -123,6 +127,23 @@ test("ordinary seeded play is deterministic and reaches only death or survival",
   assert.deepEqual(replay.transcript, first.transcript);
   assert.equal(replay.stallReason, null);
   assert.ok(["victory", "gameOver"].includes(first.state.mode));
+});
+
+test("audit acknowledgements dismiss pending feedback without becoming decisions", () => {
+  const run = simulateStructuralRun(101, "crown-of-dawn");
+  const decisions = decisionTurns(run);
+  const acknowledgements = feedbackTurns(run);
+
+  assert.ok(acknowledgements.length > 0);
+  assert.equal(decisions.length, run.state.decisionCount);
+  assert.equal(run.state.pendingChoiceFeedback, null);
+  for (const entry of acknowledgements) {
+    assert.equal(Object.hasOwn(entry, "direction"), false);
+    assert.equal(typeof entry.sourceCardId, "string");
+    assert.equal(typeof entry.nextCardId, "string");
+    assert.equal(typeof entry.nextCardToken, "string");
+    assert.ok(["neutral", "reward", "recovery", "damage", "danger"].includes(entry.tone));
+  }
 });
 
 test("a broad ordinary seed audit has victories, deaths, and no soft locks", () => {

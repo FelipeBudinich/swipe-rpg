@@ -102,7 +102,7 @@
       <main id="game-main" class="flex min-h-0 flex-1 flex-col">
         <p
           id="result-live"
-          class="result-feedback mb-1 min-h-5 shrink-0 px-2 text-center text-xs font-bold tracking-wide text-[#ffd77d]"
+          class="sr-only"
           role="status"
           aria-live="polite"
           aria-atomic="true"
@@ -154,6 +154,36 @@
               type="button"
               class="mt-auto min-h-12 rounded-xl border border-[#4e9b93] bg-[#123c40] px-5 py-3 text-sm font-black text-[#d8fff7] shadow-md transition hover:bg-[#175157] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#102633] active:translate-y-px"
             >Begin Another Arc</button>
+          </section>
+
+          <section
+            id="choice-feedback-card"
+            class="choice-feedback-card relative z-20 flex min-h-[clamp(18.25rem,47dvh,29rem)] w-full flex-col overflow-hidden rounded-[1.4rem] border border-[#5f7d85] bg-[#102633] text-[#f4ead8] shadow-[0_16px_45px_rgba(0,0,0,0.42)]"
+            role="region"
+            aria-labelledby="choice-feedback-title"
+            aria-describedby="choice-feedback-text choice-feedback-changes"
+            tabindex="-1"
+            data-tone="neutral"
+            hidden
+          >
+            <p id="choice-feedback-kicker" class="shrink-0 px-5 pt-4 text-center text-[0.65rem] font-black uppercase tracking-[0.24em] text-[#79d4c5]">Outcome</p>
+            <figure class="choice-feedback-art relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-5 py-3" aria-hidden="true">
+              <img
+                id="choice-feedback-art"
+                class="h-[clamp(6rem,17dvh,10rem)] w-full select-none object-contain drop-shadow-[0_8px_10px_rgba(0,0,0,0.36)]"
+                src="/assets/art/result-neutral.svg"
+                alt=""
+                width="320"
+                height="180"
+                decoding="async"
+                draggable="false"
+              >
+            </figure>
+            <div class="choice-feedback-copy shrink-0 border-t border-[#567481]/70 bg-[#0b1e29]/92 px-5 py-4 text-center">
+              <h2 id="choice-feedback-title" class="text-xl font-black leading-tight text-[#fff6e6]">Your Choice</h2>
+              <p id="choice-feedback-text" class="mt-2 text-sm font-semibold leading-relaxed text-[#d9e5e4]"></p>
+              <dl id="choice-feedback-changes" class="choice-feedback-changes mt-3 grid gap-1.5 text-left" aria-label="Resource changes"></dl>
+            </div>
           </section>
 
           <article
@@ -232,6 +262,14 @@
             <span id="choice-right-label" class="block text-sm font-black leading-tight">Continue</span>
             <span id="choice-right-detail" class="mt-0.5 block text-[0.62rem] font-bold leading-tight text-[#edc2be]"></span>
           </button>
+        </div>
+
+        <div id="choice-feedback-controls" class="mt-2 shrink-0" hidden>
+          <button
+            id="choice-feedback-continue"
+            type="button"
+            class="min-h-14 w-full rounded-xl border border-[#d8a94d] bg-[#3b3022] px-5 py-3 text-sm font-black text-[#fff1bb] shadow-md transition hover:bg-[#514027] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+          >Continue</button>
         </div>
       </main>
 

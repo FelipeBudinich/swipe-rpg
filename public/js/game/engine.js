@@ -4,6 +4,12 @@ import { EMBER_CROWN_ENEMIES } from "../data/ember-crown-enemies.js";
 import { items } from "../data/items.js";
 import { normalizeSeed } from "../rng.js";
 import { getCombatCard, resolveCombatChoice } from "./combat.js";
+import {
+  createPendingChoiceFeedback,
+  deriveChoiceFeedbackChanges,
+  normalizePendingChoiceFeedback,
+  shouldCreateChoiceFeedback,
+} from "./choice-feedback.js";
 import { applyEffects, resourceChanges } from "./effects.js";
 import {
   addInventoryItem,
@@ -719,6 +725,21 @@ export function getNextCard(inputState, contentInput = DEFAULT_CONTENT) {
   }
 
   let current = getCurrentCard(working, content);
+  const pendingFeedback = normalizePendingChoiceFeedback(
+    working.pendingChoiceFeedback,
+    {
+      state: working,
+      card: current,
+      arc: getCurrentArc(working, content.arcs),
+    },
+  );
+  if (pendingFeedback && current) {
+    working = { ...working, pendingChoiceFeedback: pendingFeedback };
+    return { state: working, card: current, source: working.currentCardSource ?? "current" };
+  }
+  if (working.pendingChoiceFeedback) {
+    working = { ...working, pendingChoiceFeedback: null };
+  }
   const hasQueuedCombatReward = (working.run.forcedCardQueue ?? []).some((entry) =>
     isCombatRewardEntry(entry, content));
   if (hasQueuedCombatReward && current?.category !== "combatReward") {
@@ -1000,6 +1021,15 @@ export function resolveChoice(
   inputOptions = {},
 ) {
   const { content, options } = splitContentAndOptions(contentInput, inputOptions);
+  if (inputState?.pendingChoiceFeedback) {
+    return {
+      state: inputState,
+      card: getCurrentCard(inputState, content),
+      ignored: true,
+      reason: "feedback-pending",
+      changes: {},
+    };
+  }
   const direction = normalizeDirection(inputDirection);
   if (!direction) {
     return {
@@ -1116,14 +1146,79 @@ export function resolveChoice(
 
   working = updateMetaProgress(clampPlayerResources(working, content.items), content);
   const next = getNextCard(working, content);
+  const changes = resourceChanges(before, next.state, content.items);
+  const feedbackChanges = deriveChoiceFeedbackChanges(before, next.state, content.items);
+  const arc = getCurrentArc(next.state, content.arcs) ?? getCurrentArc(before, content.arcs);
+  const explicitFeedbackTone =
+    choice.feedbackTone ?? choice.tone ?? current.feedbackTone ?? current.tone ?? null;
+  const pendingChoiceFeedback = shouldCreateChoiceFeedback({
+    beforeState: before,
+    resolvedMode,
+    resolvedCard: current,
+    resultText,
+    nextState: next.state,
+    nextCard: next.card,
+    arc,
+  })
+    ? createPendingChoiceFeedback({
+        sourceCard: current,
+        sourceToken: token,
+        resultText,
+        tone: explicitFeedbackTone,
+        changes: feedbackChanges,
+        nextState: next.state,
+      })
+    : null;
+  const nextState = pendingChoiceFeedback
+    ? { ...next.state, pendingChoiceFeedback }
+    : next.state;
   return {
-    state: next.state,
+    state: nextState,
     card: next.card,
     resolvedCard: current,
     resultText,
-    changes: resourceChanges(before, next.state, content.items),
+    changes,
     feedbackTone: feedbackTone({ after: next.state, before, card: current, combat: combatResult }),
     combat: combatResult,
+  };
+}
+
+export function dismissChoiceFeedback(
+  state,
+  { expectedFeedbackId, content: contentOption } = {},
+  contentInput = DEFAULT_CONTENT,
+) {
+  const content = normalizeContent(contentOption ?? contentInput);
+  const feedback = state?.pendingChoiceFeedback;
+  if (!feedback) {
+    return {
+      state,
+      card: getCurrentCard(state, content),
+      ignored: true,
+      reason: "no-feedback",
+    };
+  }
+  if (expectedFeedbackId && expectedFeedbackId !== feedback.id) {
+    return {
+      state,
+      card: getCurrentCard(state, content),
+      ignored: true,
+      reason: "stale-feedback",
+    };
+  }
+
+  const dismissed = { ...state, pendingChoiceFeedback: null };
+  const current = getCurrentCard(dismissed, content);
+  if (current) {
+    return { state: dismissed, card: current, ignored: false, reason: null };
+  }
+
+  const recovered = getNextCard(dismissed, content);
+  return {
+    state: recovered.state,
+    card: recovered.card,
+    ignored: false,
+    reason: "recovered-successor",
   };
 }
 
@@ -1137,6 +1232,9 @@ export const dismissInterstitial = dismissStoryTransition;
 
 export function equipInventoryItem(state, itemId, contentInput = DEFAULT_CONTENT) {
   const content = normalizeContent(contentInput);
+  if (state?.pendingChoiceFeedback) {
+    return { state, equipped: false, changes: {}, reason: "feedback-pending" };
+  }
   const nextState = equipItem(state, itemId, content.items);
   return {
     state: nextState,
@@ -1149,6 +1247,7 @@ export function useInventoryItem(state, itemId, contentInput = DEFAULT_CONTENT) 
   const content = normalizeContent(contentInput);
   const item = findItem(itemId, content.items);
   if (
+    state?.pendingChoiceFeedback ||
     ["gameOver", "victory", "storyTransition"].includes(state.mode) ||
     !item ||
     item.type !== "consumable" ||

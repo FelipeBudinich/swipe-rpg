@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { EMBER_CROWN_ARC } from "../public/js/data/arcs/ember-crown.js";
 import {
   createGame,
+  dismissChoiceFeedback,
   dismissStoryTransition,
   getNextCard,
   resolveChoice,
@@ -72,6 +73,13 @@ function resolveVisible(state, card, preferred = "left") {
   });
 }
 
+function acknowledgeChoiceFeedback(result) {
+  if (!result.state.pendingChoiceFeedback) return result;
+  return dismissChoiceFeedback(result.state, {
+    expectedFeedbackId: result.state.pendingChoiceFeedback.id,
+  });
+}
+
 test("a new arc always opens on the authored Opening Image entry", () => {
   const game = createGame({ seed: 44 });
   assert.equal(game.state.story.currentBeatId, "openingImage");
@@ -91,7 +99,8 @@ test("world decisions are atomic, count once, and reject a stale resolution toke
   assert.equal(resolved.state.decisionCount, 1);
   assert.equal(resolved.state.story.totalWorldCardsResolved, 1);
 
-  const duplicate = resolveChoice(resolved.state, "left", undefined, { expectedToken: token });
+  const acknowledged = acknowledgeChoiceFeedback(resolved);
+  const duplicate = resolveChoice(acknowledged.state, "left", undefined, { expectedToken: token });
   assert.equal(duplicate.ignored, true);
   assert.equal(duplicate.reason, "stale-resolution");
   assert.equal(duplicate.state.story.totalWorldCardsResolved, 1);
@@ -146,6 +155,8 @@ test("Midpoint orders intro, Iron Wyvern, battle rewards, level-up, and aftermat
   assert.match(next.card.id, /^midpoint-/);
 
   next = resolveVisible(next.state, next.card);
+  assert.ok(next.state.pendingChoiceFeedback);
+  next = acknowledgeChoiceFeedback(next);
   assert.equal(next.state.mode, "combat");
   assert.equal(next.state.encounter.enemyId, EMBER_CROWN_ARC.midbossId);
   assert.equal(next.state.story.cardsResolvedInBeat, 1);
@@ -183,12 +194,15 @@ test("Finale reserves two preparations, then resolves Malrec before ending choic
     assert.notEqual(next.card.story.role, "anchor");
     preparations.push(next.card.id);
     next = resolveVisible(next.state, next.card);
+    next = acknowledgeChoiceFeedback(next);
   }
   assert.equal(new Set(preparations).size, 2);
   assert.equal(next.card.story.role, "anchor");
   assert.match(next.card.id, /^finale-malrec-/);
 
   next = resolveVisible(next.state, next.card);
+  assert.ok(next.state.pendingChoiceFeedback);
+  next = acknowledgeChoiceFeedback(next);
   assert.equal(next.state.encounter.enemyId, EMBER_CROWN_ARC.finalBossId);
   const bossResult = resolveChoice(next.state, damagingDirection(next.card), undefined, {
     expectedToken: next.card.resolutionToken,

@@ -1,4 +1,5 @@
 import { normalizeSeed } from "../rng.js";
+import { normalizePendingChoiceFeedback } from "./choice-feedback.js";
 
 export const SAVE_VERSION = 2;
 export const DEFAULT_ARC_ID = "ember-crown";
@@ -142,6 +143,7 @@ export function createInitialState(options = {}) {
     currentCardToken: null,
     currentCardSource: null,
     lastResolvedToken: null,
+    pendingChoiceFeedback: null,
     story: createStoryState(arcId),
     player: {
       level: 1,
@@ -331,6 +333,13 @@ export function normalizeState(raw, options = {}) {
   if (normalized.story.pendingInterstitialBeatId && normalized.mode === "exploration") {
     normalized.mode = "storyTransition";
   }
+  normalized.pendingChoiceFeedback = normalizePendingChoiceFeedback(
+    raw.pendingChoiceFeedback,
+    {
+      state: normalized,
+      card: normalized.currentCardData,
+    },
+  );
   return normalized;
 }
 

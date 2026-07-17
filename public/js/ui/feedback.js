@@ -20,7 +20,7 @@ export function diffHud(before, after) {
 }
 
 export function createFeedbackController({ resultElement, resourceElements = {} }) {
-  let resultTimer = 0;
+  let announcementGeneration = 0;
   const pulseTimers = new Map();
 
   const pulse = (resource, delta, { showDelta = true } = {}) => {
@@ -46,24 +46,43 @@ export function createFeedbackController({ resultElement, resourceElements = {} 
     }, 900));
   };
 
-  return {
-    show(resultText, changes = {}, tone = "normal") {
-      globalThis.clearTimeout(resultTimer);
-      resultElement.textContent = resultText ?? "";
-      resultElement.dataset.kind = tone;
-      for (const resource of RESOURCES) pulse(resource, changes[resource] ?? 0);
-      if ((changes.level ?? 0) !== 0 && (changes.xp ?? 0) === 0) {
-        pulse("xp", changes.level, { showDelta: false });
-      }
-      resultTimer = globalThis.setTimeout(() => {
-        resultElement.textContent = "";
-        delete resultElement.dataset.kind;
-      }, 2200);
-    },
-    clear() {
-      globalThis.clearTimeout(resultTimer);
+  const announce = (message) => {
+    const text = typeof message === "string" ? message : "";
+    const generation = ++announcementGeneration;
+    if (!text) {
       resultElement.textContent = "";
-      delete resultElement.dataset.kind;
+      return;
+    }
+    if (resultElement.textContent !== text) {
+      resultElement.textContent = text;
+      return;
+    }
+    resultElement.textContent = "";
+    globalThis.queueMicrotask(() => {
+      if (generation === announcementGeneration) resultElement.textContent = text;
+    });
+  };
+
+  const pulseChanges = (changes = {}) => {
+    for (const resource of RESOURCES) pulse(resource, changes[resource] ?? 0);
+    if ((changes.level ?? 0) !== 0 && (changes.xp ?? 0) === 0) {
+      pulse("xp", changes.level, { showDelta: false });
+    }
+  };
+
+  const showTransient = (message, changes = {}) => {
+    pulseChanges(changes);
+    announce(message);
+  };
+
+  return {
+    announce,
+    pulseChanges,
+    showTransient,
+    show: showTransient,
+    clear() {
+      announcementGeneration += 1;
+      resultElement.textContent = "";
     },
   };
 }

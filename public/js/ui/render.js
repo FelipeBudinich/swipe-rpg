@@ -3,6 +3,23 @@ import {
   deriveTerminalPresentation,
   deriveTransitionPresentation,
 } from "./story-transition.js";
+import {
+  CHOICE_FEEDBACK_CHANGE_FIELDS,
+  CHOICE_FEEDBACK_CHANGE_LABELS,
+  FEEDBACK_ART_BY_TONE,
+  normalizeChoiceFeedbackChanges,
+  normalizeChoiceFeedbackTone,
+} from "../game/choice-feedback.js";
+
+export { FEEDBACK_ART_BY_TONE };
+
+const FEEDBACK_TITLE_BY_TONE = Object.freeze({
+  neutral: "Your Choice",
+  reward: "Reward",
+  recovery: "Recovery",
+  damage: "The Cost",
+  danger: "Consequence",
+});
 
 const RESOURCE_EFFECTS = {
   modifyHp: "hp",
@@ -84,6 +101,59 @@ function titleCase(value) {
   return String(value ?? "")
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function signedFeedbackValue(field, delta) {
+  const signed = `${delta > 0 ? "+" : ""}${delta}`;
+  if (field === "inventory") {
+    return `${signed} ${Math.abs(delta) === 1 ? "Item" : "Items"}`;
+  }
+  return `${signed} ${CHOICE_FEEDBACK_CHANGE_LABELS[field]}`;
+}
+
+function feedbackChangeAnnouncement(field, delta) {
+  const label = field === "inventory" && Math.abs(delta) === 1
+    ? "Item"
+    : CHOICE_FEEDBACK_CHANGE_LABELS[field];
+  return `${label} ${delta > 0 ? "plus" : "minus"} ${Math.abs(delta)}`;
+}
+
+export function deriveChoiceFeedbackPresentation(feedback) {
+  if (
+    !feedback ||
+    typeof feedback.id !== "string" ||
+    !feedback.id.trim() ||
+    typeof feedback.resultText !== "string" ||
+    !feedback.resultText.trim()
+  ) {
+    return null;
+  }
+  const tone = normalizeChoiceFeedbackTone(feedback.tone) ?? "neutral";
+  const changes = normalizeChoiceFeedbackChanges(feedback.changes);
+  const rows = CHOICE_FEEDBACK_CHANGE_FIELDS.flatMap((field) => {
+    const delta = changes[field];
+    return delta
+      ? [{
+          key: field,
+          label: CHOICE_FEEDBACK_CHANGE_LABELS[field],
+          value: signedFeedbackValue(field, delta),
+          direction: delta > 0 ? "gain" : "loss",
+          announcement: feedbackChangeAnnouncement(field, delta),
+        }]
+      : [];
+  });
+  const title = FEEDBACK_TITLE_BY_TONE[tone];
+  const text = feedback.resultText.trim();
+  const textSentence = /[.!?][”"']?$/.test(text) ? text : `${text}.`;
+  return {
+    id: feedback.id,
+    tone,
+    title,
+    text,
+    artId: FEEDBACK_ART_BY_TONE[tone],
+    rows,
+    announcement: `${title}. ${textSentence}${rows.length ? ` ${rows.map(({ announcement }) => announcement).join(". ")}.` : ""} Continue.`,
+  };
 }
 
 export function deriveCombatCardStatus(state, card, enemyDefinitions = {}) {
@@ -365,6 +435,14 @@ export function createRenderer({
     rightDetail: byId("choice-right-detail"),
     cardLive: byId("card-live"),
     choiceControls: byId("choice-controls"),
+    choiceFeedbackCard: byId("choice-feedback-card"),
+    choiceFeedbackKicker: byId("choice-feedback-kicker"),
+    choiceFeedbackTitle: byId("choice-feedback-title"),
+    choiceFeedbackText: byId("choice-feedback-text"),
+    choiceFeedbackArt: byId("choice-feedback-art"),
+    choiceFeedbackChanges: byId("choice-feedback-changes"),
+    choiceFeedbackControls: byId("choice-feedback-controls"),
+    choiceFeedbackContinue: byId("choice-feedback-continue"),
     transition: byId("story-transition"),
     transitionBeat: byId("story-transition-beat"),
     transitionTitle: byId("story-transition-title"),
@@ -403,6 +481,12 @@ export function createRenderer({
     gold: elements.inventoryOpen,
     enemyHp: elements.combatStatus,
     inventory: elements.inventoryOpen,
+  };
+
+  const clearPreviewTargets = () => {
+    for (const target of new Set(Object.values(previewTargets))) {
+      if (target) delete target.dataset.previewed;
+    }
   };
 
   const renderCombatCardStatus = (state, card) => {
@@ -532,10 +616,13 @@ export function createRenderer({
     elements.card.hidden = false;
     elements.cardBackdrop.hidden = false;
     elements.choiceControls.hidden = false;
+    elements.choiceFeedbackCard.hidden = true;
+    elements.choiceFeedbackControls.hidden = true;
     elements.transition.hidden = true;
     elements.terminal.hidden = true;
     elements.card.removeAttribute("inert");
     elements.card.tabIndex = 0;
+    elements.choiceFeedbackContinue.disabled = true;
     elements.cardStack.setAttribute("aria-label", "Current decision");
     lastSpecialAnnouncement = null;
   };
@@ -546,13 +633,37 @@ export function createRenderer({
     elements.card.hidden = true;
     elements.cardBackdrop.hidden = true;
     elements.choiceControls.hidden = true;
+    elements.choiceFeedbackCard.hidden = true;
+    elements.choiceFeedbackControls.hidden = true;
     elements.card.setAttribute("inert", "");
     elements.card.tabIndex = -1;
     elements.transition.hidden = surface !== "transition";
     elements.terminal.hidden = surface !== "terminal";
+    elements.choiceFeedbackContinue.disabled = true;
     elements.leftButton.disabled = true;
     elements.rightButton.disabled = true;
+    elements.inventoryOpen.disabled = true;
     elements.cardStack.setAttribute("aria-label", label);
+  };
+
+  const setFeedbackSurface = () => {
+    activeCard = null;
+    lastCardAnnouncementKey = null;
+    clearPreviewTargets();
+    elements.card.hidden = true;
+    elements.cardBackdrop.hidden = false;
+    elements.choiceControls.hidden = true;
+    elements.choiceFeedbackCard.hidden = false;
+    elements.choiceFeedbackControls.hidden = false;
+    elements.transition.hidden = true;
+    elements.terminal.hidden = true;
+    elements.card.setAttribute("inert", "");
+    elements.card.tabIndex = -1;
+    elements.leftButton.disabled = true;
+    elements.rightButton.disabled = true;
+    elements.inventoryOpen.disabled = true;
+    elements.choiceFeedbackContinue.disabled = false;
+    elements.cardStack.setAttribute("aria-label", "Choice outcome");
   };
 
   const announceSpecial = (key, message) => {
@@ -611,6 +722,38 @@ export function createRenderer({
     );
   };
 
+  const renderChoiceFeedback = (presentation) => {
+    setFeedbackSurface();
+    elements.choiceFeedbackCard.dataset.tone = presentation.tone;
+    elements.choiceFeedbackKicker.textContent = "Outcome";
+    elements.choiceFeedbackTitle.textContent = presentation.title;
+    elements.choiceFeedbackText.textContent = presentation.text;
+    elements.choiceFeedbackArt.src = resolveArtSource(
+      presentation.artId,
+      allowedArtIds,
+      "result-neutral",
+    );
+    elements.choiceFeedbackArt.alt = "";
+    elements.choiceFeedbackArt.draggable = false;
+    elements.choiceFeedbackChanges.replaceChildren();
+    elements.choiceFeedbackChanges.hidden = presentation.rows.length === 0;
+    for (const row of presentation.rows) {
+      const group = document.createElement("div");
+      group.className = "choice-feedback-change-row";
+      const term = document.createElement("dt");
+      term.className = "choice-feedback-change-label";
+      term.textContent = row.label;
+      const value = document.createElement("dd");
+      value.className = "choice-feedback-change-value";
+      value.dataset.direction = row.direction;
+      value.textContent = row.value;
+      group.append(term, value);
+      elements.choiceFeedbackChanges.append(group);
+    }
+    elements.choiceFeedbackContinue.setAttribute("aria-label", "Continue to the next decision");
+    announceSpecial(`feedback:${presentation.id}`, presentation.announcement);
+  };
+
   return {
     elements,
     render(state, card, { derivedStats, xpNeeded, storyProgress } = {}) {
@@ -623,8 +766,6 @@ export function createRenderer({
         maxMp: Math.max(0, Number(state.player?.mp ?? 0)),
       };
       renderHud(state, safeDerivedStats, xpNeeded ?? 1, storyProgress);
-      const combatStatus = renderCombatCardStatus(state, card);
-      const rewardSummary = renderRewardSummary(state, card);
       const terminal = deriveTerminalPresentation(state, {
         arcById,
         enemyById,
@@ -641,12 +782,20 @@ export function createRenderer({
         renderTransition(transition);
         return;
       }
+      const choiceFeedback = deriveChoiceFeedbackPresentation(state.pendingChoiceFeedback);
+      if (choiceFeedback) {
+        renderChoiceFeedback(choiceFeedback);
+        return;
+      }
+      const combatStatus = renderCombatCardStatus(state, card);
+      const rewardSummary = renderRewardSummary(state, card);
       setInteractiveSurface();
       renderCard(card, combatStatus, rewardSummary);
     },
     focusPrimarySurface() {
       if (!elements.transition.hidden) elements.transitionContinue.focus();
       else if (!elements.terminal.hidden) elements.terminalRestart.focus();
+      else if (!elements.choiceFeedbackCard.hidden) elements.choiceFeedbackContinue.focus();
       else elements.card.focus();
     },
     renderInventory(state, { derivedStats } = {}) {
@@ -680,9 +829,7 @@ export function createRenderer({
     previewChoice(direction) {
       const choice = direction === "left" ? activeCard?.left : direction === "right" ? activeCard?.right : null;
       const affected = new Set(affectedResources(choice));
-      for (const target of new Set(Object.values(previewTargets))) {
-        if (target) delete target.dataset.previewed;
-      }
+      clearPreviewTargets();
       for (const resource of affected) {
         const target = previewTargets[resource];
         if (target && !target.hidden) target.dataset.previewed = "true";

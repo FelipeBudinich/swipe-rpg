@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { itemById, items } from "../public/js/data/items.js";
 import {
   createGame,
+  dismissChoiceFeedback,
   dismissStoryTransition,
   equipInventoryItem,
   getNextCard,
@@ -230,6 +231,28 @@ export function simulateRun(seed, maxDecisions = MAX_DECISIONS, inputOptions = {
     safetySteps < normalized.maxDecisions * 4
   ) {
     safetySteps += 1;
+    if (state.pendingChoiceFeedback) {
+      const feedback = state.pendingChoiceFeedback;
+      transcript.push({
+        kind: "feedback",
+        decision: state.decisionCount,
+        sourceCardId: feedback.sourceCardId,
+        tone: feedback.tone,
+        nextCardId: feedback.nextCardId,
+        nextCardToken: feedback.nextCardToken,
+      });
+      const dismissed = dismissChoiceFeedback(state, {
+        expectedFeedbackId: feedback.id,
+      });
+      if (dismissed.ignored) {
+        stallReason = dismissed.reason ?? "ignored-feedback";
+        break;
+      }
+      state = dismissed.state;
+      card = dismissed.card;
+      continue;
+    }
+
     if (shouldDismissStoryTransition(state, card)) {
       transcript.push({
         kind: "transition",

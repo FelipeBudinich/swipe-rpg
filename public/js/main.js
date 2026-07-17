@@ -26,7 +26,7 @@ import {
   isActiveCommitResolutionBlocked as activeCommitResolutionIsBlocked,
   isNewInputBlocked as newInputIsBlocked,
 } from "./ui/interaction-lock.js";
-import { createRenderer } from "./ui/render.js";
+import { createRenderer, FEEDBACK_ART_BY_TONE } from "./ui/render.js";
 import { isStoryTransitionActive } from "./ui/story-transition.js";
 import { createSwipeController } from "./ui/swipe-controller.js";
 
@@ -46,17 +46,6 @@ function stateFrom(result) {
 
 function cardFrom(result, fallback = null) {
   return result?.card ?? fallback;
-}
-
-function feedbackKind(changes, mode, engineTone = "") {
-  if (["danger", "death"].includes(engineTone)) return "danger";
-  if (["reward", "loot", "level-up", "victory"].includes(engineTone)) return "reward";
-  if (mode === "gameOver") return "danger";
-  if (mode === "victory") return "reward";
-  if ((changes.hp ?? 0) < 0) return "damage";
-  if ((changes.hp ?? 0) > 0 || (changes.mp ?? 0) > 0) return "recovery";
-  if ((changes.gold ?? 0) > 0 || (changes.xp ?? 0) > 0) return "reward";
-  return "normal";
 }
 
 function normalizeLookup(lookup) {
@@ -81,6 +70,7 @@ const allowedArtIds = new Set([
   ...EMBER_CROWN_CARDS.map(({ artId }) => artId),
   ...EMBER_CROWN_ENEMIES.map(({ artId }) => artId),
   ...ITEMS.map(({ artId }) => artId),
+  ...Object.values(FEEDBACK_ART_BY_TONE),
 ].filter((artId) => typeof artId === "string"));
 const renderer = createRenderer({
   itemById,
@@ -116,6 +106,7 @@ let drawerController;
 let swipeController;
 let commitFocusTarget = null;
 let cardEntryGeneration = 0;
+let feedbackDismissalActive = false;
 
 function interactionLockState() {
   return {
@@ -124,6 +115,7 @@ function interactionLockState() {
     drawerPaused,
     storyTransitionActive: isStoryTransitionActive(state),
     terminalActive: ["gameOver", "victory"].includes(state.mode),
+    feedbackActive: Boolean(state.pendingChoiceFeedback),
     confirmationOpen: Boolean(document.getElementById("confirm-dialog")?.open),
   };
 }
@@ -141,6 +133,12 @@ function updateControlLocks() {
   elements.leftButton.disabled = blocked || currentCard?.left?.disabled === true;
   elements.rightButton.disabled = blocked || currentCard?.right?.disabled === true;
   document.getElementById("inventory-open").disabled = blocked;
+  elements.choiceFeedbackContinue.disabled = Boolean(
+    !state.pendingChoiceFeedback ||
+    inputLocked ||
+    feedbackDismissalActive ||
+    document.getElementById("confirm-dialog")?.open,
+  );
 }
 
 function beginCommitLock() {
@@ -177,7 +175,7 @@ function renderAll({ announceEntry = false } = {}) {
   if (drawerController?.isOpen) renderer.renderInventory(state, { derivedStats });
   updateControlLocks();
 
-  if (announceEntry) {
+  if (announceEntry && !elements.card.hidden && !elements.card.hasAttribute("inert")) {
     const generation = ++cardEntryGeneration;
     elements.card.dataset.swipeState = "entering";
     globalThis.setTimeout(() => {
@@ -206,6 +204,7 @@ function showModeFeedback(previousState, nextState) {
 
 async function prepareNextCard() {
   renderAll({ announceEntry: true });
+  if (elements.card.hidden || elements.card.hasAttribute("inert")) return;
   try {
     await Promise.race([
       elements.cardArt.decode?.() ?? Promise.resolve(),
@@ -257,11 +256,15 @@ async function commitChoice(direction) {
     saveState(state);
     showModeFeedback(previousState, state);
     await prepareNextCard();
-    feedback.show(
-      resolution.resultText || resolution.resolvedCard?.resultText || "The Ember Crown answers your choice.",
-      changes,
-      feedbackKind(changes, state.mode, resolution.feedbackTone),
-    );
+    feedback.clear();
+    if (state.pendingChoiceFeedback) {
+      feedback.pulseChanges(changes);
+    } else {
+      feedback.pulseChanges(changes);
+      if (previousState.mode === "combat" && state.mode === "combat") {
+        feedback.announce(resolution.resultText);
+      }
+    }
     return true;
   } finally {
     inputLocked = false;
@@ -279,14 +282,14 @@ swipeController = createSwipeController({
   canCommit: (direction) => Boolean(currentCard?.[direction]) && currentCard[direction].disabled !== true,
   onBlocked: (direction) => {
     const choice = currentCard?.[direction];
-    feedback.show(choice?.disabledReason || `${choice?.label || "That choice"} is unavailable right now.`, {}, "danger");
+    feedback.announce(choice?.disabledReason || `${choice?.label || "That choice"} is unavailable right now.`);
   },
   onPreview: (direction) => renderer.previewChoice(direction),
   onCommitStart: beginCommitLock,
   onCommit: commitChoice,
   onError: (error) => {
     updateControlLocks();
-    feedback.show("The road shivered. Your choice was not lost—try again.", {}, "danger");
+    feedback.announce("The road shivered. Your choice was not lost—try again.");
     console.error(error);
   },
 });
@@ -333,7 +336,7 @@ document.addEventListener("keydown", (event) => {
 
 document.getElementById("inventory-content").addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-inventory-action]");
-  if (!button || inputLocked) return;
+  if (!button || inputLocked || state.pendingChoiceFeedback) return;
   const actionButtonsBefore = [...document.querySelectorAll("#inventory-content button[data-inventory-action]")];
   const actionIndex = actionButtonsBefore.indexOf(button);
   const itemId = button.dataset.itemId;
@@ -366,7 +369,7 @@ document.getElementById("inventory-content").addEventListener("click", async (ev
     saveState(state);
     showModeFeedback(previousState, state);
     renderAll();
-    feedback.show(message, changes, button.dataset.inventoryAction === "equip" ? "reward" : feedbackKind(changes, state.mode));
+    feedback.showTransient(message, changes);
     if (state.mode === "gameOver" || state.mode === "victory") {
       closeDrawerAfterUnlock = true;
     } else {
@@ -461,6 +464,36 @@ async function dismissCurrentTransition() {
   }
 }
 
+async function dismissCurrentChoiceFeedback() {
+  if (
+    !state.pendingChoiceFeedback ||
+    feedbackDismissalActive ||
+    inputLocked ||
+    document.getElementById("confirm-dialog")?.open
+  ) {
+    return;
+  }
+
+  const expectedFeedbackId = state.pendingChoiceFeedback.id;
+  feedbackDismissalActive = true;
+  inputLocked = true;
+  updateControlLocks();
+  try {
+    const dismissed = Engine.dismissChoiceFeedback(state, { expectedFeedbackId });
+    if (dismissed.ignored) return;
+    state = dismissed.state;
+    currentCard = dismissed.card;
+    saveState(state);
+    swipeController.resetForNextCard();
+    await prepareNextCard();
+    renderer.focusPrimarySurface();
+  } finally {
+    inputLocked = false;
+    feedbackDismissalActive = false;
+    updateControlLocks();
+  }
+}
+
 async function restartFromTerminal() {
   if (inputLocked || !["gameOver", "victory"].includes(state.mode)) return;
   inputLocked = true;
@@ -520,6 +553,7 @@ document.getElementById("new-run").addEventListener("click", () => void beginFre
 document.getElementById("reset-data").addEventListener("click", () => void beginFreshRun({ resetMeta: true }));
 elements.transitionContinue.addEventListener("click", () => void dismissCurrentTransition());
 elements.terminalRestart.addEventListener("click", () => void restartFromTerminal());
+elements.choiceFeedbackContinue.addEventListener("click", () => void dismissCurrentChoiceFeedback());
 
 renderAll({ announceEntry: true });
 saveState(state);

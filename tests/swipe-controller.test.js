@@ -404,8 +404,36 @@ test("fixed-seed UI commit coordination advances three cards exactly once each",
     drawerPaused: false,
     storyTransitionActive: false,
     terminalActive: false,
+    feedbackActive: Boolean(state.pendingChoiceFeedback),
     confirmationOpen: false,
   });
+  const dismissFeedback = () => {
+    const feedback = state.pendingChoiceFeedback;
+    assert.ok(feedback);
+    const before = {
+      decisionCount: state.decisionCount,
+      worldCardsResolved: state.story.totalWorldCardsResolved,
+      rngState: state.rngState,
+      cardId: state.currentCardId,
+      cardToken: state.currentCardToken,
+    };
+    const dismissed = Engine.dismissChoiceFeedback(state, {
+      expectedFeedbackId: feedback.id,
+    });
+    assert.equal(dismissed.ignored, false);
+    state = dismissed.state;
+    currentCard = dismissed.card;
+    assert.equal(state.pendingChoiceFeedback, null);
+    assert.equal(state.decisionCount, before.decisionCount);
+    assert.equal(state.story.totalWorldCardsResolved, before.worldCardsResolved);
+    assert.equal(state.rngState, before.rngState);
+    assert.equal(state.currentCardId, before.cardId);
+    assert.equal(state.currentCardToken, before.cardToken);
+    assert.equal(currentCard?.resolutionToken, before.cardToken);
+    card.dataset.cardId = currentCard?.id ?? "special-surface";
+    card.hidden = !currentCard;
+    card.inert = !currentCard;
+  };
 
   assert.equal(firstCardId, "opening-hearthvale-oath");
   card.dataset.cardId = firstCardId;
@@ -428,8 +456,8 @@ test("fixed-seed UI commit coordination advances three cards exactly once each",
         state = resolution.state;
         currentCard = resolution.card;
         card.dataset.cardId = currentCard?.id ?? "special-surface";
-        card.hidden = !currentCard;
-        card.inert = !currentCard;
+        card.hidden = Boolean(state.pendingChoiceFeedback) || !currentCard;
+        card.inert = Boolean(state.pendingChoiceFeedback) || !currentCard;
         return true;
       } finally {
         inputLocked = false;
@@ -444,10 +472,17 @@ test("fixed-seed UI commit coordination advances three cards exactly once each",
   assert.equal(state.story.totalWorldCardsResolved, 1);
   assert.notEqual(state.currentCardToken, firstToken);
   assert.notEqual(currentCard?.id, firstCardId);
-  assert.equal(card.hidden, false);
-  assert.equal(card.inert, false);
+  assert.ok(state.pendingChoiceFeedback);
+  assert.equal(card.hidden, true);
+  assert.equal(card.inert, true);
   assert.equal(card.dataset.swipeState, "entering");
   assert.equal(controller.isCommitting, false);
+
+  assert.equal(await controller.commit("right"), false);
+  assert.equal(resolutionCount, 1);
+  dismissFeedback();
+  assert.equal(card.hidden, false);
+  assert.equal(card.inert, false);
 
   const stale = Engine.resolveChoice(state, "left", undefined, {
     expectedToken: firstToken,
@@ -457,7 +492,11 @@ test("fixed-seed UI commit coordination advances three cards exactly once each",
   assert.equal(stale.state.decisionCount, 1);
 
   assert.equal(await controller.commit("right"), true);
+  assert.ok(state.pendingChoiceFeedback);
+  dismissFeedback();
   assert.equal(await controller.commit("left"), true);
+  assert.ok(state.pendingChoiceFeedback);
+  dismissFeedback();
   assert.equal(resolutionCount, 3);
   assert.equal(state.decisionCount, 3);
   assert.equal(state.story.totalWorldCardsResolved, 3);

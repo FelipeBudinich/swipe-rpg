@@ -280,6 +280,15 @@ test("document exposes the compact story, progression, combat, reward, and Pack 
     "story-transition-continue",
     "terminal-summary",
     "terminal-restart",
+    "result-live",
+    "choice-feedback-card",
+    "choice-feedback-kicker",
+    "choice-feedback-title",
+    "choice-feedback-text",
+    "choice-feedback-art",
+    "choice-feedback-changes",
+    "choice-feedback-controls",
+    "choice-feedback-continue",
     "debug-checkpoints",
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
@@ -408,9 +417,11 @@ test("document removes redundant choice instructions without leaving a footer pl
   const removedCopy = "Swipe the card or use either button. Your choice is final.";
   const gameMain = elementSourceById(html, "game-main");
   const controls = elementSourceById(gameMain, "choice-controls");
+  const feedbackControls = elementSourceById(gameMain, "choice-feedback-controls");
   const controlsStart = gameMain.indexOf(controls);
+  const feedbackControlsStart = gameMain.indexOf(feedbackControls);
   const trailingMarkup = gameMain
-    .slice(controlsStart + controls.length, gameMain.lastIndexOf("</main>"))
+    .slice(feedbackControlsStart + feedbackControls.length, gameMain.lastIndexOf("</main>"))
     .trim();
 
   assert.doesNotMatch(html, /\bid=(["'])choice-help\1/);
@@ -422,10 +433,77 @@ test("document removes redundant choice instructions without leaving a footer pl
   assert.doesNotMatch(css, /#choice-help\b/);
   assert.doesNotMatch(css, /#game-main\s*>\s*p:last-child/);
   assert.equal(trailingMarkup, "");
+  assert.ok(feedbackControlsStart > controlsStart + controls.length);
   assert.match(gameMain, /\bid=(["'])result-live\1/);
   assert.match(controls, /\bid=(["'])choice-left\1/);
   assert.match(controls, /\bid=(["'])inventory-open\1/);
   assert.match(controls, /\bid=(["'])choice-right\1/);
+  assert.doesNotMatch(feedbackControls, /\bid=(["'])(?:choice-left|inventory-open|choice-right)\1/);
+});
+
+test("feedback outcome is a dedicated semantic card with one separate Continue action", async () => {
+  const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const cardStack = elementSourceById(html, "card-stack");
+  const feedbackCard = elementSourceById(cardStack, "choice-feedback-card");
+  const feedbackOpeningTag = feedbackCard.slice(0, feedbackCard.indexOf(">") + 1);
+  const feedbackControls = elementSourceById(html, "choice-feedback-controls");
+  const feedbackControlsOpeningTag = feedbackControls.slice(0, feedbackControls.indexOf(">") + 1);
+  const continueButton = elementSourceById(feedbackControls, "choice-feedback-continue");
+  const continueOpeningTag = continueButton.slice(0, continueButton.indexOf(">") + 1);
+  const continueClasses =
+    /\bclass=(["'])([^"']*)\1/.exec(continueOpeningTag)?.[2].split(/\s+/) ?? [];
+  const artOpeningTag = /<img\b[^>]*\bid=(["'])choice-feedback-art\1[^>]*>/i.exec(feedbackCard)?.[0];
+  assert.ok(artOpeningTag, "Expected the feedback art image");
+  const changes = elementSourceById(feedbackCard, "choice-feedback-changes");
+
+  assert.match(feedbackOpeningTag, /^<section\b/i);
+  assert.match(feedbackOpeningTag, /\brole=(["'])region\1/);
+  assert.match(feedbackOpeningTag, /\baria-labelledby=(["'])choice-feedback-title\1/);
+  assert.match(
+    feedbackOpeningTag,
+    /\baria-describedby=(["'])choice-feedback-text choice-feedback-changes\1/,
+  );
+  assert.match(feedbackOpeningTag, /\btabindex=(["'])-1\1/);
+  assert.match(feedbackOpeningTag, /\bdata-tone=(["'])neutral\1/);
+  assert.match(feedbackOpeningTag, /\bhidden(?:\s|>)/);
+  for (const id of [
+    "choice-feedback-kicker",
+    "choice-feedback-title",
+    "choice-feedback-text",
+    "choice-feedback-art",
+    "choice-feedback-changes",
+  ]) {
+    assert.match(feedbackCard, new RegExp(`\\bid=(["'])${id}\\1`));
+  }
+  assert.match(changes, /\baria-label=(["'])Resource changes\1/);
+  assert.match(artOpeningTag, /\bsrc=(["'])\/assets\/art\/result-neutral\.svg\1/);
+  assert.match(artOpeningTag, /\balt=(["'])\1/);
+  assert.match(artOpeningTag, /\bdraggable=(["'])false\1/);
+  assert.match(feedbackControlsOpeningTag, /\bhidden(?:\s|>)/);
+  assert.equal((feedbackControls.match(/<button\b/gi) ?? []).length, 1);
+  assert.match(continueOpeningTag, /\btype=(["'])button\1/);
+  assert.ok(continueClasses.includes("min-h-14"));
+  assert.ok(continueClasses.includes("w-full"));
+  assert.equal(continueButton.replace(/<[^>]+>/g, "").trim(), "Continue");
+  assert.ok(html.indexOf('id="choice-feedback-controls"') > html.indexOf('id="choice-controls"'));
+});
+
+test("the result status is visually hidden and does not duplicate the feedback card", async () => {
+  const [html, css] = await Promise.all([
+    readFile(new URL("../public/index.html", import.meta.url), "utf8"),
+    readFile(new URL("../src/input.css", import.meta.url), "utf8"),
+  ]);
+  const live = elementSourceById(html, "result-live");
+  const openingTag = live.slice(0, live.indexOf(">") + 1);
+  const classes = /\bclass=(["'])([^"']*)\1/.exec(openingTag)?.[2].split(/\s+/) ?? [];
+
+  assert.ok(classes.includes("sr-only"));
+  assert.match(openingTag, /\brole=(["'])status\1/);
+  assert.match(openingTag, /\baria-live=(["'])polite\1/);
+  assert.match(openingTag, /\baria-atomic=(["'])true\1/);
+  assert.equal(live.replace(/<[^>]+>/g, "").trim(), "");
+  assert.doesNotMatch(openingTag, /\b(?:mt-|mb-|min-h-|text-\[|transition)\S*/);
+  assert.doesNotMatch(css, /\.result-feedback\b|#result-live\s*\{/);
 });
 
 test("story HUD exposes arc title and beat in one labelled heading line", async () => {
@@ -526,10 +604,19 @@ test("short-height CSS compacts one resource row without hiding its values or me
     "choice-left",
     "inventory-open",
     "choice-right",
-    "result-live",
+    "choice-feedback-card",
+    "choice-feedback-changes",
+    "choice-feedback-controls",
+    "choice-feedback-continue",
   ]) {
     assert.ok(hiddenSelectors.every((selector) => !selector.includes(`#${id}`)), `#${id} must remain visible`);
   }
+
+  assert.match(shortHeight, /#choice-feedback-controls\s*\{[^}]*margin-top:\s*0\.25rem;/s);
+  assert.match(shortHeight, /\.choice-feedback-card\s*\{[^}]*padding-top:\s*0;/s);
+  assert.match(shortHeight, /#choice-feedback-art\s*\{[^}]*height:\s*4\.25rem\s*!important;/s);
+  assert.match(shortHeight, /#choice-feedback-text\s*\{[^}]*line-height:\s*1\.35;/s);
+  assert.match(shortHeight, /#choice-feedback-changes\s*\{[^}]*gap:\s*0\.2rem;/s);
 });
 
 test("narrow-width CSS compacts the three action columns without stacking them", async () => {
@@ -541,4 +628,22 @@ test("narrow-width CSS compacts the three action columns without stacking them",
   assert.match(narrowWidth, /#inventory-open\s*\{[^}]*padding-right:\s*0\.5rem;[^}]*padding-left:\s*0\.5rem;/s);
   assert.match(narrowWidth, /#choice-left,\s*#choice-right\s*\{[^}]*min-width:\s*0;/s);
   assert.doesNotMatch(narrowWidth, /#choice-controls\s*\{[^}]*(?:grid-template-columns|flex-direction|display:\s*block)/s);
+});
+
+test("feedback card styling distinguishes tones and remains usable with reduced motion", async () => {
+  const css = await readFile(new URL("../src/input.css", import.meta.url), "utf8");
+  const feedbackCard = cssBlock(css, ".choice-feedback-card");
+  const reducedMotion = cssBlock(css, "@media (prefers-reduced-motion: reduce)");
+
+  assert.match(feedbackCard, /animation:\s*choice-feedback-enter\b/);
+  assert.match(css, /@keyframes choice-feedback-enter\s*\{/);
+  for (const tone of ["reward", "recovery", "damage", "danger"]) {
+    assert.match(css, new RegExp(`#choice-feedback-card\\[data-tone="${tone}"\\]\\s*\\{`));
+  }
+  assert.match(css, /\.choice-feedback-change-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;/s);
+  assert.match(css, /\.choice-feedback-change-value\[data-direction="gain"\]\s*\{/);
+  assert.match(css, /\.choice-feedback-change-value\[data-direction="loss"\]\s*\{/);
+  assert.match(reducedMotion, /animation-duration:\s*1ms\s*!important/);
+  assert.match(reducedMotion, /animation-iteration-count:\s*1\s*!important/);
+  assert.match(reducedMotion, /transition-duration:\s*1ms\s*!important/);
 });
