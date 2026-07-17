@@ -94,9 +94,9 @@ const { elements } = renderer;
 const feedback = createFeedbackController({
   resultElement: document.getElementById("result-live"),
   resourceElements: {
-    hp: document.getElementById("hud-hp"),
-    mp: document.getElementById("hud-mp"),
-    xp: document.getElementById("hud-xp"),
+    hp: document.getElementById("hp-hud"),
+    mp: document.getElementById("mp-hud"),
+    xp: document.getElementById("level-xp-hud"),
     gold: document.getElementById("inventory-open"),
   },
 });

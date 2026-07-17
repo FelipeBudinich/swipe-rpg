@@ -14,6 +14,7 @@ export function diffHud(before, after) {
   const changes = Object.fromEntries(
     RESOURCES.map((resource) => [resource, (after[resource] ?? 0) - (before[resource] ?? 0)]),
   );
+  changes.level = (after.level ?? 0) - (before.level ?? 0);
   if ((after.level ?? 0) > (before.level ?? 0) && changes.xp < 0) changes.xp = after.xp ?? 0;
   return changes;
 }
@@ -22,7 +23,7 @@ export function createFeedbackController({ resultElement, resourceElements = {} 
   let resultTimer = 0;
   const pulseTimers = new Map();
 
-  const pulse = (resource, delta) => {
+  const pulse = (resource, delta, { showDelta = true } = {}) => {
     if (!delta) return;
     const valueElement = resourceElements[resource];
     if (!valueElement) return;
@@ -31,14 +32,14 @@ export function createFeedbackController({ resultElement, resourceElements = {} 
     delete element.dataset.changed;
     void element.offsetWidth;
     element.dataset.changed = delta > 0 ? "gain" : "loss";
-    if (deltaElement) {
+    if (deltaElement && showDelta) {
       deltaElement.textContent = `${delta > 0 ? "+" : ""}${delta}`;
       deltaElement.dataset.visible = "true";
     }
     globalThis.clearTimeout(pulseTimers.get(resource));
     pulseTimers.set(resource, globalThis.setTimeout(() => {
       delete element.dataset.changed;
-      if (deltaElement) {
+      if (deltaElement && showDelta) {
         deltaElement.textContent = "";
         delete deltaElement.dataset.visible;
       }
@@ -51,6 +52,9 @@ export function createFeedbackController({ resultElement, resourceElements = {} 
       resultElement.textContent = resultText ?? "";
       resultElement.dataset.kind = tone;
       for (const resource of RESOURCES) pulse(resource, changes[resource] ?? 0);
+      if ((changes.level ?? 0) !== 0 && (changes.xp ?? 0) === 0) {
+        pulse("xp", changes.level, { showDelta: false });
+      }
       resultTimer = globalThis.setTimeout(() => {
         resultElement.textContent = "";
         delete resultElement.dataset.kind;

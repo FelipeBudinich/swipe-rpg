@@ -50,6 +50,39 @@ const arc = {
 };
 const arcById = { [arc.id]: arc };
 
+function elementSourceById(source, id) {
+  const idMatch = [...source.matchAll(/\bid=(["'])([^"']+)\1/g)]
+    .find((match) => match[2] === id);
+  assert.ok(idMatch, `Expected #${id} to exist`);
+  const tagStart = source.lastIndexOf("<", idMatch.index);
+  const tagMatch = /^<([a-z][\w-]*)\b/i.exec(source.slice(tagStart));
+  assert.ok(tagMatch, `Expected #${id} to belong to an element`);
+  const tagName = tagMatch[1];
+  const tagPattern = new RegExp(`<\\/?${tagName}\\b[^>]*>`, "gi");
+  let depth = 0;
+  for (const match of source.slice(tagStart).matchAll(tagPattern)) {
+    const tokenStart = tagStart + match.index;
+    const token = match[0];
+    if (token.startsWith("</")) depth -= 1;
+    else if (!token.endsWith("/>")) depth += 1;
+    if (depth === 0) return source.slice(tagStart, tokenStart + token.length);
+  }
+  assert.fail(`Expected #${id} to have a closing </${tagName}>`);
+}
+
+function cssBlock(source, marker) {
+  const markerStart = source.indexOf(marker);
+  assert.ok(markerStart >= 0, `Expected CSS marker ${marker}`);
+  const braceStart = source.indexOf("{", markerStart);
+  let depth = 0;
+  for (let index = braceStart; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    else if (source[index] === "}") depth -= 1;
+    if (depth === 0) return source.slice(markerStart, index + 1);
+  }
+  assert.fail(`Expected CSS block ${marker} to close`);
+}
+
 function storyState(overrides = {}) {
   return {
     mode: "exploration",
@@ -210,12 +243,20 @@ test("document exposes the compact story, progression, combat, reward, and Pack 
     "hud-beat-number",
     "hud-beat-name",
     "hud-story-progress",
+    "player-resource-row",
     "level-xp-hud",
     "hud-level",
     "hud-xp",
+    "hud-xp-delta",
     "hud-xp-bar",
+    "hp-hud",
     "hud-hp",
+    "hud-hp-delta",
+    "hud-hp-bar",
+    "mp-hud",
     "hud-mp",
+    "hud-mp-delta",
+    "hud-mp-bar",
     "inventory-open",
     "inventory-gold",
     "card-combat-status",
@@ -265,9 +306,84 @@ test("document exposes the compact story, progression, combat, reward, and Pack 
   assert.ok(wallet > drawerStart && wallet < drawerEnd);
   assert.match(html, /<button\s+id="inventory-open"/);
   assert.match(html, /id="inventory-open"[\s\S]*?data-resource="gold"/);
-  assert.match(html, /id="level-xp-hud"[\s\S]*?aria-label="Character progression"/);
+  assert.match(html, /id="level-xp-hud"[\s\S]*?aria-label="Level 1\. Experience 0 of 20\."/);
   assert.match(html, /id="inventory-wallet"[\s\S]*?aria-label="Gold"/);
   assert.match(html, /id="card-reward-summary"[\s\S]*?aria-label="Battle rewards"[\s\S]*?hidden/);
   assert.doesNotMatch(html, /hud-journey|>Depth</);
   assert.doesNotMatch(html, /on(?:click|load|error|submit)=/i);
+});
+
+test("document keeps Level and XP, HP, and MP in one weighted resource row", async () => {
+  const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const row = elementSourceById(html, "player-resource-row");
+  const rowOpeningTag = row.slice(0, row.indexOf(">") + 1);
+  const sectionIds = [...row.matchAll(/<section\b[^>]*\bid=(["'])([^"']+)\1[^>]*>/gi)]
+    .map((match) => match[2]);
+
+  assert.deepEqual(sectionIds, ["level-xp-hud", "hp-hud", "mp-hud"]);
+  assert.equal((row.match(/<section\b/gi) ?? []).length, 3);
+  assert.ok(rowOpeningTag.includes("grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)]"));
+
+  const expectedSections = [
+    ["level-xp-hud", "xp", ["hud-level", "hud-xp", "hud-xp-delta", "hud-xp-bar"]],
+    ["hp-hud", "hp", ["hud-hp", "hud-hp-delta", "hud-hp-bar"]],
+    ["mp-hud", "mp", ["hud-mp", "hud-mp-delta", "hud-mp-bar"]],
+  ];
+  for (const [sectionId, resource, childIds] of expectedSections) {
+    const section = elementSourceById(row, sectionId);
+    const openingTag = section.slice(0, section.indexOf(">") + 1);
+    assert.match(openingTag, new RegExp(`\\bdata-resource=(["'])${resource}\\1`));
+    assert.match(openingTag, /\bclass=(["'])[^"']*\bmin-w-0\b[^"']*\1/);
+    for (const childId of childIds) assert.match(section, new RegExp(`\\bid=(["'])${childId}\\1`));
+  }
+
+  const ids = [...html.matchAll(/\bid=(["'])([^"']+)\1/g)].map((match) => match[2]);
+  const preservedIds = [
+    "hud-level",
+    "hud-xp",
+    "hud-xp-delta",
+    "hud-xp-bar",
+    "hud-hp",
+    "hud-hp-delta",
+    "hud-hp-bar",
+    "hud-mp",
+    "hud-mp-delta",
+    "hud-mp-bar",
+  ];
+  for (const id of preservedIds) {
+    assert.equal(ids.filter((candidate) => candidate === id).length, 1, `Expected one #${id}`);
+  }
+  const duplicates = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))].sort();
+  assert.deepEqual(duplicates, []);
+  assert.equal((html.match(/\bdata-resource=(["'])xp\1/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /\bdata-resource=(["'])level\1/);
+  assert.doesNotMatch(html, /\bid=(["'])level-hud\1/);
+});
+
+test("short-height CSS compacts one resource row without hiding its values or meters", async () => {
+  const css = await readFile(new URL("../src/input.css", import.meta.url), "utf8");
+  const shortHeight = cssBlock(css, "@media (max-height: 650px)");
+
+  assert.match(shortHeight, /#player-resource-row\s*\{/);
+  assert.match(shortHeight, /#player-resource-row\s*>\s*section\s*\{/);
+  assert.match(shortHeight, /#player-resource-row\s*>\s*section\s*>\s*div\s*\{/);
+  assert.doesNotMatch(css, /#level-xp-hud\s*>\s*dl/);
+
+  const hiddenSelectors = [...shortHeight.matchAll(/([^{}]+)\{[^{}]*(?:display\s*:\s*none|visibility\s*:\s*hidden|content-visibility\s*:\s*hidden)[^{}]*\}/gi)]
+    .map((match) => match[1]);
+  for (const id of [
+    "player-resource-row",
+    "level-xp-hud",
+    "hud-level",
+    "hud-xp",
+    "hud-xp-bar",
+    "hp-hud",
+    "hud-hp",
+    "hud-hp-bar",
+    "mp-hud",
+    "hud-mp",
+    "hud-mp-bar",
+  ]) {
+    assert.ok(hiddenSelectors.every((selector) => !selector.includes(`#${id}`)), `#${id} must remain visible`);
+  }
 });

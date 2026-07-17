@@ -339,8 +339,10 @@ export function createRenderer({
     levelXpHud: byId("level-xp-hud"),
     xp: byId("hud-xp"),
     xpBar: byId("hud-xp-bar"),
+    hpHud: byId("hp-hud"),
     hp: byId("hud-hp"),
     hpBar: byId("hud-hp-bar"),
+    mpHud: byId("mp-hud"),
     mp: byId("hud-mp"),
     mpBar: byId("hud-mp-bar"),
     arcTitle: byId("arc-title"),
@@ -405,8 +407,9 @@ export function createRenderer({
   let lastCardAnnouncementKey = null;
 
   const previewTargets = {
-    hp: elements.hp.closest("[data-resource]"),
-    mp: elements.mp.closest("[data-resource]"),
+    hp: elements.hpHud,
+    mp: elements.mpHud,
+    level: elements.levelXpHud,
     xp: elements.levelXpHud,
     gold: elements.inventoryOpen,
     enemyHp: elements.combatStatus,
@@ -514,9 +517,9 @@ export function createRenderer({
       : calculateStoryProgress;
     const storyHud = deriveStoryHud(state, { arcById, calculateStoryProgress: progressCalculator });
     elements.level.textContent = String(state.player.level);
-    elements.xp.textContent = `${state.player.xp}/${xpNeeded}`;
-    elements.hp.textContent = `${state.player.hp}/${derivedStats.maxHp}`;
-    elements.mp.textContent = `${state.player.mp}/${derivedStats.maxMp}`;
+    elements.xp.textContent = `${state.player.xp} / ${xpNeeded}`;
+    elements.hp.textContent = `${state.player.hp} / ${derivedStats.maxHp}`;
+    elements.mp.textContent = `${state.player.mp} / ${derivedStats.maxMp}`;
     elements.arcTitle.textContent = storyHud.arcTitle;
     elements.beatName.textContent = storyHud.beatName;
     elements.beatNumber.textContent = `${storyHud.beatNumber} / ${storyHud.beatCount}`;
@@ -526,9 +529,12 @@ export function createRenderer({
     setBar(elements.storyProgress, storyHud.progressPercent, 100);
     elements.storyProgress.textContent = `${Math.round(storyHud.progressPercent)} percent`;
     elements.storyProgress.setAttribute("aria-label", storyHud.progressLabel);
-    elements.hpBar.setAttribute("aria-label", `HP ${state.player.hp} of ${derivedStats.maxHp}`);
-    elements.mpBar.setAttribute("aria-label", `MP ${state.player.mp} of ${derivedStats.maxMp}`);
-    elements.xpBar.setAttribute("aria-label", `XP ${state.player.xp} of ${xpNeeded}`);
+    elements.levelXpHud.setAttribute("aria-label", `Level ${state.player.level}. Experience ${state.player.xp} of ${xpNeeded}.`);
+    elements.hpHud.setAttribute("aria-label", `Health ${state.player.hp} of ${derivedStats.maxHp}.`);
+    elements.mpHud.setAttribute("aria-label", `Magic points ${state.player.mp} of ${derivedStats.maxMp}.`);
+    elements.hpBar.setAttribute("aria-label", `Health: ${state.player.hp} of ${derivedStats.maxHp}`);
+    elements.mpBar.setAttribute("aria-label", `Magic points: ${state.player.mp} of ${derivedStats.maxMp}`);
+    elements.xpBar.setAttribute("aria-label", `Experience: ${state.player.xp} of ${xpNeeded}`);
     return storyHud;
   };
 

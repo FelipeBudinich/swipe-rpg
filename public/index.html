@@ -48,32 +48,56 @@
           >0 percent</progress>
         </section>
 
-        <section id="level-xp-hud" class="relative mt-1.5 rounded-lg bg-[#091923] px-2 py-1.5" data-resource="xp" aria-label="Character progression">
-          <dl class="mb-1 flex items-baseline justify-between gap-3">
-            <div class="flex items-baseline gap-1.5">
-              <dt class="text-[0.62rem] font-bold uppercase tracking-wider text-[#9bb3ba]">Level</dt>
-              <dd id="hud-level" class="text-sm font-black tabular-nums text-[#fff6e6]">1</dd>
+        <div
+          id="player-resource-row"
+          class="mt-1.5 grid grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)] gap-1.5"
+        >
+          <section
+            id="level-xp-hud"
+            class="relative min-w-0 rounded-lg bg-[#091923] px-2 py-1.5"
+            data-resource="xp"
+            aria-label="Level 1. Experience 0 of 20."
+          >
+            <div class="mb-1 flex min-w-0 items-baseline justify-between gap-1">
+              <span class="min-w-0 whitespace-nowrap text-[0.62rem] font-bold uppercase tracking-[0.04em] text-[#9bb3ba]">
+                Level <span id="hud-level" class="font-black tabular-nums text-[#fff6e6]">1</span>
+              </span>
+              <span class="min-w-0 truncate text-[0.64rem] font-black uppercase tabular-nums text-[#a7e5bd]">
+                XP <span id="hud-xp">0 / 20</span>
+                <span id="hud-xp-delta" class="resource-delta" aria-hidden="true"></span>
+              </span>
             </div>
-            <div class="flex min-w-0 items-baseline gap-1.5 text-right">
-              <dt class="text-[0.62rem] font-bold uppercase tracking-wider text-[#a7e5bd]">XP</dt>
-              <dd class="tabular-nums text-[0.72rem] font-black text-[#a7e5bd]"><span id="hud-xp">0 / 20</span><span id="hud-xp-delta" class="resource-delta" aria-hidden="true"></span></dd>
-            </div>
-          </dl>
-          <progress id="hud-xp-bar" class="resource-meter" data-meter="xp" value="0" max="20" aria-label="Experience: 0 of 20">0 of 20</progress>
-        </section>
+            <progress id="hud-xp-bar" class="resource-meter" data-meter="xp" value="0" max="20" aria-label="Experience: 0 of 20">0 of 20</progress>
+          </section>
 
-        <div class="mt-1.5 grid grid-cols-2 gap-1.5">
-          <section class="relative rounded-lg bg-[#091923] px-2 py-1.5" data-resource="hp" aria-label="Health">
-            <div class="mb-1 flex items-baseline justify-between gap-2 text-[0.66rem] font-bold uppercase tracking-wider text-[#ffb3a7]">
-              <span>HP</span>
-              <span class="tabular-nums"><span id="hud-hp">30 / 30</span><span id="hud-hp-delta" class="resource-delta" aria-hidden="true"></span></span>
+          <section
+            id="hp-hud"
+            class="relative min-w-0 rounded-lg bg-[#091923] px-2 py-1.5"
+            data-resource="hp"
+            aria-label="Health 30 of 30."
+          >
+            <div class="mb-1 flex min-w-0 items-baseline justify-between gap-1">
+              <span class="shrink-0 text-[0.62rem] font-bold uppercase tracking-wider text-[#ffb3a7]">HP</span>
+              <span class="min-w-0 truncate text-[0.64rem] font-black tabular-nums text-[#ffb3a7]">
+                <span id="hud-hp">30 / 30</span>
+                <span id="hud-hp-delta" class="resource-delta" aria-hidden="true"></span>
+              </span>
             </div>
             <progress id="hud-hp-bar" class="resource-meter" data-meter="hp" value="30" max="30" aria-label="Health: 30 of 30">30 of 30</progress>
           </section>
-          <section class="relative rounded-lg bg-[#091923] px-2 py-1.5" data-resource="mp" aria-label="Magic points">
-            <div class="mb-1 flex items-baseline justify-between gap-2 text-[0.66rem] font-bold uppercase tracking-wider text-[#aebcff]">
-              <span>MP</span>
-              <span class="tabular-nums"><span id="hud-mp">10 / 10</span><span id="hud-mp-delta" class="resource-delta" aria-hidden="true"></span></span>
+
+          <section
+            id="mp-hud"
+            class="relative min-w-0 rounded-lg bg-[#091923] px-2 py-1.5"
+            data-resource="mp"
+            aria-label="Magic points 10 of 10."
+          >
+            <div class="mb-1 flex min-w-0 items-baseline justify-between gap-1">
+              <span class="shrink-0 text-[0.62rem] font-bold uppercase tracking-wider text-[#aebcff]">MP</span>
+              <span class="min-w-0 truncate text-[0.64rem] font-black tabular-nums text-[#aebcff]">
+                <span id="hud-mp">10 / 10</span>
+                <span id="hud-mp-delta" class="resource-delta" aria-hidden="true"></span>
+              </span>
             </div>
             <progress id="hud-mp-bar" class="resource-meter" data-meter="mp" value="10" max="10" aria-label="Magic points: 10 of 10">10 of 10</progress>
           </section>
