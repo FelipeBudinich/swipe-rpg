@@ -24,6 +24,33 @@ test("malformed persisted choice metadata cannot crash resource previews", () =>
   assert.doesNotThrow(() => choiceDetail(malformed));
 });
 
+test("resource detection and choice details remain available without a card-level summary", () => {
+  const resources = affectedResources({
+    preview: [
+      { resource: "enemyHp", label: "7–10 damage" },
+      { resource: "maxHp", delta: 6 },
+      { resource: "maxMp", delta: 4 },
+    ],
+    effects: [
+      { type: "modifyHp", amount: -3 },
+      { type: "modifyMp", amount: -3 },
+      { type: "addXp", amount: 8 },
+      { type: "addGold", amount: 12 },
+    ],
+  });
+
+  assert.deepEqual(new Set(resources), new Set(["enemyHp", "hp", "mp", "xp", "gold"]));
+  assert.equal(choiceDetail({ effects: [{ type: "modifyMp", amount: -3 }] }), "-3 MP");
+  assert.equal(choiceDetail({ effects: [{ type: "heal", amount: 6 }] }), "+6 HP");
+  assert.equal(choiceDetail({ effects: [{ type: "addGold", amount: 8 }] }), "+8 gold");
+  assert.equal(choiceDetail({ detail: "Sell · +12 gold" }), "Sell · +12 gold");
+  assert.equal(choiceDetail({ detail: "Use now" }), "Use now");
+  assert.equal(
+    choiceDetail({ preview: [{ resource: "enemyHp", label: "7–10 damage" }] }),
+    "7–10 damage",
+  );
+});
+
 test("art sources resolve only through the bundled local allowlist", () => {
   const allowed = new Set(["player", "scene-road"]);
   assert.equal(resolveArtSource("scene-road", allowed), "/assets/art/scene-road.svg");
@@ -147,6 +174,30 @@ test("renderer source uses explicit preview targets and text-safe reward renderi
   assert.match(source, /lastCardAnnouncementKey/);
   assert.match(source, /card\?\.resolutionToken/);
   assert.doesNotMatch(source, /choiceHelp|choice-help/);
+  assert.doesNotMatch(
+    source,
+    /card-resource-preview|resourcePreview|cardResourceSummary|Choices may affect|Choices shape the story|changes the story ahead/,
+  );
+
+  const setChoiceStart = source.indexOf("const setChoice =");
+  const renderCardStart = source.indexOf("const renderCard =", setChoiceStart);
+  const renderHudStart = source.indexOf("const renderHud =", renderCardStart);
+  const setChoiceSource = source.slice(setChoiceStart, renderCardStart);
+  const renderCardSource = source.slice(renderCardStart, renderHudStart);
+  assert.match(setChoiceSource, /const resources = affectedResources\(choice\)/);
+  assert.match(setChoiceSource, /choiceDetail\(choice\)/);
+  assert.match(setChoiceSource, /detail\.textContent = detailText/);
+  assert.match(setChoiceSource, /button\.dataset\.affects = resources\.join\(" "\)/);
+  assert.match(renderCardSource, /elements\.detail\.textContent = card\?\.detail \?\? card\?\.riskText \?\? ""/);
+
+  const previewStart = source.indexOf("previewChoice(direction)");
+  const previewEnd = source.indexOf("\n    },\n  };", previewStart);
+  const previewSource = source.slice(previewStart, previewEnd);
+  assert.ok(previewStart >= 0 && previewEnd > previewStart);
+  assert.match(previewSource, /delete target\.dataset\.previewed/);
+  assert.match(previewSource, /target\.dataset\.previewed = "true"/);
+  assert.match(previewSource, /const affected = new Set\(affectedResources\(choice\)\)/);
+  assert.doesNotMatch(previewSource, /textContent|choiceDetail|resourcePreview/);
 });
 
 test("renderer shows the action row only on interactive cards", async () => {

@@ -322,6 +322,45 @@ test("document exposes the compact story, progression, combat, reward, and Pack 
   assert.doesNotMatch(html, /on(?:click|load|error|submit)=/i);
 });
 
+test("document removes the generic card resource summary while retaining meaningful card copy", async () => {
+  const [html, javascript, css] = await Promise.all([
+    readFile(new URL("../public/index.html", import.meta.url), "utf8"),
+    readPublicJavaScript(),
+    readFile(new URL("../src/input.css", import.meta.url), "utf8"),
+  ]);
+  const card = elementSourceById(html, "card");
+  const cardOpeningTag = card.slice(0, card.indexOf(">") + 1);
+  const describedBy = /\baria-describedby=(["'])([^"']+)\1/.exec(cardOpeningTag)?.[2]
+    .trim()
+    .split(/\s+/) ?? [];
+  const textIndex = card.indexOf('id="card-text"');
+  const rewardIndex = card.indexOf('id="card-reward-summary"');
+  const detailIndex = card.indexOf('id="card-detail"');
+  const productionSources = [html, javascript, css];
+
+  for (const source of productionSources) {
+    for (const obsolete of [
+      "card-resource-preview",
+      "Affected resources",
+      "Choices may affect",
+      "Choices shape the story",
+      "changes the story ahead",
+      "resourcePreview",
+      "cardResourceSummary",
+    ]) {
+      assert.ok(!source.includes(obsolete), `Production source must omit ${obsolete}`);
+    }
+  }
+
+  assert.ok(textIndex >= 0 && rewardIndex > textIndex && detailIndex > rewardIndex);
+  assert.deepEqual(describedBy, ["card-text", "card-detail"]);
+  for (const id of ["card-text", "card-detail"]) {
+    assert.equal((html.match(new RegExp(`\\bid=(["'])${id}\\1`, "g")) ?? []).length, 1);
+    assert.match(card, new RegExp(`\\bid=(["'])${id}\\1`));
+  }
+  assert.match(card, /\bid=(["'])card-reward-summary\1/);
+});
+
 test("document places the single Pack action between equal-width choices", async () => {
   const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
   const storyHud = elementSourceById(html, "story-hud");

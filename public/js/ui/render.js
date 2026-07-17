@@ -271,16 +271,6 @@ function itemStats(item) {
     .join(" · ");
 }
 
-function cardResourceSummary(card) {
-  const affected = [...new Set([
-    ...affectedResources(card?.left),
-    ...affectedResources(card?.right),
-  ])];
-  return affected.length
-    ? `Choices may affect ${affected.map((resource) => RESOURCE_LABELS[resource] ?? resource).join(", ")}.`
-    : "Choices shape the story.";
-}
-
 function createItemRow(item, action, equippedItem = null, allowedArtIds = new Set()) {
   const row = document.createElement("article");
   row.className = "grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-[#36505d] bg-[#091923] p-2";
@@ -359,7 +349,6 @@ export function createRenderer({
     title: byId("card-title"),
     text: byId("card-text"),
     detail: byId("card-detail"),
-    resourcePreview: byId("card-resource-preview"),
     combatStatus: byId("card-combat-status"),
     cardEnemyHp: byId("card-enemy-hp"),
     cardEnemyHpBar: byId("card-enemy-hp-bar"),
@@ -499,9 +488,6 @@ export function createRenderer({
     elements.card.dataset.mode = currentState?.mode ?? "exploration";
     setChoice("left", card?.left);
     setChoice("right", card?.right);
-    const isReward = rewardSummary.visible;
-    elements.resourcePreview.textContent = isReward ? "" : cardResourceSummary(card);
-    elements.resourcePreview.hidden = isReward;
     const announcement = cardAnnouncement(card, { combatStatus, rewardSummary });
     elements.card.setAttribute("aria-label", announcement);
     const announcementKey = `${String(currentState?.runSeed ?? "run")}:${String(card?.resolutionToken ?? card?.id ?? "fallback")}`;
@@ -701,13 +687,6 @@ export function createRenderer({
         const target = previewTargets[resource];
         if (target && !target.hidden) target.dataset.previewed = "true";
       }
-      const detailText = choice ? choiceDetail(choice) : "";
-      const rewardPreviewIsEmpty = activeCard?.category === "combatReward" && !detailText;
-      const previewText = choice
-        ? detailText || `${choice.label} changes the story ahead.`
-        : cardResourceSummary(activeCard);
-      elements.resourcePreview.textContent = rewardPreviewIsEmpty ? "" : previewText;
-      elements.resourcePreview.hidden = rewardPreviewIsEmpty;
     },
   };
 }
