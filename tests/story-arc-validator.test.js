@@ -1,17 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  DEFAULT_BEAT_BUDGETS,
-  MAJOR_ANCHOR_BEAT_IDS,
-  STORY_BEATS,
-} from "../public/js/game/story/constants.js";
+import { EMBER_CROWN_ARC } from "../public/js/data/arcs/ember-crown.js";
+import { EMBER_CROWN_CARDS } from "../public/js/data/cards/ember-crown-cards.js";
+import { EMBER_CROWN_ENEMIES } from "../public/js/data/ember-crown-enemies.js";
+import { items } from "../public/js/data/items.js";
 import {
   ArcValidationError,
   validateArcDefinition,
   validateArcDefinitions,
 } from "../public/js/game/story/arc-validator.js";
 
+const PHASE_IDS = Object.freeze(
+  Array.from({ length: 9 }, (_, index) => `phase-${index + 1}`),
+);
 const choice = { label: "Choose", resultText: "Chosen.", effects: [] };
 const makeCard = (id, beatId, role, completionTags = []) => ({
   id,
@@ -32,68 +34,89 @@ const makeCard = (id, beatId, role, completionTags = []) => ({
 
 function validFixture() {
   const cards = [];
-  const beats = STORY_BEATS.map((definition) => {
+  const beats = PHASE_IDS.map((id, index) => {
+    const completionTag = `${id}-complete`;
     const beat = {
-      ...definition,
-      budget: { ...DEFAULT_BEAT_BUDGETS[definition.id] },
+      id,
+      name: `Phase ${index + 1}`,
+      act: `Movement ${Math.floor(index / 3) + 1}`,
+      budget: { minimum: 1, target: 2, maximum: 3 },
       completionObjective: {
         type: "storyTagResolved",
-        tag: `${definition.id}-complete`,
+        tag: completionTag,
       },
       encounterPolicy: { mode: "none" },
     };
-    if (MAJOR_ANCHOR_BEAT_IDS.includes(definition.id)) {
-      const cardId = `anchor-${definition.id}`;
-      beat.completionObjective = { type: "anchorResolved" };
-      beat.anchor = {
-        variants: [{ cardId, requirements: [], weight: 1 }],
-        fallbackCardId: cardId,
-      };
-      cards.push(
-        makeCard(
-          cardId,
-          definition.id,
-          definition.id === "finalImage" ? "ending" : "anchor",
-        ),
-      );
-    } else {
-      cards.push(
-        makeCard(
-          `completion-${definition.id}`,
-          definition.id,
-          "completion",
-          [`${definition.id}-complete`],
-        ),
-      );
-    }
-    if (definition.id === "finale") beat.bossEnemyId = "test-final-boss";
+    cards.push(makeCard(`completion-${id}`, id, "completion", [completionTag]));
     return beat;
   });
 
-  const secondEndingCard = makeCard("final-image-second", "finalImage", "ending");
-  cards.push(secondEndingCard);
-  beats.at(-1).anchor.variants.push({
-    cardId: secondEndingCard.id,
-    requirements: [{ type: "endingSelected", endingId: "ending-two" }],
-    weight: 1,
-  });
+  const anchorBeat = beats[3];
+  const anchorCard = makeCard("phase-4-anchor", anchorBeat.id, "anchor");
+  cards.splice(
+    cards.findIndex(({ id }) => id === "completion-phase-4"),
+    1,
+    anchorCard,
+  );
+  anchorBeat.completionObjective = { type: "anchorResolved" };
+  anchorBeat.anchor = {
+    variants: [{ cardId: anchorCard.id, requirements: [], weight: 1 }],
+    fallbackCardId: anchorCard.id,
+  };
+
+  const bossBeat = beats[7];
+  bossBeat.bossEnemyId = "test-final-boss";
+  bossBeat.completionObjective = {
+    type: "specificEnemyDefeated",
+    enemyId: "test-final-boss",
+  };
+  bossBeat.encounterPolicy = { mode: "boss-only" };
+
+  const terminalBeat = beats[8];
+  const firstEndingCard = makeCard("ending-home", terminalBeat.id, "ending");
+  const secondEndingCard = makeCard("ending-away", terminalBeat.id, "ending");
+  cards.splice(
+    cards.findIndex(({ id }) => id === "completion-phase-9"),
+    1,
+    firstEndingCard,
+    secondEndingCard,
+  );
+  terminalBeat.completionObjective = { type: "anchorResolved" };
+  terminalBeat.anchor = {
+    variants: [
+      {
+        cardId: firstEndingCard.id,
+        requirements: [{ type: "endingSelected", endingId: "home" }],
+        weight: 1,
+      },
+      {
+        cardId: secondEndingCard.id,
+        requirements: [{ type: "endingSelected", endingId: "away" }],
+        weight: 1,
+      },
+    ],
+    fallbackCardId: firstEndingCard.id,
+  };
 
   return {
     arc: {
       id: "validator-arc",
       title: "Validator Arc",
+      beatIds: [...PHASE_IDS],
       beats,
+      transitionBeatIds: ["phase-4", "phase-8"],
+      endingBeatId: terminalBeat.id,
       finalBossId: "test-final-boss",
       endings: [
         {
-          id: "ending-one",
-          title: "Ending One",
-          finalImageCardIds: ["anchor-finalImage"],
+          id: "home",
+          title: "Home",
+          terminalCardIds: [firstEndingCard.id],
         },
         {
-          id: "ending-two",
-          title: "Ending Two",
-          finalImageCardIds: ["final-image-second"],
+          id: "away",
+          title: "Away",
+          terminalCardIds: [secondEndingCard.id],
         },
       ],
     },
@@ -101,31 +124,71 @@ function validFixture() {
   };
 }
 
-test("validates the exact 15-beat order and 30 / 35 / 40 budgets", () => {
+test("validates an arbitrary ordered nine-phase arc and derives its authored budgets", () => {
   const { arc, cards } = validFixture();
+  assert.equal(arc.beats.some(({ id }) => ["finale", "finalImage"].includes(id)), false);
   assert.deepEqual(validateArcDefinition(arc, cards, {
     enemies: [{ id: "test-final-boss" }],
   }), {
     valid: true,
     errors: [],
     arcId: "validator-arc",
-    totals: { minimum: 30, target: 35, maximum: 40 },
-    cardCount: cards.length,
+    totals: { minimum: 9, target: 18, maximum: 27 },
+    cardCount: 10,
   });
 });
 
-test("rejects reordered/missing beats, invalid budgets, and malformed anchors", () => {
+test("keeps the existing Ember Crown content valid without canonical beat checks", () => {
+  const result = validateArcDefinition(EMBER_CROWN_ARC, EMBER_CROWN_CARDS, {
+    enemies: EMBER_CROWN_ENEMIES,
+    items,
+    contentCountRange: { minimum: 45, maximum: 60 },
+  });
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.totals, { minimum: 30, target: 35, maximum: 40 });
+});
+
+test("rejects invalid authored order, identifiers, names, budgets, and anchors", () => {
   const { arc, cards } = validFixture();
   [arc.beats[0], arc.beats[1]] = [arc.beats[1], arc.beats[0]];
-  arc.beats.find(({ id }) => id === "catalyst").anchor.fallbackCardId = null;
-  arc.beats.find(({ id }) => id === "setup").budget.target = 99;
+  arc.beats[1].name = arc.beats[0].name;
+  arc.beats.find(({ id }) => id === "phase-1").budget.target = 4;
+  arc.beats.find(({ id }) => id === "phase-2").budget.minimum = -1;
+  arc.beats.find(({ id }) => id === "phase-4").anchor.fallbackCardId = null;
   assert.throws(
     () => validateArcDefinition(arc, cards),
     (error) =>
       error instanceof ArcValidationError &&
-      /Beat 1 must be openingImage/.test(error.message) &&
-      /fallbackCardId/.test(error.message) &&
-      /target greater than maximum/.test(error.message),
+      /beatIds must match the ordered beats exactly/.test(error.message) &&
+      /Duplicate beat name/.test(error.message) &&
+      /target greater than maximum/.test(error.message) &&
+      /minimum budget must be a non-negative integer/.test(error.message) &&
+      /fallbackCardId/.test(error.message),
+  );
+});
+
+test("rejects completion gaps and malformed metadata-driven terminal content", () => {
+  const { arc, cards } = validFixture();
+  const completionCard = cards.find(({ id }) => id === "completion-phase-5");
+  completionCard.story.role = "ambient";
+  completionCard.story.completionTags = [];
+  const bossBeat = arc.beats.find(({ id }) => id === "phase-8");
+  bossBeat.bossEnemyId = null;
+  bossBeat.completionObjective = {
+    type: "storyTagResolved",
+    tag: "phase-8-complete",
+  };
+  delete arc.finalBossId;
+  arc.endings.find(({ id }) => id === "away").terminalCardIds = [];
+  arc.endingBeatId = "missing-phase";
+  assert.throws(
+    () => validateArcDefinition(arc, cards),
+    (error) =>
+      error instanceof ArcValidationError &&
+      /phase-5 has no possible completion-card candidate/.test(error.message) &&
+      /Boss-only beat phase-8 must identify its boss/.test(error.message) &&
+      /Ending away has no terminal card variant/.test(error.message) &&
+      /terminal beat references unknown beat missing-phase/.test(error.message),
   );
 });
 

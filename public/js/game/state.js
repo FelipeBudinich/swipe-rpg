@@ -1,25 +1,10 @@
 import { normalizeSeed } from "../rng.js";
 import { normalizePendingChoiceFeedback } from "./choice-feedback.js";
+import { STORY_BEAT_IDS as DEFAULT_STORY_BEAT_IDS } from "./story/constants.js";
 
 export const SAVE_VERSION = 2;
 export const DEFAULT_ARC_ID = "ember-crown";
-export const STORY_BEAT_IDS = Object.freeze([
-  "openingImage",
-  "themeStated",
-  "setup",
-  "catalyst",
-  "debate",
-  "breakIntoTwo",
-  "bStory",
-  "funAndGames",
-  "midpoint",
-  "badGuysCloseIn",
-  "allIsLost",
-  "darkNightOfTheSoul",
-  "breakIntoThree",
-  "finale",
-  "finalImage",
-]);
+export const STORY_BEAT_IDS = DEFAULT_STORY_BEAT_IDS;
 export const EQUIPMENT_SLOTS = Object.freeze(["weapon", "armor", "charm"]);
 
 export const INITIAL_BASE_STATS = Object.freeze({
@@ -51,6 +36,14 @@ function uniqueStrings(value) {
   return [...new Set(asArray(value).filter((entry) => typeof entry === "string"))];
 }
 
+function orderedStoryPhaseIds(options = {}) {
+  const source = options && typeof options === "object" ? options : {};
+  const supplied = source.storyPhaseIds ?? source.beatIds;
+  if (!Array.isArray(supplied)) return STORY_BEAT_IDS;
+  const normalized = uniqueStrings(supplied).filter((id) => id.length > 0);
+  return normalized.length > 0 ? normalized : STORY_BEAT_IDS;
+}
+
 function stringRecord(value) {
   return Object.fromEntries(
     Object.entries(asRecord(value)).filter(([, entry]) => typeof entry === "string"),
@@ -60,6 +53,15 @@ function stringRecord(value) {
 function integerRecord(value) {
   return Object.fromEntries(
     Object.entries(asRecord(value)).map(([key, entry]) => [key, asNonNegativeInteger(entry)]),
+  );
+}
+
+function recordForIds(value, ids, normalizeValue = (entry) => entry) {
+  const allowed = new Set(ids);
+  return Object.fromEntries(
+    Object.entries(asRecord(value))
+      .filter(([key]) => allowed.has(key))
+      .map(([key, entry]) => [key, normalizeValue(entry)]),
   );
 }
 
@@ -85,12 +87,22 @@ function isCardPayload(value, expectedId) {
   );
 }
 
-export function createMeta(overrides = {}) {
+export function createMeta(overrides = {}, options = {}) {
   const source = asRecord(overrides);
+  const storyPhaseIds = orderedStoryPhaseIds(options);
+  const requestedIndex = Math.min(
+    storyPhaseIds.length - 1,
+    asNonNegativeInteger(source.furthestBeatIndex),
+  );
+  const requestedId =
+    typeof source.furthestBeatId === "string" && storyPhaseIds.includes(source.furthestBeatId)
+      ? source.furthestBeatId
+      : storyPhaseIds[requestedIndex];
+  const alignedIndex = storyPhaseIds.indexOf(requestedId);
   return {
     bestLevel: Math.max(1, asInteger(source.bestLevel, 1)),
-    furthestBeatIndex: Math.min(14, asNonNegativeInteger(source.furthestBeatIndex)),
-    furthestBeatId: typeof source.furthestBeatId === "string" ? source.furthestBeatId : "openingImage",
+    furthestBeatIndex: alignedIndex >= 0 ? alignedIndex : requestedIndex,
+    furthestBeatId: requestedId ?? storyPhaseIds[0],
     bestStoryProgress: Math.max(0, Math.min(100, asFinite(source.bestStoryProgress, 0))),
     bestWorldCardsResolved: asNonNegativeInteger(source.bestWorldCardsResolved),
     deathCount: asNonNegativeInteger(source.deathCount),
@@ -103,14 +115,16 @@ export function createMeta(overrides = {}) {
   };
 }
 
-export function createStoryState(arcId = DEFAULT_ARC_ID) {
+export function createStoryState(arcId = DEFAULT_ARC_ID, options = {}) {
+  const storyPhaseIds = orderedStoryPhaseIds(options);
+  const firstPhaseId = storyPhaseIds[0];
   return {
     arcId,
     status: "active",
-    currentBeatId: STORY_BEAT_IDS[0],
+    currentBeatId: firstPhaseId,
     currentBeatIndex: 0,
     cardsResolvedInBeat: 0,
-    cardsResolvedByBeat: { [STORY_BEAT_IDS[0]]: 0 },
+    cardsResolvedByBeat: { [firstPhaseId]: 0 },
     totalWorldCardsResolved: 0,
     completedBeatIds: [],
     resolvedStoryTags: [],
@@ -129,6 +143,7 @@ export function createStoryState(arcId = DEFAULT_ARC_ID) {
 export function createInitialState(options = {}) {
   const normalizedOptions =
     typeof options === "object" && options !== null ? options : { seed: options };
+  const storyPhaseIds = orderedStoryPhaseIds(normalizedOptions);
   const seed = normalizeSeed(normalizedOptions.seed ?? Date.now());
   const arcId = typeof normalizedOptions.arcId === "string" ? normalizedOptions.arcId : DEFAULT_ARC_ID;
 
@@ -144,7 +159,7 @@ export function createInitialState(options = {}) {
     currentCardSource: null,
     lastResolvedToken: null,
     pendingChoiceFeedback: null,
-    story: createStoryState(arcId),
+    story: createStoryState(arcId, { storyPhaseIds }),
     player: {
       level: 1,
       xp: 0,
@@ -174,22 +189,25 @@ export function createInitialState(options = {}) {
       deathCause: null,
       stats: {},
     },
-    meta: createMeta(normalizedOptions.meta),
+    meta: createMeta(normalizedOptions.meta, { storyPhaseIds }),
   };
 }
 
-function normalizeStory(rawStory, fallback) {
+function normalizeStory(rawStory, fallback, storyPhaseIds) {
   const story = asRecord(rawStory);
-  const currentBeatIndex = Math.min(14, asNonNegativeInteger(story.currentBeatIndex));
-  const expectedBeatId = STORY_BEAT_IDS[currentBeatIndex];
-  const currentBeatId = STORY_BEAT_IDS.includes(story.currentBeatId)
+  const currentBeatIndex = Math.min(
+    storyPhaseIds.length - 1,
+    asNonNegativeInteger(story.currentBeatIndex),
+  );
+  const expectedBeatId = storyPhaseIds[currentBeatIndex];
+  const currentBeatId = storyPhaseIds.includes(story.currentBeatId)
     ? story.currentBeatId
     : expectedBeatId;
-  const alignedIndex = STORY_BEAT_IDS.indexOf(currentBeatId);
+  const alignedIndex = storyPhaseIds.indexOf(currentBeatId);
   const status = ["active", "completed", "failed"].includes(story.status)
     ? story.status
     : fallback.status;
-  const pendingInterstitialBeatId = STORY_BEAT_IDS.includes(story.pendingInterstitialBeatId)
+  const pendingInterstitialBeatId = storyPhaseIds.includes(story.pendingInterstitialBeatId)
     ? story.pendingInterstitialBeatId
     : null;
   return {
@@ -198,16 +216,23 @@ function normalizeStory(rawStory, fallback) {
     currentBeatId,
     currentBeatIndex: alignedIndex,
     cardsResolvedInBeat: asNonNegativeInteger(story.cardsResolvedInBeat),
-    cardsResolvedByBeat: integerRecord(story.cardsResolvedByBeat),
+    cardsResolvedByBeat: recordForIds(
+      story.cardsResolvedByBeat,
+      storyPhaseIds,
+      asNonNegativeInteger,
+    ),
     totalWorldCardsResolved: asNonNegativeInteger(story.totalWorldCardsResolved),
-    completedBeatIds: uniqueStrings(story.completedBeatIds).filter((id) => STORY_BEAT_IDS.includes(id)),
+    completedBeatIds: uniqueStrings(story.completedBeatIds).filter((id) => storyPhaseIds.includes(id)),
     resolvedStoryTags: uniqueStrings(story.resolvedStoryTags),
     facts: asRecord(story.facts),
-    selectedAnchorIdByBeat: stringRecord(story.selectedAnchorIdByBeat),
+    selectedAnchorIdByBeat: recordForIds(
+      stringRecord(story.selectedAnchorIdByBeat),
+      storyPhaseIds,
+    ),
     resolvedAnchorIds: uniqueStrings(story.resolvedAnchorIds),
     pendingInterstitialBeatId,
     shownInterstitialBeatIds: uniqueStrings(story.shownInterstitialBeatIds)
-      .filter((id) => STORY_BEAT_IDS.includes(id)),
+      .filter((id) => storyPhaseIds.includes(id)),
     endingId: typeof story.endingId === "string" ? story.endingId : null,
     endingTitle: typeof story.endingTitle === "string" ? story.endingTitle : null,
     completed: Boolean(story.completed || status === "completed"),
@@ -221,8 +246,9 @@ function normalizeStory(rawStory, fallback) {
  * physical depth is never guessed into a narrative beat.
  */
 export function normalizeState(raw, options = {}) {
+  const storyPhaseIds = orderedStoryPhaseIds(options);
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return createInitialState(options);
+    return createInitialState({ ...asRecord(options), storyPhaseIds });
   }
 
   const seed = normalizeSeed(raw.runSeed ?? options.seed ?? Date.now());
@@ -230,11 +256,17 @@ export function normalizeState(raw, options = {}) {
     return createInitialState({
       seed: options.seed ?? seed,
       arcId: options.arcId ?? DEFAULT_ARC_ID,
-      meta: createMeta(raw.meta),
+      meta: createMeta(raw.meta, { storyPhaseIds }),
+      storyPhaseIds,
     });
   }
 
-  const fallback = createInitialState({ seed, arcId: raw.story?.arcId, meta: raw.meta });
+  const fallback = createInitialState({
+    seed,
+    arcId: raw.story?.arcId,
+    meta: raw.meta,
+    storyPhaseIds,
+  });
   const player = asRecord(raw.player);
   const baseStats = asRecord(player.baseStats);
   const equipment = asRecord(player.equipment);
@@ -255,7 +287,7 @@ export function normalizeState(raw, options = {}) {
     currentCardToken: typeof raw.currentCardToken === "string" ? raw.currentCardToken : null,
     currentCardSource: typeof raw.currentCardSource === "string" ? raw.currentCardSource : null,
     lastResolvedToken: typeof raw.lastResolvedToken === "string" ? raw.lastResolvedToken : null,
-    story: normalizeStory(raw.story, fallback.story),
+    story: normalizeStory(raw.story, fallback.story, storyPhaseIds),
     player: {
       level: Math.max(1, asInteger(player.level, fallback.player.level)),
       xp: asNonNegativeInteger(player.xp),
@@ -288,7 +320,7 @@ export function normalizeState(raw, options = {}) {
               ? encounter.currentIntent
               : "attack",
             round: Math.max(1, asInteger(encounter.round, 1)),
-            originBeatId: STORY_BEAT_IDS.includes(encounter.originBeatId)
+            originBeatId: storyPhaseIds.includes(encounter.originBeatId)
               ? encounter.originBeatId
               : fallback.story.currentBeatId,
             kind: typeof encounter.kind === "string" ? encounter.kind : "random",
@@ -311,7 +343,11 @@ export function normalizeState(raw, options = {}) {
         run.lastCombatTurn !== null && run.lastCombatTurn !== undefined && Number.isFinite(Number(run.lastCombatTurn))
           ? asNonNegativeInteger(run.lastCombatTurn)
           : null,
-      randomEncountersByBeat: integerRecord(run.randomEncountersByBeat),
+      randomEncountersByBeat: recordForIds(
+        run.randomEncountersByBeat,
+        storyPhaseIds,
+        asNonNegativeInteger,
+      ),
       enemiesDefeated: integerRecord(run.enemiesDefeated),
       goldEarned: asNonNegativeInteger(run.goldEarned),
       itemsFound: asNonNegativeInteger(run.itemsFound),
@@ -320,7 +356,7 @@ export function normalizeState(raw, options = {}) {
       deathCause: typeof run.deathCause === "string" ? run.deathCause : null,
       stats: asRecord(run.stats),
     },
-    meta: createMeta(raw.meta),
+    meta: createMeta(raw.meta, { storyPhaseIds }),
   };
 
   if (

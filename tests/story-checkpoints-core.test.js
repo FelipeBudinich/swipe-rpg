@@ -72,6 +72,27 @@ test("all named checkpoint IDs are stable", () => {
   assert.equal(getCheckpointIdForBeat("finalImage"), "15-final-image");
 });
 
+test("checkpoints support an arbitrary nine-phase story definition", () => {
+  const phases = Array.from({ length: 9 }, (_, index) => ({
+    id: `deck-${String(index + 1).padStart(2, "0")}`,
+  }));
+  const base = state();
+  const deckState = {
+    ...base,
+    story: {
+      ...base.story,
+      currentBeatId: "deck-09",
+      currentBeatIndex: 8,
+    },
+  };
+  const checkpoint = createStoryCheckpoint(deckState, "deck-09", { phases });
+
+  assert.equal(checkpoint.id, "09-deck-09");
+  assert.equal(checkpoint.beatId, "deck-09");
+  assert.deepEqual(checkpoint.storyPhaseIds, phases.map(({ id }) => id));
+  assert.equal(restoreStoryCheckpoint(checkpoint, deckState).story.currentBeatId, "deck-09");
+});
+
 test("checkpoint captures RNG/full run, strips animation state, and retains current meta on restore", () => {
   const original = state();
   const checkpoint = createStoryCheckpoint(original, "setup");

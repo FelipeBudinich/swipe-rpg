@@ -32,28 +32,61 @@ function withoutTransientState(state) {
   return cloned;
 }
 
-export function getCheckpointIdForBeat(beatOrId) {
+function storyPhaseIds(source = STORY_BEAT_IDS) {
+  const entries = Array.isArray(source)
+    ? source
+    : Array.isArray(source?.beats)
+      ? source.beats
+      : Array.isArray(source?.storyPhases)
+        ? source.storyPhases
+        : STORY_BEAT_IDS;
+  const ids = entries
+    .map((entry) => typeof entry === "string" ? entry : entry?.id)
+    .filter((id) => typeof id === "string" && id.length > 0);
+  return [...new Set(ids)];
+}
+
+function checkpointIdsFor(source = STORY_BEAT_IDS) {
+  const ids = storyPhaseIds(source);
+  return Object.fromEntries(ids.map((id, index) => [
+    id,
+    STORY_CHECKPOINT_IDS[id] ??
+      `${String(index + 1).padStart(2, "0")}-${id
+        .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+        .replace(/[^a-z0-9]+/gi, "-")
+        .replace(/^-|-$/g, "")
+        .toLowerCase()}`,
+  ]));
+}
+
+export function getCheckpointIdForBeat(beatOrId, phases = STORY_BEAT_IDS) {
   const beatId = typeof beatOrId === "string" ? beatOrId : beatOrId?.id;
-  if (STORY_CHECKPOINT_IDS[beatId]) return STORY_CHECKPOINT_IDS[beatId];
-  if (Object.values(STORY_CHECKPOINT_IDS).includes(beatId)) return beatId;
+  const ids = checkpointIdsFor(phases);
+  if (ids[beatId]) return ids[beatId];
+  if (Object.values(ids).includes(beatId)) return beatId;
   return null;
 }
 
-export function getBeatIdForCheckpoint(checkpointId) {
+export function getBeatIdForCheckpoint(checkpointId, phases = STORY_BEAT_IDS) {
   return (
-    Object.entries(STORY_CHECKPOINT_IDS).find(([, id]) => id === checkpointId)?.[0] ??
+    Object.entries(checkpointIdsFor(phases)).find(([, id]) => id === checkpointId)?.[0] ??
     null
   );
 }
 
 /** Capture a deterministic, JSON-safe run snapshot including RNG state. */
-export function createStoryCheckpoint(state, beatOrCheckpointId = state?.story?.currentBeatId) {
+export function createStoryCheckpoint(
+  state,
+  beatOrCheckpointId = state?.story?.currentBeatId,
+  { phases = STORY_BEAT_IDS } = {},
+) {
   if (!state?.story || state.rngState === undefined || state.rngState === null) {
     throw new TypeError("A story checkpoint requires story state and an RNG state.");
   }
-  const id = getCheckpointIdForBeat(beatOrCheckpointId);
+  const phaseIds = storyPhaseIds(phases);
+  const id = getCheckpointIdForBeat(beatOrCheckpointId, phaseIds);
   if (!id) throw new RangeError(`Unknown story checkpoint: ${String(beatOrCheckpointId)}`);
-  const beatId = getBeatIdForCheckpoint(id);
+  const beatId = getBeatIdForCheckpoint(id, phaseIds);
   const snapshot = withoutTransientState(state);
   if (!snapshot) throw new TypeError("Story state is not serializable.");
 
@@ -62,6 +95,7 @@ export function createStoryCheckpoint(state, beatOrCheckpointId = state?.story?.
     id,
     beatId,
     arcId: state.story.arcId ?? null,
+    storyPhaseIds: phaseIds,
     rngState: snapshot.rngState,
     snapshot,
   };
@@ -72,11 +106,12 @@ export function createStoryCheckpoint(state, beatOrCheckpointId = state?.story?.
  * Debug snapshots can therefore never roll discoveries or records backward.
  */
 export function restoreStoryCheckpoint(checkpoint, currentState = {}) {
+  const phaseIds = storyPhaseIds(checkpoint?.storyPhaseIds);
   if (
     !checkpoint ||
     checkpoint.checkpointVersion !== STORY_CHECKPOINT_VERSION ||
-    !STORY_BEAT_IDS.includes(checkpoint.beatId) ||
-    getCheckpointIdForBeat(checkpoint.beatId) !== checkpoint.id
+    !phaseIds.includes(checkpoint.beatId) ||
+    getCheckpointIdForBeat(checkpoint.beatId, phaseIds) !== checkpoint.id
   ) {
     throw new TypeError("Invalid story checkpoint.");
   }

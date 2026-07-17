@@ -55,6 +55,7 @@ function normalizeLookup(lookup) {
 const itemById = normalizeLookup(ITEM_BY_ID);
 const enemyById = normalizeLookup(EMBER_CROWN_ENEMY_BY_ID);
 const arcById = { [EMBER_CROWN_ARC.id]: EMBER_CROWN_ARC };
+const storyPhaseIds = EMBER_CROWN_ARC.beats.map(({ id }) => id);
 const localDevelopmentHost = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(
   globalThis.location.hostname,
 );
@@ -95,7 +96,10 @@ const initialSeed = randomSeed();
 const initialGame = Engine.createGame({ seed: initialSeed });
 let state = loadState({
   createFallback: () => initialGame.state,
-  normalize: (raw, fallback) => normalizeState(raw, { seed: fallback.runSeed }),
+  normalize: (raw, fallback) => normalizeState(raw, {
+    seed: fallback.runSeed,
+    storyPhaseIds,
+  }),
 });
 let selected = Engine.getNextCard(state);
 state = selected.state;
@@ -515,12 +519,21 @@ async function restartFromTerminal() {
 }
 
 const DEBUG_CHECKPOINT_KEY_PREFIX = "jrpg-story-checkpoint-v1:";
+const debugCheckpointDefinitions = EMBER_CROWN_ARC.beats.map((phase) => ({
+  id: getCheckpointIdForBeat(phase, EMBER_CROWN_ARC.beats),
+  name: phase.name,
+}));
 const debugCheckpoints = createDebugCheckpointControls({
+  checkpoints: debugCheckpointDefinitions,
   onSave(checkpointId) {
-    if (getCheckpointIdForBeat(state.story?.currentBeatId) !== checkpointId) {
+    if (
+      getCheckpointIdForBeat(state.story?.currentBeatId, EMBER_CROWN_ARC.beats) !== checkpointId
+    ) {
       throw new RangeError("Select the checkpoint matching the current story beat.");
     }
-    const checkpoint = createStoryCheckpoint(state, checkpointId);
+    const checkpoint = createStoryCheckpoint(state, checkpointId, {
+      phases: EMBER_CROWN_ARC.beats,
+    });
     globalThis.localStorage.setItem(
       `${DEBUG_CHECKPOINT_KEY_PREFIX}${checkpointId}`,
       JSON.stringify(checkpoint),
@@ -536,6 +549,7 @@ const debugCheckpoints = createDebugCheckpointControls({
     const normalized = normalizeState(restored, {
       seed: restored.runSeed,
       arcId: EMBER_CROWN_ARC.id,
+      storyPhaseIds,
     });
     const next = Engine.getNextCard(normalized);
     state = next.state;

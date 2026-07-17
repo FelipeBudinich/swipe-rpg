@@ -80,18 +80,35 @@ function addCardId(ids, value) {
   if (typeof value === "string" && value) ids.add(value);
 }
 
-function finalImageCardIds(arc) {
+function terminalStoryPhase(arc) {
+  const phases = asList(arc?.storyPhases ?? arc?.beats);
+  const configuredId = arc?.terminalPhaseId ?? arc?.endingPhaseId ?? arc?.finalPhaseId;
+  return (
+    phases.find((phase) => phase?.id === configuredId) ??
+    phases.find((phase) =>
+      phase?.terminal === true ||
+      phase?.isEnding === true ||
+      phase?.role === "ending"
+    ) ??
+    phases.at(-1) ??
+    null
+  );
+}
+
+function terminalStoryCardIds(arc) {
   const ids = new Set();
   for (const ending of asList(arc?.endings)) {
     addCardId(ids, ending?.finalImageCardId);
     for (const id of asList(ending?.finalImageCardIds)) addCardId(ids, id);
+    addCardId(ids, ending?.cardId);
+    for (const id of asList(ending?.cardIds)) addCardId(ids, id);
   }
 
-  const finalBeat = asList(arc?.beats).find(({ id }) => id === "finalImage");
-  for (const id of asList(finalBeat?.completionCardIds)) addCardId(ids, id);
-  addCardId(ids, finalBeat?.anchor?.fallbackCardId);
-  for (const variant of asList(finalBeat?.anchor?.variants)) addCardId(ids, variant?.cardId);
-  for (const [id, value] of Object.entries(finalBeat?.endingVariants ?? {})) {
+  const finalPhase = terminalStoryPhase(arc);
+  for (const id of asList(finalPhase?.completionCardIds)) addCardId(ids, id);
+  addCardId(ids, finalPhase?.anchor?.fallbackCardId);
+  for (const variant of asList(finalPhase?.anchor?.variants)) addCardId(ids, variant?.cardId);
+  for (const [id, value] of Object.entries(finalPhase?.endingVariants ?? {})) {
     addCardId(ids, id);
     addCardId(ids, value);
     addCardId(ids, value?.cardId);
@@ -99,12 +116,15 @@ function finalImageCardIds(arc) {
   return ids;
 }
 
-/** Identify a Final Image from story position, role, or explicit arc metadata. */
-export function isFinalImageCard(card, state, arc) {
-  if (state?.story?.currentBeatId === "finalImage") return true;
+/** Identify a terminal story card from phase position, role, or explicit metadata. */
+export function isTerminalStoryCard(card, state, arc) {
+  const finalPhase = terminalStoryPhase(arc);
+  if (finalPhase?.id && state?.story?.currentBeatId === finalPhase.id) return true;
   if (card?.story?.role === "ending") return true;
-  return isNonemptyString(card?.id) && finalImageCardIds(arc).has(card.id);
+  return isNonemptyString(card?.id) && terminalStoryCardIds(arc).has(card.id);
 }
+
+export const isFinalImageCard = isTerminalStoryCard;
 
 /** Copy only supported, finite, nonzero resource deltas. */
 export function normalizeChoiceFeedbackChanges(changes) {
@@ -170,7 +190,7 @@ export function feedbackSuccessorIsSuppressed(state, card, arc) {
   return Boolean(
     SUPPRESSED_SUCCESSOR_MODES.has(state?.mode) ||
       SUPPRESSED_SUCCESSOR_CATEGORIES.has(card?.category) ||
-      isFinalImageCard(card, state, arc) ||
+      isTerminalStoryCard(card, state, arc) ||
       state?.story?.completed === true ||
       state?.story?.status === "completed",
   );
@@ -191,7 +211,7 @@ export function shouldCreateChoiceFeedback({
       resolvedCard?.story?.countsTowardStory === true &&
       typeof resultText === "string" &&
       resultText.trim() &&
-      !isFinalImageCard(resolvedCard, beforeState, arc) &&
+      !isTerminalStoryCard(resolvedCard, beforeState, arc) &&
       isPreparedSuccessor(nextState, nextCard) &&
       !feedbackSuccessorIsSuppressed(nextState, nextCard, arc),
   );

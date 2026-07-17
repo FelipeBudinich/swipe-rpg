@@ -1,9 +1,5 @@
 import { weightedChoice } from "../../rng.js";
 import {
-  MAJOR_INTERSTITIAL_BEAT_IDS,
-  STORY_BEAT_IDS,
-} from "./constants.js";
-import {
   calculateStoryProgress,
   calculateStoryProgressPercent,
   canAdvanceBeat,
@@ -48,7 +44,7 @@ export function getCurrentBeat(state, arcOrArcs) {
 export function createInitialStoryState(arc, overrides = {}) {
   const firstBeat = asList(arc?.beats)[0];
   const source = asRecord(overrides);
-  const initialBeatId = source.currentBeatId ?? firstBeat?.id ?? STORY_BEAT_IDS[0];
+  const initialBeatId = source.currentBeatId ?? firstBeat?.id ?? null;
   const suppliedCounts = asRecord(source.cardsResolvedByBeat);
   return {
     arcId: arc?.id ?? source.arcId ?? null,
@@ -79,7 +75,9 @@ export function createInitialStoryState(arc, overrides = {}) {
     cardsResolvedByBeat:
       Object.keys(suppliedCounts).length > 0
         ? { ...suppliedCounts }
-        : { [initialBeatId]: Number(source.cardsResolvedInBeat ?? 0) },
+        : initialBeatId
+          ? { [initialBeatId]: Number(source.cardsResolvedInBeat ?? 0) }
+          : {},
   };
 }
 
@@ -282,16 +280,18 @@ export function recordStoryCardResolution(state, card, choice) {
   };
 }
 
-function needsInterstitial(state, beat) {
-  if (!beat || !MAJOR_INTERSTITIAL_BEAT_IDS.includes(beat.id)) return false;
+function needsInterstitial(state, beat, arc) {
+  if (!beat) return false;
   if (beat.interstitial === false) return false;
+  const transitionIds = asList(arc?.transitionBeatIds);
+  if (!beat.interstitial && !transitionIds.includes(beat.id)) return false;
   return !asList(state?.story?.shownInterstitialBeatIds).includes(beat.id);
 }
 
 export function enterBeat(state, beat, arc) {
   if (!state?.story || !beat) return state;
   const index = asList(arc?.beats).findIndex(({ id }) => id === beat.id);
-  const pendingInterstitialBeatId = needsInterstitial(state, beat) ? beat.id : null;
+  const pendingInterstitialBeatId = needsInterstitial(state, beat, arc) ? beat.id : null;
   return {
     ...state,
     ...(pendingInterstitialBeatId ? { mode: "storyTransition" } : {}),
@@ -299,7 +299,10 @@ export function enterBeat(state, beat, arc) {
       ...state.story,
       status: "active",
       currentBeatId: beat.id,
-      currentBeatIndex: index >= 0 ? index : STORY_BEAT_IDS.indexOf(beat.id),
+      currentBeatIndex:
+        index >= 0
+          ? index
+          : Math.max(0, Math.trunc(Number(state.story.currentBeatIndex) || 0)),
       cardsResolvedInBeat: 0,
       cardsResolvedByBeat: {
         ...(state.story.cardsResolvedByBeat ?? {}),

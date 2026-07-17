@@ -849,8 +849,11 @@ export function getNextCard(inputState, contentInput = DEFAULT_CONTENT) {
 export function createGame(options = {}) {
   const content = normalizeContent(options.content ?? DEFAULT_CONTENT);
   const arcId = options.arcId ?? content.arcs[0]?.id ?? EMBER_CROWN_ARC.id;
+  const storyPhaseIds = content.arcById[arcId]?.beats
+    ?.map(({ id }) => id)
+    .filter((id) => typeof id === "string");
   return getNextCard(
-    createInitialState({ seed: options.seed, meta: options.meta, arcId }),
+    createInitialState({ seed: options.seed, meta: options.meta, arcId, storyPhaseIds }),
     content,
   );
 }

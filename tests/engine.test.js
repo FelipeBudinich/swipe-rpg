@@ -92,6 +92,62 @@ test("a new arc always opens on the authored Opening Image entry", () => {
   assert.deepEqual(resolved.state.story.completedBeatIds, ["openingImage"]);
 });
 
+test("a custom nine-phase arc initializes from its authored phase ordering", () => {
+  const phaseIds = Array.from({ length: 9 }, (_, index) => `phase-${index + 1}`);
+  const openingCard = {
+    id: "nine-phase-opening",
+    category: "story",
+    speaker: "The Test Keeper",
+    title: "A Shorter Road",
+    text: "Nine phases begin here.",
+    baseWeight: 1,
+    cooldown: 0,
+    oncePerRun: false,
+    requirements: [],
+    story: {
+      arcIds: ["nine-phase"],
+      beatWeights: { "phase-1": 1 },
+      role: "entry",
+      completionTags: [],
+      countsTowardStory: true,
+    },
+    left: { label: "Begin", resultText: "The road opens.", effects: [] },
+    right: { label: "Prepare", resultText: "The road waits.", effects: [] },
+  };
+  const arc = {
+    id: "nine-phase",
+    title: "Nine Phase",
+    beats: phaseIds.map((id, index) => ({
+      id,
+      name: `Phase ${index + 1}`,
+      budget: { minimum: 1, target: 1, maximum: 1 },
+      completionObjective: { type: "storyTagResolved", tag: `complete-${id}` },
+      completionCardIds: index === 0 ? [openingCard.id] : [],
+      encounterPolicy: { mode: "none" },
+    })),
+    endings: [],
+  };
+
+  const game = createGame({
+    seed: 43,
+    arcId: arc.id,
+    meta: { furthestBeatIndex: 99 },
+    content: {
+      cards: [openingCard],
+      enemies: [],
+      items: [],
+      arcs: [arc],
+    },
+  });
+
+  assert.equal(game.state.story.arcId, arc.id);
+  assert.equal(game.state.story.currentBeatId, "phase-1");
+  assert.equal(game.state.story.currentBeatIndex, 0);
+  assert.equal(game.state.meta.furthestBeatId, "phase-9");
+  assert.equal(game.state.meta.furthestBeatIndex, 8);
+  assert.equal(game.card.id, openingCard.id);
+});
+
 test("world decisions are atomic, count once, and reject a stale resolution token", () => {
   const game = createGame({ seed: 45 });
   const token = game.card.resolutionToken;

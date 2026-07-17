@@ -10,6 +10,7 @@ import {
   canAdvanceBeat,
   getStoryBudgetTotals,
   hasActiveRequiredStoryCombat,
+  isKnownStoryBeatId,
   shouldForceBeatCompletion,
 } from "../public/js/game/story/beat-progress.js";
 import {
@@ -20,6 +21,7 @@ import {
 
 const arc = {
   id: "test-arc",
+  transitionBeatIds: ["breakIntoTwo"],
   beats: STORY_BEATS.map((beat) => ({
     ...beat,
     budget: DEFAULT_BEAT_BUDGETS[beat.id],
@@ -44,6 +46,43 @@ function fixtureState(beatIndex = 0, overrides = {}) {
 
 test("canonical beat budgets total 30 / 35 / 40", () => {
   assert.deepEqual(getStoryBudgetTotals(arc), { minimum: 30, target: 35, maximum: 40 });
+});
+
+test("story phase helpers accept a data-defined nine-phase deck", () => {
+  const deckArc = {
+    id: "nine-deck-story",
+    transitionBeatIds: ["deck-02"],
+    beats: Array.from({ length: 9 }, (_, index) => ({
+      id: `deck-${String(index + 1).padStart(2, "0")}`,
+      name: `Deck ${index + 1}`,
+      budget: { minimum: 1, target: 2, maximum: 3 },
+      completionObjective: { type: "storyTagResolved", tag: `deck-${index + 1}-done` },
+    })),
+  };
+  const story = createInitialStoryState(deckArc);
+
+  assert.equal(story.currentBeatId, "deck-01");
+  assert.deepEqual(getStoryBudgetTotals(deckArc), {
+    minimum: 9,
+    target: 18,
+    maximum: 27,
+  });
+  assert.equal(isKnownStoryBeatId("deck-09", deckArc), true);
+  assert.equal(isKnownStoryBeatId("finalImage", deckArc), false);
+
+  const advanced = advanceBeat({
+    mode: "exploration",
+    story: {
+      ...story,
+      cardsResolvedInBeat: 1,
+      resolvedStoryTags: ["deck-1-done"],
+    },
+    run: { forcedCardQueue: [] },
+    encounter: null,
+  }, deckArc);
+  assert.equal(advanced.story.currentBeatId, "deck-02");
+  assert.equal(advanced.story.pendingInterstitialBeatId, "deck-02");
+  assert.equal(advanced.mode, "storyTransition");
 });
 
 test("hybrid advancement requires minimum, objective, no local queue, and no combat", () => {

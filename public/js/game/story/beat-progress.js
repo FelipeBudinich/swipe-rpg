@@ -1,11 +1,10 @@
-import {
-  DEFAULT_BEAT_BUDGETS,
-  EXPECTED_STORY_BUDGET_TOTALS,
-  STORY_BEAT_IDS,
-} from "./constants.js";
-
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value ?? {}, key);
 const asList = (value) => (Array.isArray(value) ? value : []);
+const DEFAULT_STORY_PHASE_BUDGET = Object.freeze({
+  minimum: 1,
+  target: 1,
+  maximum: 1,
+});
 
 function finiteNonNegative(value, fallback = 0) {
   const numeric = Number(value);
@@ -23,19 +22,18 @@ function currentBeatFrom(state, arc) {
   return Number.isInteger(index) && index >= 0 ? beats[index] ?? null : null;
 }
 
-/** Normalize the canonical budget while tolerating min/max aliases at boundaries. */
+/** Normalize a story phase budget while tolerating min/max aliases at boundaries. */
 export function normalizeBeatBudget(beat) {
   const source = beat?.budget ?? beat ?? {};
-  const defaults = DEFAULT_BEAT_BUDGETS[beat?.id] ?? {};
   return {
     minimum: finiteNonNegative(
       source.minimum ?? source.min,
-      finiteNonNegative(defaults.minimum),
+      DEFAULT_STORY_PHASE_BUDGET.minimum,
     ),
-    target: finiteNonNegative(source.target, finiteNonNegative(defaults.target)),
+    target: finiteNonNegative(source.target, DEFAULT_STORY_PHASE_BUDGET.target),
     maximum: finiteNonNegative(
       source.maximum ?? source.max,
-      finiteNonNegative(defaults.maximum),
+      DEFAULT_STORY_PHASE_BUDGET.maximum,
     ),
   };
 }
@@ -271,7 +269,7 @@ export function calculateStoryProgress(state, arc) {
     (total, beat) => total + normalizeBeatBudget(beat).target,
     0,
   );
-  const denominator = totalTarget > 0 ? totalTarget : EXPECTED_STORY_BUDGET_TOTALS.target;
+  const denominator = totalTarget > 0 ? totalTarget : Math.max(1, beats.length);
   let earned = 0;
 
   for (const beat of beats) {
@@ -284,7 +282,7 @@ export function calculateStoryProgress(state, arc) {
     earned += Math.min(target, finiteNonNegative(state?.story?.cardsResolvedInBeat));
   }
 
-  // Even a resolved Final Image remains visually below 100 until completeArc.
+  // The final phase remains visually below 100 until the story is explicitly complete.
   return Math.max(0, Math.min(0.999, earned / denominator));
 }
 
@@ -305,6 +303,9 @@ export function getStoryBudgetTotals(arc) {
   );
 }
 
-export function isKnownStoryBeatId(beatId) {
-  return STORY_BEAT_IDS.includes(beatId);
+export function isKnownStoryBeatId(beatId, arcOrIds = []) {
+  const ids = Array.isArray(arcOrIds)
+    ? arcOrIds.map((entry) => typeof entry === "string" ? entry : entry?.id)
+    : asList(arcOrIds?.beats).map((beat) => beat?.id);
+  return typeof beatId === "string" && ids.includes(beatId);
 }

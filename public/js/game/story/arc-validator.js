@@ -1,15 +1,12 @@
 import {
-  DEFAULT_BEAT_BUDGETS,
   ENCOUNTER_POLICY_MODES,
-  EXPECTED_STORY_BUDGET_TOTALS,
-  MAJOR_ANCHOR_BEAT_IDS,
-  STORY_BEATS,
   STORY_CARD_ROLES,
 } from "./constants.js";
-import { getStoryBudgetTotals, normalizeBeatBudget } from "./beat-progress.js";
+import { getStoryBudgetTotals } from "./beat-progress.js";
 
 const asList = (value) => (Array.isArray(value) ? value : []);
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value ?? {}, key);
+const isNonemptyString = (value) => typeof value === "string" && value.trim().length > 0;
 
 export class ArcValidationError extends Error {
   constructor(errors) {
@@ -43,6 +40,28 @@ function duplicateIds(entries) {
     seen.add(id);
   }
   return [...duplicates];
+}
+
+function duplicateNames(entries, key = "name") {
+  const seen = new Set();
+  const duplicates = new Set();
+  for (const entry of asList(entries)) {
+    const name = entry?.[key];
+    if (!isNonemptyString(name)) continue;
+    if (seen.has(name)) duplicates.add(name);
+    seen.add(name);
+  }
+  return [...duplicates];
+}
+
+function declaredBeatBudget(beat) {
+  const source = beat?.budget;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  return {
+    minimum: hasOwn(source, "minimum") ? source.minimum : source.min,
+    target: source.target,
+    maximum: hasOwn(source, "maximum") ? source.maximum : source.max,
+  };
 }
 
 function beatHasCard(card, beatId) {
@@ -81,6 +100,66 @@ function anchorCardIds(beat) {
   ].filter((id) => typeof id === "string");
 }
 
+const ENDING_CARD_ID_FIELDS = Object.freeze([
+  "cardId",
+  "endingCardId",
+  "terminalCardId",
+  "finalImageCardId",
+]);
+const ENDING_CARD_IDS_FIELDS = Object.freeze([
+  "cardIds",
+  "endingCardIds",
+  "terminalCardIds",
+  "finalImageCardIds",
+]);
+
+function terminalCardIdsFrom(value) {
+  if (isNonemptyString(value)) return [value];
+  if (Array.isArray(value)) return value.flatMap(terminalCardIdsFrom);
+  if (!value || typeof value !== "object") return [];
+  return [
+    ...ENDING_CARD_ID_FIELDS.flatMap((field) =>
+      isNonemptyString(value[field]) ? [value[field]] : []
+    ),
+    ...ENDING_CARD_IDS_FIELDS.flatMap((field) =>
+      asList(value[field]).filter(isNonemptyString)
+    ),
+  ];
+}
+
+function endingVariantEntries(arc) {
+  return asList(arc?.beats).flatMap((beat) =>
+    Object.entries(
+      beat?.endingVariants &&
+      typeof beat.endingVariants === "object" &&
+      !Array.isArray(beat.endingVariants)
+        ? beat.endingVariants
+        : {},
+    ).map(([endingId, value]) => ({ beatId: beat?.id, endingId, value }))
+  );
+}
+
+function terminalCardIdsForEnding(arc, ending) {
+  return [
+    ...terminalCardIdsFrom(ending),
+    ...endingVariantEntries(arc)
+      .filter(({ endingId }) => endingId === ending?.id)
+      .flatMap(({ value }) => terminalCardIdsFrom(value)),
+  ];
+}
+
+function terminalCardIdsForArc(arc) {
+  return [
+    ...asList(arc?.endings).flatMap((ending) => terminalCardIdsForEnding(arc, ending)),
+    ...asList(arc?.beats).flatMap((beat) =>
+      terminalCardIdsFrom({
+        terminalCardId: beat?.terminalCardId,
+        terminalCardIds: beat?.terminalCardIds,
+      })
+    ),
+  ];
+}
+
 function referencedCardIds(arc) {
   const references = [];
   for (const beat of asList(arc?.beats)) {
@@ -91,16 +170,24 @@ function referencedCardIds(arc) {
       "completionCardIds",
       "forcedCardIds",
       "sequenceCardIds",
+      "terminalCardIds",
     ]) {
       references.push(...asList(beat?.[field]));
     }
-    for (const field of ["entryCardId", "completionCardId", "aftermathCardId"]) {
+    for (const field of [
+      "entryCardId",
+      "completionCardId",
+      "aftermathCardId",
+      "terminalCardId",
+    ]) {
       if (typeof beat?.[field] === "string") references.push(beat[field]);
     }
   }
   for (const ending of asList(arc?.endings)) {
-    if (typeof ending?.finalImageCardId === "string") references.push(ending.finalImageCardId);
-    references.push(...asList(ending?.finalImageCardIds));
+    references.push(...terminalCardIdsFrom(ending));
+  }
+  for (const { value } of endingVariantEntries(arc)) {
+    references.push(...terminalCardIdsFrom(value));
   }
   for (const sequence of asList(arc?.forcedSequences)) {
     references.push(...asList(sequence?.cardIds));
@@ -119,6 +206,25 @@ function walkRequirements(value, visitor, seen = new Set()) {
   seen.add(value);
   if (!Array.isArray(value) && typeof value.type === "string") visitor(value);
   for (const nested of Object.values(value)) walkRequirements(nested, visitor, seen);
+}
+
+function hasRequirementType(value, type) {
+  let found = false;
+  walkRequirements(value, (requirement) => {
+    if (requirement.type === type) found = true;
+  });
+  return found;
+}
+
+function enemyIdsFromRequirements(value) {
+  const enemyIds = [];
+  walkRequirements(value, (requirement) => {
+    if (["enemyDefeated", "specificEnemyDefeated"].includes(requirement.type)) {
+      const enemyId = requirement.enemyId ?? requirement.id;
+      if (isNonemptyString(enemyId)) enemyIds.push(enemyId);
+    }
+  });
+  return [...new Set(enemyIds)];
 }
 
 const ABSTRACT_SCORE = /^(morality|karma|alignment|good|evil|virtue|cruelty|loyalty[-_ ]?score)$/i;
@@ -153,6 +259,26 @@ function collectRegistryErrors(arc, cards, options, errors) {
 
   for (const cardId of referencedCardIds(arc)) {
     if (!knownCards.has(cardId)) errors.push(`Unknown card ID: ${cardId}`);
+  }
+
+  for (const beatId of asList(arc?.transitionBeatIds)) {
+    if (!beatIds.has(beatId)) errors.push(`Arc transition references unknown beat ${beatId}.`);
+  }
+  for (const sequence of asList(arc?.forcedSequences)) {
+    if (isNonemptyString(sequence?.beatId) && !beatIds.has(sequence.beatId)) {
+      errors.push(
+        `Forced sequence ${sequence?.id ?? "unknown"} references unknown beat ${sequence.beatId}.`,
+      );
+    }
+  }
+  for (const { beatId, endingId } of endingVariantEntries(arc)) {
+    if (!endingIds.has(endingId)) {
+      errors.push(`Beat ${beatId} defines a terminal variant for unknown ending ${endingId}.`);
+    }
+  }
+  const terminalBeatId = arc?.terminalBeatId ?? arc?.endingBeatId;
+  if (terminalBeatId !== undefined && !beatIds.has(terminalBeatId)) {
+    errors.push(`Arc terminal beat references unknown beat ${String(terminalBeatId)}.`);
   }
 
   for (const card of asList(cards)) {
@@ -224,8 +350,11 @@ function collectRegistryErrors(arc, cards, options, errors) {
   }
 
   for (const beat of asList(arc?.beats)) {
-    for (const field of ["bossEnemyId", "midbossEnemyId", "enemyId"]) {
-      const enemyId = beat?.[field];
+    for (const [field, enemyId] of [
+      ["bossEnemyId", beat?.bossEnemyId ?? beat?.boss?.enemyId],
+      ["midbossEnemyId", beat?.midbossEnemyId],
+      ["enemyId", beat?.enemyId],
+    ]) {
       if (knownEnemies.size > 0 && typeof enemyId === "string" && !knownEnemies.has(enemyId)) {
         errors.push(`Beat ${beat.id} references unknown enemy ${enemyId}.`);
       }
@@ -269,99 +398,120 @@ function collectRegistryErrors(arc, cards, options, errors) {
 export function collectArcValidationErrors(arc, cards, options = {}) {
   const errors = [];
   if (!arc || typeof arc !== "object" || Array.isArray(arc)) return ["Arc must be an object."];
-  if (typeof arc.id !== "string" || arc.id.length === 0) errors.push("Arc ID is required.");
+  if (!isNonemptyString(arc.id)) errors.push("Arc ID is required.");
   const beats = asList(arc.beats);
+  const beatObjects = beats.filter(
+    (beat) => beat && typeof beat === "object" && !Array.isArray(beat),
+  );
   const cardList = asList(cards);
 
   const siblingArcs = asList(options.arcs);
   const matchingArcCount = siblingArcs.filter(({ id }) => id === arc.id).length;
   if (matchingArcCount > 1) errors.push(`Duplicate arc ID: ${arc.id}`);
   for (const duplicate of duplicateIds(beats)) errors.push(`Duplicate beat ID: ${duplicate}`);
+  for (const duplicate of duplicateNames(beats)) errors.push(`Duplicate beat name: ${duplicate}`);
   for (const duplicate of duplicateIds(cardList)) errors.push(`Duplicate card ID: ${duplicate}`);
   for (const duplicate of duplicateIds(arc.endings)) errors.push(`Duplicate ending ID: ${duplicate}`);
-
-  if (beats.length !== STORY_BEATS.length) {
-    errors.push(`Arc must define exactly ${STORY_BEATS.length} beats; found ${beats.length}.`);
+  for (const duplicate of duplicateNames(arc.endings, "title")) {
+    errors.push(`Duplicate ending title: ${duplicate}`);
   }
-  STORY_BEATS.forEach((expected, index) => {
-    const actual = beats[index];
-    if (!actual) {
-      errors.push(`Missing beat ${expected.id} at position ${index + 1}.`);
+  for (const duplicate of duplicateIds(arc.forcedSequences)) {
+    errors.push(`Duplicate forced sequence ID: ${duplicate}`);
+  }
+
+  if (!Array.isArray(arc.beats) || beats.length === 0) {
+    errors.push("Arc must define at least one ordered beat.");
+  }
+  beats.forEach((beat, index) => {
+    const position = index + 1;
+    if (!beat || typeof beat !== "object" || Array.isArray(beat)) {
+      errors.push(`Beat ${position} must be an object.`);
       return;
     }
-    if (actual.id !== expected.id) {
-      errors.push(`Beat ${index + 1} must be ${expected.id}; found ${String(actual.id)}.`);
+    if (!isNonemptyString(beat.id)) {
+      errors.push(`Beat ${position} must define a non-empty ID.`);
     }
-    if (actual.name !== expected.name) {
-      errors.push(`Beat ${expected.id} must display the exact name “${expected.name}”.`);
+    if (!isNonemptyString(beat.name)) {
+      errors.push(`Beat ${beat.id ?? position} must define a non-empty name.`);
     }
-    if (actual.act !== expected.act) {
-      errors.push(`Beat ${expected.id} must belong to ${expected.act}.`);
-    }
-
-    const budget = normalizeBeatBudget(actual);
-    const expectedBudget = DEFAULT_BEAT_BUDGETS[expected.id];
-    for (const key of ["minimum", "target", "maximum"]) {
-      if (budget[key] !== expectedBudget[key]) {
-        errors.push(
-          `Beat ${actual.id} ${key} budget must equal ${expectedBudget[key]}; found ${budget[key]}.`,
-        );
-      }
-    }
-    if (budget.minimum > budget.target) {
-      errors.push(`Beat ${actual.id} has minimum greater than target.`);
-    }
-    if (budget.target > budget.maximum) {
-      errors.push(`Beat ${actual.id} has target greater than maximum.`);
-    }
-    for (const key of ["minimum", "target", "maximum"]) {
-      if (!Number.isInteger(budget[key]) || budget[key] < 0) {
-        errors.push(`Beat ${actual.id} ${key} budget must be a non-negative integer.`);
-      }
+    if (hasOwn(beat, "act") && !isNonemptyString(beat.act)) {
+      errors.push(`Beat ${beat.id ?? position} act must be a non-empty string when provided.`);
     }
 
-    const anchor = anchorFor(actual);
-    const major = MAJOR_ANCHOR_BEAT_IDS.includes(actual.id);
-    if (major && !anchor) errors.push(`Major beat ${actual.id} must define an anchor family.`);
-    if (!major && anchor) errors.push(`Non-major beat ${actual.id} must not define a mandatory anchor.`);
+    const budget = declaredBeatBudget(beat);
+    if (!budget) {
+      errors.push(`Beat ${beat.id ?? position} must define a budget object.`);
+    }
+    for (const key of ["minimum", "target", "maximum"]) {
+      if (!Number.isInteger(budget?.[key]) || budget[key] < 0) {
+        errors.push(`Beat ${beat.id ?? position} ${key} budget must be a non-negative integer.`);
+      }
+    }
+    if (
+      Number.isInteger(budget?.minimum) &&
+      Number.isInteger(budget?.target) &&
+      budget.minimum > budget.target
+    ) {
+      errors.push(`Beat ${beat.id ?? position} has minimum greater than target.`);
+    }
+    if (
+      Number.isInteger(budget?.target) &&
+      Number.isInteger(budget?.maximum) &&
+      budget.target > budget.maximum
+    ) {
+      errors.push(`Beat ${beat.id ?? position} has target greater than maximum.`);
+    }
+
+    const anchor = anchorFor(beat);
     if (anchor) {
       const fallbackCardId = anchor.fallbackCardId ?? anchor.fallback?.cardId;
-      if (typeof fallbackCardId !== "string") {
-        errors.push(`Anchor family ${actual.id} must define an unconditional fallbackCardId.`);
+      if (!isNonemptyString(fallbackCardId)) {
+        errors.push(`Anchor family ${beat.id} must define an unconditional fallbackCardId.`);
       }
       if (!Array.isArray(anchor.variants)) {
-        errors.push(`Anchor family ${actual.id} must define a variants array.`);
+        errors.push(`Anchor family ${beat.id} must define a variants array.`);
       }
       for (const variant of asList(anchor.variants)) {
+        if (!isNonemptyString(variant?.cardId)) {
+          errors.push(`Anchor family ${beat.id} has a variant without a cardId.`);
+        }
         if (!Number.isFinite(Number(variant?.weight ?? 1)) || Number(variant?.weight ?? 1) <= 0) {
           errors.push(`Anchor variant ${variant?.cardId ?? "unknown"} has a non-positive weight.`);
         }
       }
-    } else if (
-      !actual.completionObjective &&
-      !actual.objective
-    ) {
-      errors.push(`Beat ${actual.id} must define a completion objective.`);
+    } else if (!beat.completionObjective && !beat.objective) {
+      errors.push(`Beat ${beat.id} must define a completion objective.`);
     }
 
-    const policyMode = actual.encounterPolicy?.mode;
+    const policyMode = beat.encounterPolicy?.mode;
     if (policyMode && !ENCOUNTER_POLICY_MODES.includes(policyMode)) {
-      errors.push(`Beat ${actual.id} has invalid encounter policy mode ${policyMode}.`);
+      errors.push(`Beat ${beat.id} has invalid encounter policy mode ${policyMode}.`);
     }
   });
 
-  const totals = getStoryBudgetTotals(arc);
-  for (const key of ["minimum", "target", "maximum"]) {
-    if (totals[key] !== EXPECTED_STORY_BUDGET_TOTALS[key]) {
-      errors.push(
-        `Story ${key} budget total must equal ${EXPECTED_STORY_BUDGET_TOTALS[key]}; found ${totals[key]}.`,
-      );
+  if (hasOwn(arc, "beatIds")) {
+    if (!Array.isArray(arc.beatIds)) {
+      errors.push("Arc beatIds must be an array when provided.");
+    } else if (
+      arc.beatIds.length !== beats.length ||
+      arc.beatIds.some((beatId, index) => beatId !== beats[index]?.id)
+    ) {
+      errors.push("Arc beatIds must match the ordered beats exactly.");
     }
+  }
+  if (
+    hasOwn(arc, "terminalBeatId") &&
+    hasOwn(arc, "endingBeatId") &&
+    arc.terminalBeatId !== arc.endingBeatId
+  ) {
+    errors.push("Arc terminalBeatId and endingBeatId must identify the same beat.");
   }
 
   const anchorReferences = new Map();
   const cardById = new Map(cardList.map((card) => [card?.id, card]));
-  for (const beat of beats) {
+  const terminalCardIds = new Set(terminalCardIdsForArc(arc));
+  const terminalBeatId = arc.terminalBeatId ?? arc.endingBeatId;
+  for (const beat of beatObjects) {
     for (const cardId of anchorCardIds(beat)) anchorReferences.set(cardId, beat.id);
     if (!anchorFor(beat) && !cardList.some((card) => isCompletionCandidate(card, beat))) {
       errors.push(`Beat ${beat.id} has no possible completion-card candidate.`);
@@ -374,6 +524,12 @@ export function collectArcValidationErrors(arc, cards, options = {}) {
   }
 
   for (const card of cardList) {
+    if (!isNonemptyString(card?.id)) {
+      errors.push("Every story card must define a non-empty ID.");
+    }
+    if (anchorReferences.has(card?.id) && !card?.story) {
+      errors.push(`Anchor card ${card.id} must define story metadata.`);
+    }
     if (!card?.story) continue;
     if (!STORY_CARD_ROLES.includes(card.story.role)) {
       errors.push(`Story card ${card.id} has invalid role ${String(card.story.role)}.`);
@@ -387,7 +543,7 @@ export function collectArcValidationErrors(arc, cards, options = {}) {
       }
     }
     if (anchorReferences.has(card.id)) {
-      const permittedRole = anchorReferences.get(card.id) === "finalImage" ? ["anchor", "ending"] : ["anchor"];
+      const permittedRole = terminalCardIds.has(card.id) ? ["anchor", "ending"] : ["anchor"];
       if (!permittedRole.includes(card.story.role)) {
         errors.push(`Anchor card ${card.id} is included as ordinary ${card.story.role ?? "ambient"} content.`);
       }
@@ -406,38 +562,106 @@ export function collectArcValidationErrors(arc, cards, options = {}) {
     });
   }
 
-  const finale = beats.find(({ id }) => id === "finale");
-  const finaleBossId =
-    finale?.bossEnemyId ??
-    finale?.boss?.enemyId ??
-    arc.finalBossEnemyId ??
-    arc.finalBossId ??
-    arc.finale?.bossEnemyId;
-  if (typeof finaleBossId !== "string") errors.push("Finale definition must identify its final boss.");
-
-  const endingIds = idsFrom(arc.endings);
-  const finalImage = beats.find(({ id }) => id === "finalImage");
-  const endingVariantIds = new Set([
-    ...asList(arc.endings).flatMap((ending) => [
-      ending?.finalImageCardId,
-      ...asList(ending?.finalImageCardIds),
-    ]),
-    ...Object.keys(finalImage?.endingVariants ?? {}),
-  ].filter(Boolean));
-  if (endingIds.size === 0 || endingVariantIds.size === 0) {
-    errors.push("Final Image must define ending-specific variants.");
-  }
-  for (const endingId of endingIds) {
-    const ending = asList(arc.endings).find(({ id }) => id === endingId);
-    const hasVariant =
-      Boolean(ending?.finalImageCardId) ||
-      asList(ending?.finalImageCardIds).length > 0 ||
-      hasOwn(finalImage?.endingVariants, endingId);
-    if (!hasVariant) errors.push(`Ending ${endingId} has no Final Image variant.`);
+  if (isNonemptyString(terminalBeatId)) {
+    for (const cardId of terminalCardIds) {
+      const card = cardById.get(cardId);
+      if (card && !beatHasCard(card, terminalBeatId)) {
+        errors.push(`Terminal card ${cardId} does not belong to beat ${terminalBeatId}.`);
+      }
+    }
   }
 
-  if (options.enforceContentCount === true && (cardList.length < 45 || cardList.length > 60)) {
-    errors.push(`Authored story card count must be between 45 and 60; found ${cardList.length}.`);
+  const bossOnlyBeats = beatObjects.filter(
+    ({ encounterPolicy }) => encounterPolicy?.mode === "boss-only",
+  );
+  for (const beat of bossOnlyBeats) {
+    const objectiveBossIds = enemyIdsFromRequirements(
+      beat?.completionObjective ?? beat?.objective,
+    );
+    const bossId =
+      beat?.bossEnemyId ??
+      beat?.boss?.enemyId ??
+      (objectiveBossIds.length === 1 ? objectiveBossIds[0] : null) ??
+      (bossOnlyBeats.length === 1 ? arc.finalBossEnemyId ?? arc.finalBossId : null);
+    if (!isNonemptyString(bossId)) {
+      errors.push(`Boss-only beat ${beat.id} must identify its boss.`);
+    }
+  }
+
+  if (hasOwn(arc, "endings") && !Array.isArray(arc.endings)) {
+    errors.push("Arc endings must be an array when provided.");
+  }
+  const endings = asList(arc.endings);
+  endings.forEach((ending, index) => {
+    if (!isNonemptyString(ending?.id)) {
+      errors.push(`Ending ${index + 1} must define a non-empty ID.`);
+    }
+    if (!isNonemptyString(ending?.title)) {
+      errors.push(`Ending ${ending?.id ?? index + 1} must define a non-empty title.`);
+    }
+  });
+
+  const endingSelectionRequired =
+    beatObjects.some((beat) =>
+      hasRequirementType(beat?.completionObjective ?? beat?.objective, "endingSelected") ||
+      asList(anchorFor(beat)?.variants).some((variant) =>
+        hasRequirementType(variant?.requirements, "endingSelected")
+      )
+    ) ||
+    cardList.some((card) =>
+      [card?.requirements, card?.left?.requirements, card?.right?.requirements].some(
+        (requirements) => hasRequirementType(requirements, "endingSelected"),
+      ) ||
+      [card?.left, card?.right].some((choice) =>
+        asList(choice?.effects).some((effect) =>
+          ["selectEnding", "selectFinalEnding"].includes(effect?.type)
+        )
+      )
+    );
+  if (endingSelectionRequired && endings.length === 0) {
+    errors.push("Arc content selects an ending but the arc defines no endings.");
+  }
+
+  if (endings.length > 0 || endingVariantEntries(arc).length > 0) {
+    for (const ending of endings) {
+      if (terminalCardIdsForEnding(arc, ending).length === 0) {
+        errors.push(`Ending ${ending.id} has no terminal card variant.`);
+      }
+    }
+  }
+  for (const cardId of terminalCardIds) {
+    const card = cardById.get(cardId);
+    if (card && card?.story?.role !== "ending") {
+      errors.push(`Terminal card ${cardId} must use the ending story role.`);
+    }
+  }
+
+  const contentCountRange =
+    options.contentCountRange ??
+    arc.contentCountRange ??
+    (options.enforceContentCount && typeof options.enforceContentCount === "object"
+      ? options.enforceContentCount
+      : null);
+  if (contentCountRange) {
+    const minimum = contentCountRange.minimum ?? contentCountRange.min;
+    const maximum = contentCountRange.maximum ?? contentCountRange.max;
+    if (!Number.isInteger(minimum) || minimum < 0) {
+      errors.push("Story card-count minimum must be a non-negative integer.");
+    }
+    if (!Number.isInteger(maximum) || maximum < 0) {
+      errors.push("Story card-count maximum must be a non-negative integer.");
+    }
+    if (Number.isInteger(minimum) && Number.isInteger(maximum) && minimum > maximum) {
+      errors.push("Story card-count minimum must not exceed its maximum.");
+    } else if (
+      Number.isInteger(minimum) &&
+      Number.isInteger(maximum) &&
+      (cardList.length < minimum || cardList.length > maximum)
+    ) {
+      errors.push(
+        `Authored story card count must be between ${minimum} and ${maximum}; found ${cardList.length}.`,
+      );
+    }
   }
   if (hasFunctionValue(arc)) errors.push("Arc definition contains a function callback.");
   if (hasAbstractScoreReference(arc)) {

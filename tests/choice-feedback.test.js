@@ -13,6 +13,7 @@ import {
   deriveChoiceFeedbackChanges,
   feedbackSuccessorIsSuppressed,
   isFinalImageCard,
+  isTerminalStoryCard,
   normalizeChoiceFeedbackChanges,
   normalizeChoiceFeedbackTone,
   normalizePendingChoiceFeedback,
@@ -152,6 +153,25 @@ test("Final Image detection uses beat position, story role, and arc metadata", (
     assert.equal(isFinalImageCard(card({ id }), { story: {} }, feedbackArc), true, id);
   }
   assert.equal(isFinalImageCard(card(), { story: { currentBeatId: "setup" } }, feedbackArc), false);
+});
+
+test("terminal feedback suppression follows a data-defined nine-phase story", () => {
+  const arc = {
+    id: "nine-deck-story",
+    storyPhases: Array.from({ length: 9 }, (_, index) => ({
+      id: `deck-${String(index + 1).padStart(2, "0")}`,
+      ...(index === 8 ? { terminal: true } : {}),
+    })),
+  };
+
+  assert.equal(
+    isTerminalStoryCard(card(), { story: { currentBeatId: "deck-09" } }, arc),
+    true,
+  );
+  assert.equal(
+    isTerminalStoryCard(card(), { story: { currentBeatId: "deck-08" } }, arc),
+    false,
+  );
 });
 
 test("eligible world, merchant, shrine, camp, and encounter choices create feedback", () => {
