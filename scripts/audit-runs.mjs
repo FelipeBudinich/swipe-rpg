@@ -7,6 +7,7 @@ import {
   getPlotStep,
   resolveChoice,
 } from "../public/js/game/engine.js";
+import { canChooseDirection } from "../public/js/game/choice-availability.js";
 
 const MAX_DECISIONS = 96;
 
@@ -16,8 +17,11 @@ function selectDirection(state, card, decisionCount) {
   );
   if (deck?.type === "intro") return "up";
   const step = getPlotStep(state.currentDeckId);
-  if (step < 8) return "down";
-  return ["left", "right", "up", "down"][decisionCount % 4];
+  const cycle = ["left", "right", "up", "down"];
+  const preferred =
+    step < 8 ? "down" : cycle[decisionCount % cycle.length];
+  return [preferred, ...cycle.filter((direction) => direction !== preferred)]
+    .find((direction) => canChooseDirection(state, card, direction)) ?? null;
 }
 
 export function simulateRun(seed, maxDecisions = MAX_DECISIONS) {
@@ -60,6 +64,10 @@ export function simulateRun(seed, maxDecisions = MAX_DECISIONS) {
       break;
     }
     const direction = selectDirection(state, card, state.decisionCount);
+    if (!direction) {
+      stallReason = "no-available-choice";
+      break;
+    }
     const wasIntro =
       DEEP_SOUTH_STORY.decks.find(({ id }) => id === state.currentDeckId)?.type ===
       "intro";

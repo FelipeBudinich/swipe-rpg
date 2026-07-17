@@ -26,9 +26,9 @@
         class="shrink-0 rounded-2xl border border-[#36505d] bg-[#102633]/95 p-2.5 shadow-lg"
         aria-label="Deep South expedition status"
       >
-        <section id="story-hud" class="rounded-lg bg-[#091923] px-2.5 py-2" aria-labelledby="story-title">
+        <section id="story-hud" class="rounded-lg bg-[#091923] px-2.5 py-2" aria-labelledby="story-title hud-deck-title">
           <h1 id="story-title" class="text-sm font-black tracking-[0.08em] text-[#fff6e6]">Deep South</h1>
-          <p id="hud-deck-title" class="mt-0.5 truncate text-xs font-bold text-[#b9cbd0]">Intro — It begins here</p>
+          <h2 id="hud-deck-title" class="mt-0.5 text-xs font-bold leading-tight text-[#b9cbd0]">It begins here - 4 cards left in deck</h2>
         </section>
 
         <div
@@ -126,7 +126,6 @@
             hidden
           >
             <p id="terminal-kicker" class="text-center text-[0.65rem] font-black uppercase tracking-[0.24em] text-[#d9a9b5]">Expedition lost</p>
-            <p class="mt-2 text-center text-xs font-bold uppercase tracking-[0.14em] text-[#9fc7ba]">Deep South</p>
             <h2 id="terminal-title" class="mt-1 text-center text-2xl font-black leading-tight text-[#fff6e6]">The sea remembers</h2>
             <p id="terminal-copy" class="mt-3 text-center text-sm font-semibold leading-relaxed text-[#b9cbd0]">Reason fractures beneath the weight of what the expedition has witnessed.</p>
             <dl id="terminal-stats" class="mt-4 grid grid-cols-3 gap-2 text-center"></dl>
@@ -161,7 +160,7 @@
             </div>
 
             <header class="shrink-0 border-b border-[#a9a087] bg-[#d8d1bd] px-4 py-2 text-center">
-              <p id="card-speaker" class="text-[0.63rem] font-black uppercase tracking-[0.2em] text-[#285b5a]">Deep South</p>
+              <p id="card-speaker" class="text-[0.63rem] font-black uppercase tracking-[0.2em] text-[#285b5a]">It begins here</p>
               <h2 id="card-title" class="mt-0.5 text-lg font-black leading-tight text-[#142630]">The packet</h2>
             </header>
 
@@ -184,33 +183,30 @@
           </article>
         </section>
 
-        <p id="direction-hint" class="mt-1.5 shrink-0 text-center text-[0.62rem] font-bold leading-tight text-[#9bb3ba]">Up: keep reading · Left: skip introduction</p>
-
         <div
           id="choice-controls"
           class="mt-1 grid shrink-0 grid-cols-2 gap-1.5"
           role="group"
           aria-label="Story actions"
-          data-layout="intro"
         >
-          <button id="choice-up" type="button" class="choice-button" data-direction="up" aria-keyshortcuts="ArrowUp" aria-label="Up: Continue reading">
+          <button id="choice-up" type="button" class="choice-button" data-direction="up" aria-keyshortcuts="ArrowUp" aria-label="Up: Keep reading">
             <span class="choice-direction">Up · ↑</span>
-            <span id="choice-up-label" class="choice-label">Continue reading</span>
+            <span id="choice-up-label" class="choice-label">Keep reading</span>
             <span id="choice-up-detail" class="choice-detail"></span>
           </button>
-          <button id="choice-down" type="button" class="choice-button" data-direction="down" aria-keyshortcuts="ArrowDown" aria-label="Down" hidden>
+          <button id="choice-down" type="button" class="choice-button" data-direction="down" aria-keyshortcuts="ArrowDown" aria-label="Down: Skip toward Castro">
             <span class="choice-direction">Down · ↓</span>
-            <span id="choice-down-label" class="choice-label">Press onward</span>
+            <span id="choice-down-label" class="choice-label">Skip toward Castro</span>
             <span id="choice-down-detail" class="choice-detail"></span>
           </button>
-          <button id="choice-left" type="button" class="choice-button" data-direction="left" aria-keyshortcuts="ArrowLeft" aria-label="Left: Skip introduction">
+          <button id="choice-left" type="button" class="choice-button" data-direction="left" aria-keyshortcuts="ArrowLeft" aria-label="Left: No option. No action is available in this direction." data-availability="missing" disabled>
             <span class="choice-direction">Left · ←</span>
-            <span id="choice-left-label" class="choice-label">Skip introduction</span>
+            <span id="choice-left-label" class="choice-label">No option</span>
             <span id="choice-left-detail" class="choice-detail"></span>
           </button>
-          <button id="choice-right" type="button" class="choice-button" data-direction="right" aria-keyshortcuts="ArrowRight" aria-label="Right" hidden>
+          <button id="choice-right" type="button" class="choice-button" data-direction="right" aria-keyshortcuts="ArrowRight" aria-label="Right: No option. No action is available in this direction." data-availability="missing" disabled>
             <span class="choice-direction">Right · →</span>
-            <span id="choice-right-label" class="choice-label">Act here</span>
+            <span id="choice-right-label" class="choice-label">No option</span>
             <span id="choice-right-detail" class="choice-detail"></span>
           </button>
         </div>

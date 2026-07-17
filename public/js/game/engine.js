@@ -3,9 +3,13 @@ import {
   DEEP_SOUTH_STORY,
 } from "../data/deep-south.js";
 import { normalizeSeed } from "../rng.js";
+import {
+  applyChoiceCosts,
+  getDirectionAvailability,
+} from "./choice-availability.js";
 import { createPendingFeedback } from "./choice-feedback.js";
 import { discardToDeck, drawFromDeck } from "./deck-draw.js";
-import { applyResourceEffects } from "./effects.js";
+import { applyResourceEffects, resourceChanges } from "./effects.js";
 import { createInitialState } from "./state.js";
 
 export const DIRECTIONS = Object.freeze(["up", "down", "left", "right"]);
@@ -76,7 +80,7 @@ function presentIntroCard(card, token) {
         resolutionToken: token,
         choices: {
           up: { label: "Keep reading", result: "", effects: {} },
-          left: { label: "Skip toward Castro", result: "", effects: {} },
+          down: { label: "Skip toward Castro", result: "", effects: {} },
         },
       }
     : null;
@@ -218,7 +222,7 @@ function ignored(state, story, reason) {
   };
 }
 
-function resolveIntro(state, direction, story) {
+function resolveIntro(state, direction, story, unchangedState = state) {
   const intro = getIntroDeck(story);
   const index = Math.min(
     Math.max(0, Number(state.introCardIndex) || 0),
@@ -226,7 +230,7 @@ function resolveIntro(state, direction, story) {
   );
 
   if (state.introSkipPending) {
-    if (direction === "left") {
+    if (direction === "down") {
       return {
         ...enterCastro(state, story),
         ignored: false,
@@ -245,10 +249,10 @@ function resolveIntro(state, direction, story) {
       );
       return { ...next, ignored: false, resultText: "", changes: {} };
     }
-    return ignored(state, story, "intro-direction-ignored");
+    return ignored(unchangedState, story, "intro-direction-ignored");
   }
 
-  if (direction === "left") {
+  if (direction === "down") {
     const next = getNextCard(
       {
         ...state,
@@ -259,7 +263,9 @@ function resolveIntro(state, direction, story) {
     );
     return { ...next, ignored: false, resultText: "", changes: {} };
   }
-  if (direction !== "up") return ignored(state, story, "intro-direction-ignored");
+  if (direction !== "up") {
+    return ignored(unchangedState, story, "intro-direction-ignored");
+  }
 
   if (index >= intro.cards.length - 1) {
     return {
@@ -282,17 +288,31 @@ function resolveIntro(state, direction, story) {
   return { ...next, ignored: false, resultText: "", changes: {} };
 }
 
-function resolvePlot(state, card, direction, story) {
+function resolvePlot(state, card, direction, story, unchangedState = state) {
   const sourceDeck = getDeckById(state.currentDeckId, story);
-  const choice = card?.choices?.[direction];
-  if (!sourceDeck || sourceDeck.type !== "plot" || !choice) {
-    return ignored(state, story, "choice-unavailable");
+  if (!sourceDeck || sourceDeck.type !== "plot") {
+    return ignored(unchangedState, story, "choice-unavailable");
   }
 
-  const destinationDeckId = getDestinationDeckId(sourceDeck.id, direction, story);
-  if (!destinationDeckId) return ignored(state, story, "invalid-destination");
+  const availability = getDirectionAvailability(state, card, direction);
+  if (!availability.available) {
+    return ignored(unchangedState, story, availability.reason);
+  }
+  const choice = availability.choice;
 
-  const applied = applyResourceEffects(state, choice.effects);
+  const destinationDeckId = getDestinationDeckId(sourceDeck.id, direction, story);
+  if (!destinationDeckId) {
+    return ignored(unchangedState, story, "invalid-destination");
+  }
+
+  // Re-check immediately before deduction so UI availability can never be
+  // treated as authorization. The cost and effects become one atomic result.
+  const costed = applyChoiceCosts(state, choice);
+  if (!costed.available) {
+    return ignored(unchangedState, story, costed.reason);
+  }
+  const applied = applyResourceEffects(costed.state, choice.effects);
+  const changes = resourceChanges(state, applied.state);
   const decisionCount = Number(state.decisionCount ?? 0) + 1;
   const sourceToken = state.currentCardToken;
   const sourceDrawState = discardToDeck(
@@ -320,10 +340,10 @@ function resolvePlot(state, card, direction, story) {
     destinationDeckId,
     resultText: choice.result,
     tone: choice.tone,
-    changes: applied.changes,
+    changes,
   });
   if (!pendingFeedback) {
-    return ignored(state, story, "invalid-feedback");
+    return ignored(unchangedState, story, "invalid-feedback");
   }
 
   return {
@@ -333,7 +353,7 @@ function resolvePlot(state, card, direction, story) {
     reason: null,
     resolvedCard: card,
     resultText: choice.result,
-    changes: applied.changes,
+    changes,
   };
 }
 
@@ -354,18 +374,18 @@ export function resolveChoice(
   const prepared = getNextCard(inputState, story);
   const state = prepared.state;
   const card = prepared.card;
-  if (!card) return ignored(state, story, "no-card");
+  if (!card) return ignored(inputState, story, "no-card");
   if (expectedToken && expectedToken !== state.currentCardToken) {
-    return ignored(state, story, "stale-resolution");
+    return ignored(inputState, story, "stale-resolution");
   }
   if (state.lastResolvedToken === state.currentCardToken) {
-    return ignored(state, story, "stale-resolution");
+    return ignored(inputState, story, "stale-resolution");
   }
 
   const deck = getDeckById(state.currentDeckId, story);
   return deck?.type === "intro"
-    ? resolveIntro(state, inputDirection, story)
-    : resolvePlot(state, card, inputDirection, story);
+    ? resolveIntro(state, inputDirection, story, inputState)
+    : resolvePlot(state, card, inputDirection, story, inputState);
 }
 
 export function dismissChoiceFeedback(

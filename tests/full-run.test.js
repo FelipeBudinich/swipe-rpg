@@ -7,8 +7,10 @@ import {
   restartGame,
   resolveChoice,
 } from "../public/js/game/engine.js";
+import { canChooseDirection } from "../public/js/game/choice-availability.js";
 import { normalizeState } from "../public/js/game/state.js";
 import { DEEP_SOUTH_STORY } from "../public/js/data/deep-south.js";
+import { deriveDeckHud } from "../public/js/ui/render.js";
 import { simulateRun } from "../scripts/audit-runs.mjs";
 
 function commit(game, direction) {
@@ -28,20 +30,25 @@ function continueOutcome(result) {
   return next;
 }
 
+function availableDirection(game, preferredDirections) {
+  return preferredDirections.find((direction) =>
+    canChooseDirection(game.state, game.card, direction));
+}
+
 test("representative Deep South run covers Intro, skip confirmation, both plot directions, loss feedback, reload, and restart", () => {
   let game = createGame({ seed: 2 });
   const firstIntroId = game.card.id;
 
   game = commit(game, "up");
   assert.equal(game.state.introCardIndex, 1);
-  game = commit(game, "left");
+  game = commit(game, "down");
   assert.equal(game.state.introSkipPending, true);
   const heldIntroIndex = game.state.introCardIndex;
   game = commit(game, "up");
   assert.equal(game.state.introSkipPending, false);
   assert.equal(game.state.introCardIndex, heldIntroIndex);
-  game = commit(game, "left");
-  game = commit(game, "left");
+  game = commit(game, "down");
+  game = commit(game, "down");
   assert.equal(game.state.currentDeckId, "castro");
 
   const visited = [game.state.currentDeckId];
@@ -60,9 +67,15 @@ test("representative Deep South run covers Intro, skip confirmation, both plot d
   let lossResult = null;
   for (let safety = 0; safety < 10 && !lossResult; safety += 1) {
     const damagingDirection = ["up", "down", "left", "right"].find(
-      (direction) => Number(game.card.choices[direction].effects.sanity) < 0,
+      (direction) =>
+        canChooseDirection(game.state, game.card, direction) &&
+        Number(game.card.choices?.[direction]?.effects?.sanity) < 0,
     );
-    const result = commit(game, damagingDirection ?? "left");
+    const direction =
+      damagingDirection ??
+      availableDirection(game, ["left", "right", "down", "up"]);
+    assert.ok(direction, "representative run reached a card with no action");
+    const result = commit(game, direction);
     if (result.state.status === "lost") {
       lossResult = result;
     } else {
@@ -100,12 +113,17 @@ test("representative Deep South run covers Intro, skip confirmation, both plot d
 test("a fixed seed produces the same card, feedback, destination, and resource transcript", () => {
   const simulate = (seed) => {
     let game = createGame({ seed });
-    game = commit(game, "left");
-    game = commit(game, "left");
+    game = commit(game, "down");
+    game = commit(game, "down");
     const transcript = [];
     const directions = ["down", "left", "right", "up"];
     for (let index = 0; index < 12 && game.state.status === "playing"; index += 1) {
-      const direction = directions[index % directions.length];
+      const preferred = directions[index % directions.length];
+      const direction = availableDirection(game, [
+        preferred,
+        ...directions.filter((candidate) => candidate !== preferred),
+      ]);
+      assert.ok(direction, "deterministic run reached a card with no action");
       const sourceCardId = game.card.id;
       const result = commit(game, direction);
       transcript.push({
@@ -124,6 +142,81 @@ test("a fixed seed produces the same card, feedback, destination, and resource t
 
   assert.deepEqual(simulate(404), simulate(404));
   assert.notDeepEqual(simulate(404), simulate(405));
+});
+
+test("chapter card counts hold through feedback and survive leaving, returning, and reload", () => {
+  let game = createGame({ seed: 707 });
+  game = commit(game, "down");
+  game = commit(game, "down");
+  assert.equal(
+    deriveDeckHud(game.state, DEEP_SOUTH_STORY).deckLabel,
+    "Castro, Chapter 1 - 5 cards left in deck",
+  );
+
+  const southbound = commit(game, "down");
+  assert.equal(southbound.state.currentDeckId, "investigate-church");
+  assert.equal(southbound.state.currentCardId, null);
+  assert.equal(
+    deriveDeckHud(southbound.state, DEEP_SOUTH_STORY).deckLabel,
+    "Castro, Chapter 1 - 5 cards left in deck",
+  );
+  const reloadedFeedback = normalizeState(
+    JSON.parse(JSON.stringify(southbound.state)),
+    { decks: DEEP_SOUTH_STORY.decks },
+  );
+  assert.equal(
+    deriveDeckHud(reloadedFeedback, DEEP_SOUTH_STORY).deckLabel,
+    "Castro, Chapter 1 - 5 cards left in deck",
+  );
+
+  game = continueOutcome(southbound);
+  assert.equal(
+    deriveDeckHud(game.state, DEEP_SOUTH_STORY).deckLabel,
+    "Investigate Church, Chapter 2 - 5 cards left in deck",
+  );
+
+  const northbound = commit(game, "up");
+  assert.equal(
+    deriveDeckHud(northbound.state, DEEP_SOUTH_STORY).deckLabel,
+    "Investigate Church, Chapter 2 - 5 cards left in deck",
+  );
+  game = continueOutcome(northbound);
+  assert.equal(
+    deriveDeckHud(game.state, DEEP_SOUTH_STORY).deckLabel,
+    "Castro, Chapter 1 - 4 cards left in deck",
+  );
+
+  const reloaded = normalizeState(JSON.parse(JSON.stringify(game.state)), {
+    decks: DEEP_SOUTH_STORY.decks,
+  });
+  assert.equal(
+    deriveDeckHud(reloaded, DEEP_SOUTH_STORY).deckLabel,
+    "Castro, Chapter 1 - 4 cards left in deck",
+  );
+});
+
+test("the final unresolved chapter card reports one before the next cycle resets to five", () => {
+  let game = createGame({ seed: 808 });
+  game = commit(game, "down");
+  game = commit(game, "down");
+
+  for (let expected = 5; expected >= 1; expected -= 1) {
+    const grammar = expected === 1 ? "card" : "cards";
+    const label = `Castro, Chapter 1 - ${expected} ${grammar} left in deck`;
+    assert.equal(deriveDeckHud(game.state, DEEP_SOUTH_STORY).deckLabel, label);
+
+    const result = commit(game, "up");
+    assert.equal(
+      deriveDeckHud(result.state, DEEP_SOUTH_STORY).deckLabel,
+      label,
+    );
+    game = continueOutcome(result);
+  }
+
+  assert.equal(
+    deriveDeckHud(game.state, DEEP_SOUTH_STORY).deckLabel,
+    "Castro, Chapter 1 - 5 cards left in deck",
+  );
 });
 
 test("the deterministic audit acknowledges outcomes without counting them as decisions", () => {

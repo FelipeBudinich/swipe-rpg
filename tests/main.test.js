@@ -27,16 +27,48 @@ test("main wires one canonical Deep South engine without retired subsystems", ()
   );
 });
 
-test("keyboard input maps exactly the four arrow keys", () => {
-  for (const [key, direction] of [
-    ["ArrowUp", "up"],
-    ["ArrowDown", "down"],
-    ["ArrowLeft", "left"],
-    ["ArrowRight", "right"],
-  ]) {
-    assert.match(source, new RegExp(`${key}: "${direction}"`, "u"));
-  }
+test("keyboard input uses the tested canonical arrow-key adapter", () => {
+  assert.match(
+    source,
+    /import\s*\{[\s\S]*?createArrowKeyHandler,[\s\S]*?createChoiceClickHandler,[\s\S]*?\}\s*from "\.\/ui\/directional-input\.js";/u,
+  );
+  assert.match(source, /const handleArrowKey = createArrowKeyHandler\(\{/u);
+  assert.match(source, /isDirectionAvailable: \(direction\) =>/u);
+  assert.match(source, /onChoose: commitNewChoice/u);
+  assert.match(source, /onBlocked: announceUnavailableDirection/u);
+  assert.match(source, /document\.addEventListener\("keydown"/u);
   assert.doesNotMatch(source, /key\.toLowerCase|["']a["']|["']d["']/u);
+});
+
+test("buttons, swipes, and arrow keys share canonical direction availability", () => {
+  assert.match(
+    source,
+    /import \{ getDirectionAvailability \} from "\.\/game\/choice-availability\.js";/u,
+  );
+  assert.match(
+    source,
+    /button\.disabled = blocked \|\| !availability\.available/u,
+  );
+  assert.match(
+    source,
+    /canCommit: \(direction\) =>\s*getDirectionAvailability\(state, currentCard, direction\)\.available/u,
+  );
+  assert.doesNotMatch(source, /choice\.disabled|choiceForDirection/u);
+});
+
+test("direction buttons use one guarded group handler rather than active handlers on unavailable slots", () => {
+  assert.match(
+    source,
+    /const handleChoiceClick = createChoiceClickHandler\(\{/u,
+  );
+  assert.match(
+    source,
+    /elements\.choiceControls\.addEventListener\("click", handleChoiceClick\)/u,
+  );
+  assert.doesNotMatch(
+    source,
+    /button\.addEventListener\("click"/u,
+  );
 });
 
 test("outcome Continue uses the narrow dismissal API and never commits a direction", () => {

@@ -1,6 +1,7 @@
 import { DEEP_SOUTH_STORY } from "./data/deep-south.js";
 import * as Engine from "./game/engine.js";
 import { normalizeState } from "./game/state.js";
+import { getDirectionAvailability } from "./game/choice-availability.js";
 import { loadState, saveState } from "./storage.js";
 import {
   createFeedbackController,
@@ -8,11 +9,14 @@ import {
   hudSnapshot,
 } from "./ui/feedback.js";
 import {
+  createArrowKeyHandler,
+  createChoiceClickHandler,
+} from "./ui/directional-input.js";
+import {
   isActiveCommitResolutionBlocked as activeCommitResolutionIsBlocked,
   isNewInputBlocked as newInputIsBlocked,
 } from "./ui/interaction-lock.js";
 import {
-  choiceForDirection,
   createRenderer,
   FEEDBACK_ART_BY_TONE,
 } from "./ui/render.js";
@@ -88,8 +92,12 @@ function isActiveCommitResolutionBlocked() {
 function updateControlLocks() {
   const blocked = isNewInputBlocked();
   for (const [direction, button] of Object.entries(elements.choiceButtons)) {
-    const choice = choiceForDirection(state, currentCard, direction);
-    button.disabled = blocked || !choice || choice.disabled === true;
+    const availability = getDirectionAvailability(
+      state,
+      currentCard,
+      direction,
+    );
+    button.disabled = blocked || !availability.available;
   }
   elements.choiceFeedbackContinue.disabled = Boolean(
     !state.pendingFeedback || inputLocked || feedbackDismissalActive,
@@ -159,10 +167,8 @@ swipeController = createSwipeController({
   card: elements.card,
   isInputLocked: isNewInputBlocked,
   canCommit: (direction) =>
-    Boolean(choiceForDirection(state, currentCard, direction)),
-  onBlocked: () => {
-    feedback.announce("That direction has no action on this card.");
-  },
+    getDirectionAvailability(state, currentCard, direction).available,
+  onBlocked: announceUnavailableDirection,
   onPreview: (direction) => renderer.previewChoice(direction),
   onCommit: commitChoice,
   onError: (error) => {
@@ -177,29 +183,42 @@ function commitNewChoice(direction) {
   void swipeController.commit(direction);
 }
 
-for (const [direction, button] of Object.entries(elements.choiceButtons)) {
-  button.addEventListener("click", () => commitNewChoice(direction));
+function announceUnavailableDirection(direction) {
+  const availability = getDirectionAvailability(
+    state,
+    currentCard,
+    direction,
+  );
+  feedback.announce(
+    availability.requirementText ||
+      "That direction has no action on this card.",
+  );
 }
 
-document.addEventListener("keydown", (event) => {
-  if (event.defaultPrevented || event.repeat || isNewInputBlocked()) return;
-  const target = event.target;
-  if (
+const handleArrowKey = createArrowKeyHandler({
+  isInputBlocked: isNewInputBlocked,
+  isEditableTarget: (target) =>
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement
-  ) {
-    return;
-  }
-  const direction = {
-    ArrowUp: "up",
-    ArrowDown: "down",
-    ArrowLeft: "left",
-    ArrowRight: "right",
-  }[event.key];
-  if (!direction) return;
-  event.preventDefault();
-  commitNewChoice(direction);
+    target instanceof HTMLSelectElement,
+  isDirectionAvailable: (direction) =>
+    getDirectionAvailability(state, currentCard, direction).available,
+  onChoose: commitNewChoice,
+  onBlocked: announceUnavailableDirection,
+});
+
+const handleChoiceClick = createChoiceClickHandler({
+  container: elements.choiceControls,
+  isInputBlocked: isNewInputBlocked,
+  isDirectionAvailable: (direction) =>
+    getDirectionAvailability(state, currentCard, direction).available,
+  onChoose: commitNewChoice,
+  onBlocked: announceUnavailableDirection,
+});
+elements.choiceControls.addEventListener("click", handleChoiceClick);
+
+document.addEventListener("keydown", (event) => {
+  handleArrowKey(event);
 });
 
 async function dismissCurrentFeedback() {

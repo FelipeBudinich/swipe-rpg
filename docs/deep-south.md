@@ -34,22 +34,42 @@ The ordered deck index is derived from the story definition and is not persisted
 
 ## Navigation
 
-Intro cards are read in sequence with up. A first left action shows the special skip-confirmation surface; a second left enters Castro. Up from that surface returns to the same Intro card.
+Intro cards are read in sequence with up. A first down action shows the special skip-confirmation surface; a second down enters Castro. Up from that surface returns to the same Intro card. Left and right remain present but disabled throughout the Intro.
 
 For plot cards, the engine alone maps direction to destination:
 
 ```text
-up    -> max(Plot Step 1, current step - 1)
-down  -> min(Plot Step 8, current step + 1)
-left  -> current step
-right -> current step
+up    -> max(Chapter 1, current chapter - 1)
+down  -> min(Chapter 8, current chapter + 1)
+left  -> current chapter
+right -> current chapter
 ```
 
-Cards provide labels, result prose, and resource effects. They cannot override navigation.
+Cards provide labels, result prose, optional payable costs, and resource effects. They cannot override navigation. Up and down are required; left and right may be omitted when no meaningful local action exists.
+
+## Choice availability and costs
+
+One pure availability contract is shared by buttons, keyboard input, swipe
+input, and the engine resolver. Missing choices and choices whose declared
+Crew or Eldritch Lore costs cannot be paid are disabled without mutating the
+run.
+
+Payable costs use:
+
+```js
+costs: {
+  crew: 1,
+  eldritchLore: 0
+}
+```
+
+Costs are deducted exactly once before the authored effects are applied.
+Unexpected negative effects remain consequences and clamp normally. Sanity
+loss is always a consequence, never an affordability check.
 
 ## Draw lifecycle
 
-Each plot deck persists:
+Each chapter deck persists:
 
 ```js
 {
@@ -59,7 +79,13 @@ Each plot deck persists:
 }
 ```
 
-Drawing is deterministic from the persisted random state. Resolution discards the source card before changing decks. The destination card is not drawn until the outcome is acknowledged. Exhaustion reshuffles that deck's discard pile and avoids an immediate repeat when another card exists.
+Drawing is deterministic from the persisted random state. Resolution discards the source card before changing chapters. The destination card is not drawn until the outcome is acknowledged. Exhaustion reshuffles that deck's discard pile and avoids an immediate repeat when another card exists.
+
+The HUD derives cards remaining directly from this state. For an active
+chapter it adds the draw-pile length to the currently displayed unresolved
+card. During persistent feedback it keeps the source chapter heading until
+Continue draws the destination card. Intro count is the Intro length minus its
+current sequential index.
 
 ## Outcome lifecycle
 
@@ -80,8 +106,9 @@ If Sanity reaches zero, `status` is already `lost`, but the outcome remains the 
 - Intro content has at least four sequential cards.
 - Every plot deck has at least five cards.
 - Card IDs are globally unique.
-- Every plot card defines up, down, left, and right.
+- Every plot card defines up and down; left and right are optional.
 - Effects contain only Eldritch Lore, Crew, and Sanity integer deltas.
+- Costs contain only nonnegative Crew and Eldritch Lore integers.
 - No resource gate can remove every action.
 - Artwork is local, allowlisted, and script-free.
 

@@ -37,14 +37,21 @@ function openingTagById(source, id) {
   return element.slice(0, element.indexOf(">") + 1);
 }
 
-test("document identity and application heading are Deep South", () => {
+test("document identity uses one visible Deep South h1 and a wrapping chapter h2", () => {
   assert.match(html, /<title>Deep South<\/title>/);
   assert.match(
     html,
     /<meta name="description" content="Deep South, a swipe-driven maritime cosmic-horror story\.">/,
   );
-  assert.equal(elementSourceById(html, "story-title").replace(/<[^>]+>/g, "").trim(), "Deep South");
-  assert.match(elementSourceById(html, "hud-deck-title"), /Intro — It begins here/);
+  const storyTitle = elementSourceById(html, "story-title");
+  const deckTitle = elementSourceById(html, "hud-deck-title");
+  assert.match(openingTagById(html, "story-title"), /^<h1\b/u);
+  assert.equal(storyTitle.replace(/<[^>]+>/g, "").trim(), "Deep South");
+  assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
+  assert.match(openingTagById(html, "hud-deck-title"), /^<h2\b/u);
+  assert.match(deckTitle, /It begins here - 4 cards left in deck/u);
+  assert.doesNotMatch(openingTagById(html, "hud-deck-title"), /\btruncate\b/u);
+  assert.doesNotMatch(html, /Plot Step \d+ of \d+/u);
   assert.match(openingTagById(html, "player-hud"), /aria-label="Deep South expedition status"/);
 });
 
@@ -136,16 +143,37 @@ test("all four accessible directional buttons use their matching arrow shortcut"
     assert.match(controls, new RegExp(`id="choice-${direction}-label"`));
     assert.match(controls, new RegExp(`id="choice-${direction}-detail"`));
   }
+  assert.equal(
+    (controls.match(/class="choice-detail"/g) ?? []).length,
+    4,
+    "Every direction reserves a detail slot",
+  );
 });
 
-test("intro starts with explicit up and left guidance without showing invalid actions", () => {
-  const hint = elementSourceById(html, "direction-hint");
-  assert.match(hint, /Up: keep reading · Left: skip introduction/);
-  assert.match(openingTagById(html, "choice-controls"), /data-layout="intro"/);
+test("Intro starts with Up and Down actions while permanent Left and Right slots are disabled", () => {
   assert.doesNotMatch(openingTagById(html, "choice-up"), /\shidden(?:\s|>)/);
+  assert.doesNotMatch(openingTagById(html, "choice-down"), /\shidden(?:\s|>)/);
   assert.doesNotMatch(openingTagById(html, "choice-left"), /\shidden(?:\s|>)/);
-  assert.match(openingTagById(html, "choice-down"), /\shidden(?:\s|>)/);
-  assert.match(openingTagById(html, "choice-right"), /\shidden(?:\s|>)/);
+  assert.doesNotMatch(openingTagById(html, "choice-right"), /\shidden(?:\s|>)/);
+  assert.doesNotMatch(openingTagById(html, "choice-up"), /\sdisabled(?:\s|>)/);
+  assert.doesNotMatch(openingTagById(html, "choice-down"), /\sdisabled(?:\s|>)/);
+  for (const direction of ["left", "right"]) {
+    assert.match(openingTagById(html, `choice-${direction}`), /\sdisabled(?:\s|>)/);
+    assert.match(
+      elementSourceById(html, `choice-${direction}`),
+      /No option/u,
+    );
+  }
+  assert.match(elementSourceById(html, "choice-down"), /Skip toward Castro/u);
+});
+
+test("the visible direction reminder/footer and its placeholder are removed", () => {
+  assert.equal(html.includes('id="direction-hint"'), false);
+  assert.equal(css.includes("#direction-hint"), false);
+  assert.doesNotMatch(
+    html,
+    /Left: skip introduction|Swipe to choose|cards remaining/iu,
+  );
 });
 
 test("persistent outcome card remains separate from decisions and has one Continue action", () => {
@@ -171,7 +199,6 @@ test("persistent outcome card remains separate from decisions and has one Contin
 test("loss surface is cosmic-horror specific and offers Begin Again", () => {
   const terminal = elementSourceById(html, "terminal-summary");
   assert.match(terminal, /Expedition lost/);
-  assert.match(terminal, /Deep South/);
   assert.match(terminal, /The sea remembers/);
   assert.match(terminal, /id="terminal-stats"/);
   assert.match(terminal, /id="terminal-restart"/);
@@ -212,12 +239,40 @@ test("CSS supports four-axis previews and a responsive two-column action grid", 
       new RegExp(`#choice-${direction}-overlay\\s*\\{[^}]*opacity:\\s*var\\(--choice-${direction}-opacity\\)`, "s"),
     );
   }
-  assert.match(css, /\.choice-button\s*\{[^}]*min-height:\s*3\.25rem;/s);
+  assert.match(
+    css,
+    /\.choice-button\s*\{[^}]*display:\s*grid;[^}]*height:\s*4\.875rem;[^}]*min-height:\s*4\.875rem;[^}]*grid-template-rows:\s*auto 1\.8rem 1\.35rem;/s,
+  );
+  assert.match(
+    css,
+    /\.choice-label\s*\{[^}]*height:\s*1\.8rem;[^}]*min-height:\s*1\.8rem;/s,
+  );
+  assert.match(
+    css,
+    /\.choice-detail\s*\{[^}]*height:\s*1\.35rem;[^}]*min-height:\s*1\.35rem;/s,
+  );
   assert.match(
     css,
     /#card\[data-deck-type="intro"\] #card-text\s*\{[^}]*white-space:\s*pre-line;/s,
   );
-  assert.match(css, /#choice-controls\[data-layout="intro"\]\s*\{/);
+  assert.match(
+    openingTagById(html, "choice-controls"),
+    /\bgrid-cols-2\b/u,
+  );
+  assert.doesNotMatch(css, /#choice-controls\[data-layout="intro"\]/u);
+  assert.match(
+    css,
+    /\.choice-button:disabled\s*\{[^}]*background:\s*#27333a;[^}]*opacity:\s*0\.72;/s,
+  );
+  assert.match(css, /\.choice-button\[data-direction\]:disabled:hover\s*\{/u);
+  assert.match(css, /\.choice-button:disabled:active\s*\{[^}]*transform:\s*none;/s);
+  assert.ok(
+    css.indexOf(".choice-button:disabled .choice-detail") >
+      css.indexOf(
+        '.choice-button[data-direction="right"] .choice-detail',
+      ),
+    "Disabled detail color must override direction-specific colors",
+  );
   assert.match(css, /@media \(max-width:\s*359px\)/);
   assert.match(css, /@media \(max-height:\s*650px\)/);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
@@ -236,7 +291,10 @@ test("narrow and short viewport rules preserve resources, choices, and feedback"
   assert.match(narrow, /\.choice-button/);
   assert.doesNotMatch(narrow, /display:\s*none|visibility:\s*hidden/);
   assert.match(short, /#choice-controls/);
-  assert.match(short, /\.choice-button\s*\{[^}]*min-height:\s*2\.75rem;/s);
+  assert.match(
+    short,
+    /\.choice-button\s*\{[^}]*height:\s*4\.5rem;[^}]*min-height:\s*4\.5rem;/s,
+  );
   assert.match(short, /#choice-feedback-controls/);
   assert.match(short, /#choice-feedback-changes/);
   assert.doesNotMatch(short, /display:\s*none|visibility:\s*hidden/);

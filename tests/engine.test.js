@@ -11,15 +11,58 @@ import {
   restartGame,
   resolveChoice,
 } from "../public/js/game/engine.js";
+import {
+  getChoiceAvailability,
+  getDirectionAvailability,
+  normalizeChoiceCosts,
+} from "../public/js/game/choice-availability.js";
 import { createInitialState, normalizeState } from "../public/js/game/state.js";
 
 const deckById = Object.fromEntries(
   DEEP_SOUTH_STORY.decks.map((deck) => [deck.id, deck]),
 );
 
-function resolve(state, card, direction) {
+const COST_CONTRACT_CARD = {
+  id: "castro-cost-contract",
+  deckId: "castro",
+  type: "plot",
+  title: "Cost contract",
+  text: "A deterministic fixture for resolver costs.",
+  choices: {
+    up: {
+      label: "Pay one crew",
+      result: "One crewmate takes the watch.",
+      effects: {},
+      costs: { crew: 1 },
+    },
+    down: {
+      label: "Spend lore to learn",
+      result: "Two clues combine into one useful conclusion.",
+      effects: { eldritchLore: 1 },
+      costs: { eldritchLore: 2 },
+    },
+    left: {
+      label: "Risk your mind",
+      result: "The impossible answer leaves a permanent mark.",
+      effects: { sanity: -1 },
+      costs: { sanity: 99 },
+    },
+  },
+};
+
+const COST_CONTRACT_STORY = {
+  ...DEEP_SOUTH_STORY,
+  decks: DEEP_SOUTH_STORY.decks.map((deck) =>
+    deck.id === "castro"
+      ? { ...deck, cards: [COST_CONTRACT_CARD] }
+      : deck,
+  ),
+};
+
+function resolve(state, card, direction, story = DEEP_SOUTH_STORY) {
   return resolveChoice(state, direction, {
     expectedToken: card?.resolutionToken,
+    story,
   });
 }
 
@@ -34,17 +77,22 @@ function acknowledge(result) {
 
 function enterCastro(seed = 17) {
   let game = createGame({ seed });
-  game = resolve(game.state, game.card, "left");
+  game = resolve(game.state, game.card, "down");
   assert.equal(game.state.introSkipPending, true);
-  game = resolve(game.state, game.card, "left");
+  game = resolve(game.state, game.card, "down");
   assert.equal(game.state.currentDeckId, "castro");
   return game;
 }
 
-function stateOnCard(deckId, cardId, resources = {}) {
+function stateOnCard(
+  deckId,
+  cardId,
+  resources = {},
+  story = DEEP_SOUTH_STORY,
+) {
   const base = createInitialState({
     seed: 71,
-    decks: DEEP_SOUTH_STORY.decks,
+    decks: story.decks,
   });
   const state = {
     ...base,
@@ -53,7 +101,7 @@ function stateOnCard(deckId, cardId, resources = {}) {
     currentCardToken: `0:${deckId}:${cardId}`,
     resources: { ...base.resources, ...resources },
   };
-  return { state, card: getCurrentCard(state) };
+  return { state, card: getCurrentCard(state, story) };
 }
 
 test("a fresh run starts on the first sequential Intro card with exact resources", () => {
@@ -90,35 +138,44 @@ test("up reads the Intro sequentially and the final card enters Castro", () => {
   assert.equal(game.state.pendingFeedback, null);
 });
 
-test("Intro skip requires two left swipes and cancel returns to the same card", () => {
+test("Intro skip requires two down swipes and cancel returns to the same card", () => {
   let game = createGame({ seed: 3 });
   game = resolve(game.state, game.card, "up");
   const originalCardId = game.card.id;
   const originalIndex = game.state.introCardIndex;
 
-  game = resolve(game.state, game.card, "left");
+  game = resolve(game.state, game.card, "down");
   assert.equal(game.state.introSkipPending, true);
   assert.equal(game.card.id, "deep-south-intro-skip-confirmation");
-  assert.match(game.card.text, /Swipe left again to skip to Castro/u);
+  assert.match(game.card.text, /Swipe down again to skip to Castro/u);
 
   game = resolve(game.state, game.card, "up");
   assert.equal(game.state.introSkipPending, false);
   assert.equal(game.state.introCardIndex, originalIndex);
   assert.equal(game.card.id, originalCardId);
 
-  game = resolve(game.state, game.card, "left");
-  game = resolve(game.state, game.card, "left");
+  game = resolve(game.state, game.card, "down");
+  game = resolve(game.state, game.card, "down");
   assert.equal(game.state.currentDeckId, "castro");
   assert.ok(game.card);
 });
 
-test("right and down are inert throughout the Intro", () => {
-  const game = createGame({ seed: 4 });
-  for (const direction of ["right", "down"]) {
-    const result = resolve(game.state, game.card, direction);
-    assert.equal(result.ignored, true);
-    assert.equal(result.reason, "intro-direction-ignored");
-    assert.deepEqual(result.state, game.state);
+test("left and right are inert on Intro cards and skip confirmation", () => {
+  let game = createGame({ seed: 4 });
+  for (const direction of ["left", "right"]) {
+    const introResult = resolve(game.state, game.card, direction);
+    assert.equal(introResult.ignored, true);
+    assert.equal(introResult.reason, "intro-direction-ignored");
+    assert.deepEqual(introResult.state, game.state);
+  }
+
+  game = resolve(game.state, game.card, "down");
+  assert.equal(game.state.introSkipPending, true);
+  for (const direction of ["left", "right"]) {
+    const confirmationResult = resolve(game.state, game.card, direction);
+    assert.equal(confirmationResult.ignored, true);
+    assert.equal(confirmationResult.reason, "intro-direction-ignored");
+    assert.deepEqual(confirmationResult.state, game.state);
   }
 });
 
@@ -140,6 +197,164 @@ test("plot navigation is derived centrally and never reaches the Intro", () => {
   assert.equal(getDestinationDeckId("navigate", "right"), "navigate");
 });
 
+test("the shared availability predicate handles optional choices and only Crew/Lore costs", () => {
+  const game = stateOnCard(
+    "castro",
+    COST_CONTRACT_CARD.id,
+    { crew: 0, eldritchLore: 1, sanity: 1 },
+    COST_CONTRACT_STORY,
+  );
+
+  assert.deepEqual(
+    normalizeChoiceCosts({
+      crew: "2.8",
+      eldritchLore: 1,
+      sanity: 99,
+      arbitrary: 4,
+    }),
+    { crew: 2, eldritchLore: 1 },
+  );
+
+  const crew = getDirectionAvailability(game.state, game.card, "up");
+  assert.equal(crew.available, false);
+  assert.equal(crew.reason, "insufficient-resources");
+  assert.equal(crew.requirementText, "Requires 1 Crew.");
+  assert.deepEqual(crew.costs, { crew: 1 });
+  assert.deepEqual(crew.shortfalls, { crew: 1 });
+
+  const missing = getDirectionAvailability(game.state, game.card, "right");
+  assert.equal(missing.available, false);
+  assert.equal(missing.reason, "choice-unavailable");
+  assert.match(missing.requirementText, /No action is available/u);
+  assert.deepEqual(missing.costs, {});
+
+  const sanity = getChoiceAvailability(
+    game.state,
+    COST_CONTRACT_CARD.choices.left,
+  );
+  assert.equal(sanity.available, true);
+  assert.equal(sanity.requirementText, "");
+  assert.deepEqual(sanity.costs, {});
+});
+
+test("disabled choices are ignored atomically without state, draw, or resource changes", () => {
+  const game = stateOnCard(
+    "castro",
+    COST_CONTRACT_CARD.id,
+    { crew: 0 },
+    COST_CONTRACT_STORY,
+  );
+  const before = structuredClone(game.state);
+
+  for (const direction of ["up", "right"]) {
+    const result = resolve(
+      game.state,
+      game.card,
+      direction,
+      COST_CONTRACT_STORY,
+    );
+    assert.equal(result.ignored, true);
+    assert.equal(
+      result.reason,
+      direction === "up" ? "insufficient-resources" : "choice-unavailable",
+    );
+    assert.strictEqual(result.state, game.state);
+    assert.deepEqual(result.state, before);
+    assert.equal(result.state.pendingFeedback, null);
+    assert.equal(result.state.decisionCount, before.decisionCount);
+  }
+  assert.deepEqual(game.state, before);
+
+  const undrawn = {
+    ...game.state,
+    currentCardId: null,
+    currentCardToken: null,
+  };
+  const lazyDisabled = resolveChoice(undrawn, "right", {
+    story: COST_CONTRACT_STORY,
+  });
+  assert.equal(lazyDisabled.ignored, true);
+  assert.equal(lazyDisabled.reason, "choice-unavailable");
+  assert.strictEqual(lazyDisabled.state, undrawn);
+});
+
+test("the resolver re-checks and deducts choice costs exactly once", () => {
+  const game = stateOnCard(
+    "castro",
+    COST_CONTRACT_CARD.id,
+    { crew: 1 },
+    COST_CONTRACT_STORY,
+  );
+  const result = resolve(
+    game.state,
+    game.card,
+    "up",
+    COST_CONTRACT_STORY,
+  );
+
+  assert.equal(result.ignored, false);
+  assert.equal(result.state.resources.crew, 0);
+  assert.deepEqual(result.changes, { crew: -1 });
+  assert.deepEqual(result.state.pendingFeedback.changes, { crew: -1 });
+  assert.equal(result.state.decisionCount, game.state.decisionCount + 1);
+  assert.equal(
+    result.state.drawStateByDeck.castro.discardPile.filter(
+      (cardId) => cardId === COST_CONTRACT_CARD.id,
+    ).length,
+    1,
+  );
+
+  const duplicate = resolveChoice(result.state, "up", {
+    expectedToken: game.card.resolutionToken,
+    story: COST_CONTRACT_STORY,
+  });
+  assert.equal(duplicate.ignored, true);
+  assert.equal(duplicate.reason, "feedback-pending");
+  assert.equal(duplicate.state.resources.crew, 0);
+  assert.equal(duplicate.state.decisionCount, result.state.decisionCount);
+});
+
+test("feedback merges actual cost and effect deltas while sanity remains an effect", () => {
+  let game = stateOnCard(
+    "castro",
+    COST_CONTRACT_CARD.id,
+    { eldritchLore: 2 },
+    COST_CONTRACT_STORY,
+  );
+  let result = resolve(
+    game.state,
+    game.card,
+    "down",
+    COST_CONTRACT_STORY,
+  );
+  assert.equal(result.state.resources.eldritchLore, 1);
+  assert.deepEqual(result.changes, { eldritchLore: -1 });
+  assert.deepEqual(result.state.pendingFeedback.changes, {
+    eldritchLore: -1,
+  });
+
+  game = stateOnCard(
+    "castro",
+    COST_CONTRACT_CARD.id,
+    { sanity: 1 },
+    COST_CONTRACT_STORY,
+  );
+  assert.equal(
+    getDirectionAvailability(game.state, game.card, "left").available,
+    true,
+  );
+  result = resolve(
+    game.state,
+    game.card,
+    "left",
+    COST_CONTRACT_STORY,
+  );
+  assert.equal(result.state.resources.sanity, 0);
+  assert.equal(result.state.status, "lost");
+  assert.deepEqual(result.changes, { sanity: -1 });
+  assert.deepEqual(result.state.pendingFeedback.changes, { sanity: -1 });
+});
+
 test("up at Castro resolves locally and draws another Castro card only after Continue", () => {
   const game = enterCastro(5);
   const rngBefore = game.state.rngState;
@@ -157,7 +372,7 @@ test("up at Castro resolves locally and draws another Castro card only after Con
   assert.notEqual(next.card.id, game.card.id);
 });
 
-test("down advances, up retreats, and left/right remain within the active Plot Step", () => {
+test("down advances, up retreats, and left/right remain within the active chapter", () => {
   let game = enterCastro(6);
   let result = resolve(game.state, game.card, "down");
   assert.equal(result.state.currentDeckId, "investigate-church");
@@ -205,7 +420,7 @@ test("resolution discards in the source deck and preserves destination draw stat
   );
 });
 
-test("draw state survives leaving a Plot Step and returning", () => {
+test("draw state survives leaving a chapter and returning", () => {
   let game = enterCastro(8);
   let result = resolve(game.state, game.card, "down");
   game = acknowledge(result);
@@ -227,7 +442,7 @@ test("draw state survives leaving a Plot Step and returning", () => {
 
 test("actual applied Crew and Lore changes are clamped and persisted in feedback", () => {
   const loreCard = deckById.castro.cards.find(
-    (card) => card.choices.left.effects.eldritchLore > 0,
+    (card) => card.choices.left?.effects?.eldritchLore > 0,
   );
   let game = stateOnCard("castro", loreCard.id);
   let result = resolve(game.state, game.card, "left");
@@ -235,7 +450,7 @@ test("actual applied Crew and Lore changes are clamped and persisted in feedback
   assert.deepEqual(result.state.pendingFeedback.changes, { eldritchLore: 1 });
 
   const lossCard = deckById.navigate.cards.find(
-    (card) => card.choices.left.effects.crew < 0,
+    (card) => card.choices.left?.effects?.crew < 0,
   );
   game = stateOnCard("navigate", lossCard.id, { crew: 0 });
   result = resolve(game.state, game.card, "left");
@@ -256,7 +471,7 @@ test("Crew zero and Lore zero remain playable; only Sanity zero causes loss", ()
   assert.equal(result.state.status, "playing");
 
   const sanityCard = deckById.castro.cards.find(
-    (card) => card.choices.right.effects.sanity < 0,
+    (card) => card.choices.right?.effects?.sanity < 0,
   );
   game = stateOnCard("castro", sanityCard.id, { sanity: 1 });
   result = resolve(game.state, game.card, "right");

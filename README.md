@@ -2,7 +2,7 @@
 
 Deep South is a mobile-first, four-direction card game about an expedition from Chiloé into an impossible southern sea. It uses static HTML, native JavaScript modules, locally compiled Tailwind CSS, and a small hardened Node.js file server.
 
-The expedition begins with four sequential pieces of testimony. After Castro, every location is an independent deterministic card deck. Up moves toward Castro, down moves toward Gather Evidence, and left or right resolves a local action. The run ends only when Sanity reaches zero.
+The expedition begins with four sequential pieces of testimony. After Castro, every chapter is an independent deterministic card deck. Up moves toward Castro, down moves toward Gather Evidence, and left or right resolves an available local action. The run ends only when Sanity reaches zero.
 
 ## Architecture
 
@@ -12,9 +12,11 @@ The expedition begins with four sequential pieces of testimony. After Castro, ev
 - `public/js/game/deck-draw.js` owns deterministic per-deck draw/discard behavior.
 - `public/js/game/engine.js` resolves Intro navigation, plot navigation, choices, feedback acknowledgement, loss, and restart.
 - `public/js/game/effects.js` applies and clamps Eldritch Lore, Crew, and Sanity.
+- `public/js/game/choice-availability.js` is the shared affordability and direction-availability policy used by the engine and every input path.
 - `public/js/game/choice-feedback.js` creates and validates persistent outcome payloads.
 - `public/js/ui/render.js` renders the HUD, directional card controls, persistent outcome card, and loss surface.
 - `public/js/ui/swipe-controller.js` implements four-axis Pointer Events gestures.
+- `public/js/ui/directional-input.js` adapts keyboard arrows and delegated button clicks to the shared direction policy.
 - `public/js/main.js` coordinates persistence, input locking, rendering, and focus.
 - `server.js` serves `public/` with strict headers and path containment.
 
@@ -25,14 +27,14 @@ There is one state model and one canonical deck order. Rendering and input handl
 | Order | Type | ID | Display name |
 | ---: | --- | --- | --- |
 | 0 | Intro | `it-begins-here` | It begins here |
-| 1 | Plot Step 1 | `castro` | Castro |
-| 2 | Plot Step 2 | `investigate-church` | Investigate Church |
-| 3 | Plot Step 3 | `gather-crew` | Gather Crew |
-| 4 | Plot Step 4 | `navigate` | Navigate |
-| 5 | Plot Step 5 | `rest-at-desolate-beach` | Rest at desolate beach |
-| 6 | Plot Step 6 | `reach-the-coordinates` | Reach the coordinates |
-| 7 | Plot Step 7 | `explore-rlyeh` | Explore R'lyeh |
-| 8 | Plot Step 8 | `gather-evidence` | Gather Evidence |
+| 1 | Chapter 1 | `castro` | Castro |
+| 2 | Chapter 2 | `investigate-church` | Investigate Church |
+| 3 | Chapter 3 | `gather-crew` | Gather Crew |
+| 4 | Chapter 4 | `navigate` | Navigate |
+| 5 | Chapter 5 | `rest-at-desolate-beach` | Rest at desolate beach |
+| 6 | Chapter 6 | `reach-the-coordinates` | Reach the coordinates |
+| 7 | Chapter 7 | `explore-rlyeh` | Explore R'lyeh |
+| 8 | Chapter 8 | `gather-evidence` | Gather Evidence |
 
 The Intro is sequential. Plot decks draw without replacement, retain their own draw/discard piles when the expedition moves, and reshuffle deterministically when exhausted.
 
@@ -40,11 +42,21 @@ The Intro is sequential. Plot decks draw without replacement, retain their own d
 
 - Swipe or press **Arrow Up** to move toward Castro.
 - Swipe or press **Arrow Down** to move toward Gather Evidence.
-- Swipe or press **Arrow Left** or **Arrow Right** for a local action.
+- Swipe or press **Arrow Left** or **Arrow Right** for an available local action.
 - Use the four visible buttons for the same accessible actions.
 - Select **Continue** to acknowledge a persistent choice outcome.
 
-During the Intro, up reads the next card. Left opens a persisted skip confirmation; left again enters Castro, while up cancels without advancing. Right and down are inert.
+During the Intro, up reads the next card. Down opens a persisted skip confirmation; down again enters Castro, while up cancels without advancing. Left and right remain visible but disabled.
+
+The HUD derives its chapter heading and unresolved-card count from the
+canonical deck draw state. For example:
+
+```text
+Castro, Chapter 1 - 5 cards left in deck
+```
+
+The currently displayed card is included in the count. A chapter's count
+changes only after an outcome is acknowledged and its next card is drawn.
 
 ## Resources and loss
 
@@ -62,7 +74,8 @@ All three values clamp at zero. Zero Crew and zero Eldritch Lore remain playable
 
 ## Card data
 
-Plot cards contain four authored choices:
+Plot cards always contain the required up/down navigation outcomes and may
+optionally contain left/right local outcomes:
 
 ```js
 {
@@ -79,8 +92,13 @@ Plot cards contain four authored choices:
       effects: { eldritchLore: 0, crew: 0, sanity: 0 }
     },
     down: { /* authored outcome */ },
-    left: { /* authored outcome */ },
-    right: { /* authored outcome */ }
+    left: null,
+    right: {
+      label: "Send a sailor below",
+      costs: { crew: 1 },
+      result: "...",
+      effects: { eldritchLore: 1, crew: 0, sanity: 0 }
+    }
   }
 }
 ```
@@ -89,10 +107,11 @@ To add a card:
 
 1. Add it to the appropriate deck array in `public/js/data/cards/deep-south-cards.js`.
 2. Give it a globally unique stable ID.
-3. Supply all four directions.
+3. Supply up and down; add left/right only where the local action is meaningful.
 4. Limit effects to `eldritchLore`, `crew`, and `sanity`.
-5. Keep navigation out of card data; direction-to-deck movement is centralized in the engine.
-6. Run the content and full test suites.
+5. Declare payable Crew or Eldritch Lore costs in `costs`, never twice in effects.
+6. Keep navigation out of card data; direction-to-deck movement is centralized in the engine.
+7. Run the content and full test suites.
 
 ## Persistence and migration
 

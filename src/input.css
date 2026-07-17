@@ -93,11 +93,13 @@
 }
 
 .choice-button {
-  display: flex;
+  display: grid;
   min-width: 0;
-  min-height: 3.25rem;
-  flex-direction: column;
-  justify-content: center;
+  height: 4.875rem;
+  min-height: 4.875rem;
+  grid-template-rows: auto 1.8rem 1.35rem;
+  align-content: center;
+  row-gap: 0.12rem;
   border: 1px solid #527d7a;
   border-radius: 0.75rem;
   background: #123c40;
@@ -142,7 +144,21 @@
 
 .choice-button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  border-color: #59656a;
+  background: #27333a;
+  color: #aeb9bc;
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.choice-button[data-direction]:disabled:hover {
+  border-color: #59656a;
+  background: #27333a;
+  color: #aeb9bc;
+}
+
+.choice-button:disabled:active {
+  transform: none;
 }
 
 .choice-direction {
@@ -163,10 +179,15 @@
   color: #d1b5d4;
 }
 
+.choice-button:disabled .choice-direction {
+  color: #aeb9bc;
+}
+
 .choice-label {
   display: -webkit-box;
   overflow: hidden;
-  margin-top: 0.12rem;
+  height: 1.8rem;
+  min-height: 1.8rem;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   font-size: 0.8rem;
@@ -177,7 +198,8 @@
 .choice-detail {
   display: -webkit-box;
   overflow: hidden;
-  margin-top: 0.12rem;
+  height: 1.35rem;
+  min-height: 1.35rem;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   font-size: 0.6rem;
@@ -191,8 +213,8 @@
   color: #dec6df;
 }
 
-#choice-controls[data-layout="intro"] {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.choice-button:disabled .choice-detail {
+  color: #aeb9bc;
 }
 
 [data-resource][data-previewed="true"] {
@@ -340,10 +362,6 @@
   .choice-label {
     font-size: 0.76rem;
   }
-
-  #direction-hint {
-    font-size: 0.58rem;
-  }
 }
 
 @media (max-height: 650px) {
@@ -397,10 +415,6 @@
     padding-bottom: 0.4rem;
   }
 
-  #direction-hint {
-    margin-top: 0.2rem;
-  }
-
   #choice-controls,
   #choice-feedback-controls {
     margin-top: 0.2rem;
@@ -408,7 +422,8 @@
   }
 
   .choice-button {
-    min-height: 2.75rem;
+    height: 4.5rem;
+    min-height: 4.5rem;
     padding-top: 0.25rem;
     padding-bottom: 0.25rem;
   }

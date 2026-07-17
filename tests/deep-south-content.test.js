@@ -23,7 +23,9 @@ import {
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const artDirectory = join(root, "public", "assets", "art");
 const DIRECTIONS = ["down", "left", "right", "up"];
+const REQUIRED_DIRECTIONS = ["down", "up"];
 const EFFECT_KEYS = ["crew", "eldritchLore", "sanity"];
+const COST_KEYS = ["crew", "eldritchLore"];
 const EXPECTED_DECKS = [
   { id: "it-begins-here", title: "It begins here", type: "intro" },
   { id: "castro", title: "Castro", type: "plot", plotStep: 1 },
@@ -73,8 +75,17 @@ function plotCorpus(deck) {
   return deck.cards.flatMap((card) => [
     card.title,
     card.text,
-    ...Object.values(card.choices).flatMap(({ label, result }) => [label, result]),
+    ...Object.values(card.choices)
+      .filter(Boolean)
+      .flatMap(({ label, result }) => [label, result]),
   ]).join(" ");
+}
+
+function authoredChoices(card) {
+  return DIRECTIONS.flatMap((direction) => {
+    const choice = card.choices?.[direction];
+    return choice ? [{ direction, choice }] : [];
+  });
 }
 
 test("Deep South publishes the exact ordered nine-deck story contract", () => {
@@ -125,10 +136,10 @@ test("the intro is four immutable sequential cards and skip confirmation stays o
     id: "deep-south-intro-skip-confirmation",
     type: "intro-confirmation",
     title: "Skip the logbook?",
-    text: "Swipe left again to skip to Castro.\nSwipe up to keep reading.",
+    text: "Swipe down again to skip to Castro.\nSwipe up to keep reading.",
     artId: "deep-south-it-begins-here",
     choices: {
-      left: { label: "Skip to Castro" },
+      down: { label: "Skip to Castro" },
       up: { label: "Keep reading" },
     },
   });
@@ -143,7 +154,7 @@ test("the intro is four immutable sequential cards and skip confirmation stays o
   );
 });
 
-test("all eight plot decks contain five unique four-direction cards", () => {
+test("all eight plot decks contain five unique cards with required vertical navigation", () => {
   assert.equal(DEEP_SOUTH_DECKS.length, 9);
   assert.equal(DEEP_SOUTH_PLOT_DECKS.length, 8);
   assert.deepEqual(
@@ -174,9 +185,34 @@ test("all eight plot decks contain five unique four-direction cards", () => {
         "title",
         "type",
       ]);
-      assert.deepEqual(Object.keys(card.choices).sort(), DIRECTIONS);
+      assert.ok(card.choices.up, `${card.id} must define an up choice`);
+      assert.ok(card.choices.down, `${card.id} must define a down choice`);
+      assert.ok(
+        Object.keys(card.choices).every((direction) => DIRECTIONS.includes(direction)),
+        `${card.id} defines an unknown direction`,
+      );
+      assert.ok(
+        authoredChoices(card).length >= REQUIRED_DIRECTIONS.length,
+        `${card.id} does not have enough navigable choices`,
+      );
     }
   }
+
+  const missingLocalChoices = DEEP_SOUTH_PLOT_CARDS.flatMap((card) =>
+    ["left", "right"].flatMap((direction) => {
+      if (card.choices?.[direction]) return [];
+      return [{
+        cardId: card.id,
+        direction,
+        representedAsNull:
+          Object.hasOwn(card.choices, direction) && card.choices[direction] === null,
+      }];
+    }));
+  assert.equal(missingLocalChoices.length, 8);
+  assert.ok(missingLocalChoices.some(({ direction }) => direction === "left"));
+  assert.ok(missingLocalChoices.some(({ direction }) => direction === "right"));
+  assert.ok(missingLocalChoices.some(({ representedAsNull }) => representedAsNull));
+  assert.ok(missingLocalChoices.some(({ representedAsNull }) => !representedAsNull));
 
   assert.equal(DEEP_SOUTH_PLOT_CARDS.length, 40);
   assert.equal(DEEP_SOUTH_CARDS.length, 44);
@@ -191,14 +227,19 @@ test("all eight plot decks contain five unique four-direction cards", () => {
   }
 });
 
-test("plot outcomes use only the three bounded story resources with useful tradeoffs", () => {
+test("plot outcomes use bounded effects and explicit payable costs without double charging", () => {
   const outcomes = [];
+  const paidChoices = [];
 
   for (const card of DEEP_SOUTH_PLOT_CARDS) {
-    for (const direction of DIRECTIONS) {
-      const choice = card.choices[direction];
+    for (const { direction, choice } of authoredChoices(card)) {
       outcomes.push(choice);
-      assert.deepEqual(Object.keys(choice).sort(), ["effects", "label", "result"]);
+      assert.deepEqual(
+        Object.keys(choice).sort(),
+        choice.costs
+          ? ["costs", "effects", "label", "result"]
+          : ["effects", "label", "result"],
+      );
       assert.ok(choice.label.trim(), `${card.id}.${direction} has no label`);
       assert.ok(choice.result.trim(), `${card.id}.${direction} has no result`);
       assert.deepEqual(Object.keys(choice.effects).sort(), EFFECT_KEYS);
@@ -214,22 +255,52 @@ test("plot outcomes use only the three bounded story resources with useful trade
         [-1, 0].includes(choice.effects.sanity),
         `${card.id}.${direction} has an invalid sanity effect`,
       );
+
+      if (choice.costs) {
+        paidChoices.push({ card, direction, choice });
+        assert.ok(Object.keys(choice.costs).length > 0);
+        assert.ok(
+          Object.keys(choice.costs).every((resource) => COST_KEYS.includes(resource)),
+          `${card.id}.${direction} defines a forbidden cost`,
+        );
+        assert.equal(Object.hasOwn(choice.costs, "sanity"), false);
+        for (const [resource, amount] of Object.entries(choice.costs)) {
+          assert.ok(
+            Number.isInteger(amount) && amount > 0,
+            `${card.id}.${direction} has an invalid ${resource} cost`,
+          );
+          assert.ok(
+            choice.effects[resource] >= 0,
+            `${card.id}.${direction} duplicates its ${resource} cost in effects`,
+          );
+        }
+      }
     }
   }
 
-  assert.equal(outcomes.length, 160);
+  assert.equal(outcomes.length, 152);
+  assert.ok(
+    paidChoices.some(({ choice }) => choice.costs.crew === 1),
+    "at least one choice must exercise a payable Crew cost",
+  );
+  assert.ok(
+    paidChoices.every(({ card }) => card.deckId !== "it-begins-here"),
+    "intro choices must remain free",
+  );
   const effects = outcomes.map(({ effects }) => effects);
   assert.ok(effects.filter(({ eldritchLore }) => eldritchLore === 1).length >= 40);
   assert.ok(effects.filter(({ crew }) => crew === 1).length >= 8);
   assert.ok(effects.filter(({ crew }) => crew === -1).length >= 4);
   assert.ok(effects.filter(({ sanity }) => sanity === -1).length >= 20);
   assert.ok(
-    effects.filter((effect) => Object.values(effect).every((value) => value === 0)).length >= 40,
+    outcomes.filter((choice) =>
+      !choice.costs &&
+      Object.values(choice.effects).every((value) => value === 0)).length >= 40,
     "the story needs plentiful neutral choices",
   );
 });
 
-test("cards are concise, maritime, locally grounded, and contain no hard-gate schema", () => {
+test("cards are concise, locally grounded, and contain no unrelated hard-gate schema", () => {
   for (const card of DEEP_SOUTH_INTRO_CARDS) {
     assert.ok(card.title.length <= 40);
     assert.ok(card.text.length <= 180);
@@ -237,7 +308,7 @@ test("cards are concise, maritime, locally grounded, and contain no hard-gate sc
   for (const card of DEEP_SOUTH_PLOT_CARDS) {
     assert.ok(card.title.length <= 40, `${card.id} has an overlong title`);
     assert.ok(card.text.length <= 150, `${card.id} has overlong prompt prose`);
-    for (const { label, result } of Object.values(card.choices)) {
+    for (const { choice: { label, result } } of authoredChoices(card)) {
       assert.ok(label.length <= 40, `${card.id} has an overlong choice label`);
       assert.ok(result.length <= 100, `${card.id} has an overlong result`);
     }
@@ -266,7 +337,6 @@ test("cards are concise, maritime, locally grounded, and contain no hard-gate sc
     "advanceDeck",
     "condition",
     "cost",
-    "costs",
     "destinationDeckId",
     "gate",
     "gates",

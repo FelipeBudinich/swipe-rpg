@@ -10,10 +10,12 @@ const outcome = (
   label,
   result,
   { eldritchLore = 0, crew = 0, sanity = 0 } = {},
+  costs = null,
 ) => ({
   label,
   result,
   effects: { eldritchLore, crew, sanity },
+  ...(costs ? { costs } : {}),
 });
 
 const introCard = (sequence, id, title, text) => ({
@@ -111,10 +113,7 @@ const castroCards = [
         "Your rubbing preserves a pattern shaped like a drowned constellation.",
         { eldritchLore: 1 },
       ),
-      right: outcome(
-        "Question the carpenter",
-        "A carpenter admits three missing boats bore the same mark.",
-      ),
+      right: null,
     },
   ),
   plotCard(
@@ -220,10 +219,6 @@ const churchCards = [
         "A copied margin links the vanished expedition to a midnight service.",
         { eldritchLore: 1 },
       ),
-      right: outcome(
-        "Ask for permission",
-        "Your candor earns one careful hour with the ledger.",
-      ),
     },
   ),
   plotCard(
@@ -274,8 +269,9 @@ const churchCards = [
         { eldritchLore: 1 },
       ),
       right: outcome(
-        "Call for a witness",
-        "A reluctant caretaker steadies the lamp and agrees to help.",
+        "Send a sailor below",
+        "Only the rope returns from the flooded darkness.",
+        { eldritchLore: 1 },
         { crew: 1 },
       ),
     },
@@ -412,10 +408,7 @@ const crewCards = [
         "A submerged voice repeats the Calypso's call sign.",
         { sanity: -1 },
       ),
-      right: outcome(
-        "Replace his antenna",
-        "The ordinary weather band returns, calm and empty.",
-      ),
+      right: null,
     },
   ),
   plotCard(
@@ -490,10 +483,6 @@ const navigateCards = [
         "Steer by the drifting needle",
         "The vessel enters a current absent from the chart.",
         { eldritchLore: 1 },
-      ),
-      left: outcome(
-        "Trust the coastline",
-        "You hold position by rock and surf until the drift passes.",
       ),
       right: outcome(
         "Dismantle a compass",
@@ -685,10 +674,7 @@ const beachCards = [
         "The dreamer wakes screaming with a new coordinate.",
         { eldritchLore: 1, sanity: -1 },
       ),
-      right: outcome(
-        "Burn the sand-filled bedding",
-        "The smoke drifts seaward against the wind.",
-      ),
+      right: null,
     },
   ),
   plotCard(
@@ -766,10 +752,6 @@ const coordinatesCards = [
         "Average every reading",
         "The mean position matches the logbook's erased coordinate.",
         { eldritchLore: 1 },
-      ),
-      right: outcome(
-        "Trust dead reckoning",
-        "For an hour, ordinary arithmetic holds the world together.",
       ),
     },
   ),
@@ -984,10 +966,7 @@ const rlyehCards = [
         "One crew member's watch is counting backward toward birth.",
         { sanity: -1 },
       ),
-      right: outcome(
-        "Discard all clocks",
-        "Without timepieces, the breathing of the city becomes your only measure.",
-      ),
+      right: null,
     },
   ),
   plotCard(
@@ -1124,10 +1103,6 @@ const evidenceCards = [
         "Record each version alone",
         "Contradictions outline the shape that memory refuses to hold.",
         { eldritchLore: 1 },
-      ),
-      right: outcome(
-        "End the interviews",
-        "Silence keeps the remaining crew together for now.",
       ),
     },
   ),

@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { DEEP_SOUTH_STORY } from "../public/js/data/deep-south.js";
+import {
+  createGame,
+  dismissChoiceFeedback,
+  resolveChoice,
+} from "../public/js/game/engine.js";
 import {
   DIRECTIONS,
   FEEDBACK_ART_BY_TONE,
@@ -9,52 +15,45 @@ import {
   cardAnnouncement,
   choiceDetail,
   choiceForDirection,
+  deriveChoicePresentation,
   deriveDeckHud,
   deriveFeedbackPresentation,
   deriveLossPresentation,
   resolveArtSource,
 } from "../public/js/ui/render.js";
 
-const story = {
-  id: "deep-south",
-  title: "Deep South",
-  decks: [
-    { id: "it-begins-here", title: "It begins here", type: "intro" },
-    { id: "castro", title: "Castro", type: "plot", plotStep: 1 },
-    {
-      id: "investigate-church",
-      title: "Investigate Church",
-      type: "plot",
-      plotStep: 2,
+const story = DEEP_SOUTH_STORY;
+
+function stateForDeck(deckId, cardsLeft = 5) {
+  const deck = story.decks.find(({ id }) => id === deckId);
+  assert.ok(deck);
+  const currentCard = deck.cards[0];
+  return {
+    currentDeckId: deckId,
+    currentCardId: currentCard.id,
+    drawStateByDeck: {
+      [deckId]: {
+        drawPile: deck.cards
+          .slice(1, Math.max(1, cardsLeft))
+          .map(({ id }) => id),
+        discardPile: [],
+      },
     },
-    { id: "gather-crew", title: "Gather Crew", type: "plot", plotStep: 3 },
-    { id: "navigate", title: "Navigate", type: "plot", plotStep: 4 },
-    {
-      id: "rest-at-desolate-beach",
-      title: "Rest at desolate beach",
-      type: "plot",
-      plotStep: 5,
-    },
-    {
-      id: "reach-the-coordinates",
-      title: "Reach the coordinates",
-      type: "plot",
-      plotStep: 6,
-    },
-    {
-      id: "explore-rlyeh",
-      title: "Explore R'lyeh",
-      type: "plot",
-      plotStep: 7,
-    },
-    {
-      id: "gather-evidence",
-      title: "Gather Evidence",
-      type: "plot",
-      plotStep: 8,
-    },
-  ],
-};
+    resources: { eldritchLore: 0, crew: 0, sanity: 3 },
+  };
+}
+
+function resolve(game, direction) {
+  return resolveChoice(game.state, direction, {
+    expectedToken: game.card?.resolutionToken,
+  });
+}
+
+function continueFromFeedback(game) {
+  return dismissChoiceFeedback(game.state, {
+    expectedFeedbackId: game.state.pendingFeedback?.id,
+  });
+}
 
 const plotCard = {
   id: "castro-bells",
@@ -84,38 +83,139 @@ const plotCard = {
   },
 };
 
-test("deck HUD derives intro and numbered plot labels from the canonical story", () => {
-  assert.deepEqual(deriveDeckHud({ currentDeckId: "it-begins-here" }, story), {
-    storyTitle: "Deep South",
-    deck: story.decks[0],
-    deckLabel: "Intro — It begins here",
-    isIntro: true,
-  });
-  assert.deepEqual(
-    deriveDeckHud({ currentDeckId: "navigate" }, story).deckLabel,
-    "Plot Step 4 of 8 — Navigate",
+test("deck HUD derives Intro and all chapter headings from canonical state", () => {
+  const intro = deriveDeckHud(
+    {
+      currentDeckId: "it-begins-here",
+      introCardIndex: 0,
+    },
+    story,
   );
-  assert.deepEqual(
-    deriveDeckHud({ currentDeckId: "gather-evidence" }, story).deckLabel,
-    "Plot Step 8 of 8 — Gather Evidence",
-  );
+  assert.equal(intro.deckLabel, "It begins here - 4 cards left in deck");
+  assert.equal(intro.chapterNumber, null);
+  assert.equal(intro.cardsLeft, 4);
+
+  for (const deck of story.decks.filter(({ type }) => type === "plot")) {
+    const hud = deriveDeckHud(stateForDeck(deck.id, deck.cards.length), story);
+    assert.equal(
+      hud.deckLabel,
+      `${deck.title}, Chapter ${deck.plotStep} - ${deck.cards.length} cards left in deck`,
+    );
+    assert.equal(hud.chapterNumber, deck.plotStep);
+    assert.equal(hud.cardsLeft, deck.cards.length);
+    assert.doesNotMatch(hud.deckLabel, /Plot Step|Chapter 0/u);
+  }
 });
 
-test("intro exposes only up and left, including persisted skip confirmation copy", () => {
-  const normal = { currentDeckId: "it-begins-here", introSkipPending: false };
-  const confirmation = {
-    currentDeckId: "it-begins-here",
-    introSkipPending: true,
+test("card counts include the current card, use singular grammar, and retain source count during feedback", () => {
+  const active = stateForDeck("castro", 1);
+  assert.equal(
+    deriveDeckHud(active, story).deckLabel,
+    "Castro, Chapter 1 - 1 card left in deck",
+  );
+
+  const feedbackState = {
+    ...active,
+    currentDeckId: "investigate-church",
+    currentCardId: null,
+    pendingFeedback: {
+      sourceDeckId: "castro",
+      sourceCardId: active.currentCardId,
+    },
   };
-  assert.equal(choiceForDirection(normal, {}, "up").label, "Continue reading");
-  assert.equal(choiceForDirection(normal, {}, "left").label, "Skip introduction");
-  assert.equal(choiceForDirection(normal, {}, "right"), null);
-  assert.equal(choiceForDirection(normal, {}, "down"), null);
-  assert.equal(choiceForDirection(confirmation, {}, "up").label, "Keep reading");
-  assert.equal(choiceForDirection(confirmation, {}, "left").label, "Skip to Castro");
+  assert.equal(
+    deriveDeckHud(feedbackState, story).deckLabel,
+    "Castro, Chapter 1 - 1 card left in deck",
+  );
+
+  assert.equal(
+    deriveDeckHud(
+      {
+        currentDeckId: "it-begins-here",
+        introCardIndex: 2,
+        introSkipPending: true,
+      },
+      story,
+    ).deckLabel,
+    "It begins here - 2 cards left in deck",
+  );
 });
 
-test("plot cards expose all four authored directional choices", () => {
+test("card count changes only after Continue and survives chapter navigation", () => {
+  let game = createGame({ seed: 73 });
+  game = resolve(game, "down");
+  game = resolve(game, "down");
+  assert.equal(
+    deriveDeckHud(game.state, story).deckLabel,
+    "Castro, Chapter 1 - 5 cards left in deck",
+  );
+
+  game = resolve(game, "up");
+  assert.ok(game.state.pendingFeedback);
+  assert.equal(
+    deriveDeckHud(game.state, story).deckLabel,
+    "Castro, Chapter 1 - 5 cards left in deck",
+  );
+  game = continueFromFeedback(game);
+  assert.equal(
+    deriveDeckHud(game.state, story).deckLabel,
+    "Castro, Chapter 1 - 4 cards left in deck",
+  );
+
+  game = resolve(game, "down");
+  assert.equal(
+    deriveDeckHud(game.state, story).deckLabel,
+    "Castro, Chapter 1 - 4 cards left in deck",
+  );
+  game = continueFromFeedback(game);
+  assert.equal(
+    deriveDeckHud(game.state, story).deckLabel,
+    "Investigate Church, Chapter 2 - 5 cards left in deck",
+  );
+
+  game = resolve(game, "up");
+  game = continueFromFeedback(game);
+  assert.equal(
+    deriveDeckHud(game.state, story).deckLabel,
+    "Castro, Chapter 1 - 3 cards left in deck",
+  );
+});
+
+test("Intro presentation uses Up and Down while Left and Right are unavailable", () => {
+  const state = {
+    currentDeckId: "it-begins-here",
+    resources: { eldritchLore: 0, crew: 0, sanity: 3 },
+  };
+  const normalCard = {
+    choices: {
+      up: { label: "Keep reading", effects: {} },
+      down: { label: "Skip toward Castro", effects: {} },
+    },
+  };
+  const confirmationCard = {
+    choices: {
+      up: { label: "Keep reading", effects: {} },
+      down: { label: "Skip to Castro", effects: {} },
+    },
+  };
+  assert.equal(choiceForDirection(state, normalCard, "up").label, "Keep reading");
+  assert.equal(
+    choiceForDirection(state, normalCard, "down").label,
+    "Skip toward Castro",
+  );
+  assert.equal(choiceForDirection(state, normalCard, "left"), null);
+  assert.equal(choiceForDirection(state, normalCard, "right"), null);
+  assert.equal(
+    choiceForDirection(state, confirmationCard, "down").label,
+    "Skip to Castro",
+  );
+  assert.equal(
+    choiceForDirection(state, confirmationCard, "up").label,
+    "Keep reading",
+  );
+});
+
+test("a fully authored plot card exposes all four directional choices", () => {
   const state = { currentDeckId: "castro" };
   assert.deepEqual(
     DIRECTIONS.map((direction) => choiceForDirection(state, plotCard, direction)?.label),
@@ -145,10 +245,52 @@ test("choice detail and preview detection use only Deep South resources", () => 
   );
 });
 
+test("choice presentation keeps missing and resource-locked slots visible but disabled", () => {
+  const card = {
+    choices: {
+      up: { label: "Climb", effects: { sanity: -1 } },
+      right: {
+        label: "Lower a sailor",
+        costs: { crew: 1 },
+        effects: { eldritchLore: 1 },
+      },
+    },
+  };
+  const empty = {
+    resources: { eldritchLore: 0, crew: 0, sanity: 1 },
+  };
+  const missing = deriveChoicePresentation(empty, card, "left");
+  assert.equal(missing.available, false);
+  assert.equal(missing.label, "No option");
+  assert.match(missing.ariaLabel, /No action is available/u);
+
+  const locked = deriveChoicePresentation(empty, card, "right");
+  assert.equal(locked.available, false);
+  assert.equal(locked.label, "Lower a sailor");
+  assert.equal(locked.detail, "Requires 1 Crew.");
+  assert.deepEqual(locked.affects, ["eldritchLore", "crew"]);
+
+  const affordable = deriveChoicePresentation(
+    {
+      resources: { eldritchLore: 0, crew: 1, sanity: 1 },
+    },
+    card,
+    "right",
+  );
+  assert.equal(affordable.available, true);
+  assert.equal(
+    affordable.detail,
+    "Costs 1 Crew · +1 Eldritch Lore",
+  );
+
+  const sanityLoss = deriveChoicePresentation(empty, card, "up");
+  assert.equal(sanityLoss.available, true);
+  assert.equal(sanityLoss.detail, "-1 Sanity");
+});
+
 test("card announcements name every available direction and its actual effects", () => {
   const announcement = cardAnnouncement({ currentDeckId: "castro" }, plotCard);
   for (const phrase of [
-    "Deep South",
     "Bells in the fog",
     "Up: Return to the quay",
     "Down: Follow the sound. +1 Eldritch Lore · -1 Sanity",
@@ -157,6 +299,7 @@ test("card announcements name every available direction and its actual effects",
   ]) {
     assert.match(announcement, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+  assert.doesNotMatch(announcement, /\.\./u);
 });
 
 test("feedback presentation shows only actual nonzero expedition changes", () => {
@@ -282,15 +425,31 @@ test("renderer prioritizes feedback before loss and renders with text-safe DOM m
   assert.doesNotMatch(source, /\.innerHTML\s*=|insertAdjacentHTML/);
 });
 
-test("renderer binds all directional controls, overlays, and previews", async () => {
+test("renderer binds every directional slot to shared availability and previews only enabled choices", async () => {
   const source = await readFile(
     new URL("../public/js/ui/render.js", import.meta.url),
     "utf8",
   );
+  const setChoiceSource = source.slice(
+    source.indexOf("const setChoice ="),
+    source.indexOf("const renderCard =", source.indexOf("const setChoice =")),
+  );
   assert.match(source, /for \(const direction of DIRECTIONS\)/);
   assert.match(source, /byId\(`choice-\$\{direction\}`\)/);
   assert.match(source, /byId\(`choice-\$\{direction\}-overlay`\)/);
+  assert.match(source, /getDirectionAvailability\(state, card, direction\)/);
+  assert.match(setChoiceSource, /button\.hidden = false/);
+  assert.match(setChoiceSource, /button\.disabled = !presentation\.available/);
+  assert.match(setChoiceSource, /detail\.hidden = false/);
+  assert.match(source, /"No option"/);
   assert.match(source, /choiceForDirection\(currentState, activeCard, direction\)/);
+  assert.match(
+    source,
+    /getDirectionAvailability\(currentState, activeCard, direction\)\.available/,
+  );
   assert.match(source, /resourceTargets\[resource\]\.dataset\.previewed = "true"/);
+  assert.doesNotMatch(setChoiceSource, /button\.hidden\s*=\s*!/);
+  assert.doesNotMatch(setChoiceSource, /detail\.hidden\s*=\s*!/);
+  assert.doesNotMatch(source, /directionHint|Plot Step/);
   assert.doesNotMatch(source, /inventory|combat|rewardSummary|storyTransition/);
 });

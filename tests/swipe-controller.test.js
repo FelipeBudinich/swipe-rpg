@@ -332,7 +332,7 @@ test("dragging toward an unavailable Intro direction shows no false preview", (t
   const previews = [];
   createSwipeController({
     card,
-    canCommit: (direction) => direction === "up" || direction === "left",
+    canCommit: (direction) => direction === "up" || direction === "down",
     onPreview: (direction, strength) => previews.push([direction, strength]),
     onCommit: async () => true,
   });
@@ -348,14 +348,14 @@ test("dragging toward an unavailable Intro direction shows no false preview", (t
   card.dispatchEvent(
     pointerEvent("pointermove", {
       pointerId: 6,
-      clientX: 100,
-      clientY: 180,
+      clientX: 20,
+      clientY: 100,
       timeStamp: 200,
     }),
   );
   assert.equal(card.dataset.previewDirection, "none");
   assert.deepEqual(previews.at(-1), [null, 0]);
-  assert.equal(card.style.getPropertyValue("--choice-down-opacity"), "0");
+  assert.equal(card.style.getPropertyValue("--choice-left-opacity"), "0");
 });
 
 test("input locks prevent pointer starts and direct commits", async (t) => {
