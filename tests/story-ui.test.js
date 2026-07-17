@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { glob, readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -81,6 +81,15 @@ function cssBlock(source, marker) {
     if (depth === 0) return source.slice(markerStart, index + 1);
   }
   assert.fail(`Expected CSS block ${marker} to close`);
+}
+
+async function readPublicJavaScript() {
+  const root = new URL("../", import.meta.url);
+  const sources = [];
+  for await (const path of glob("public/js/**/*.js", { cwd: root })) {
+    sources.push(await readFile(new URL(path, root), "utf8"));
+  }
+  return sources.join("\n");
 }
 
 function storyState(overrides = {}) {
@@ -350,6 +359,36 @@ test("document places the single Pack action between equal-width choices", async
   }
 });
 
+test("document removes redundant choice instructions without leaving a footer placeholder", async () => {
+  const [html, renderer, javascript, css] = await Promise.all([
+    readFile(new URL("../public/index.html", import.meta.url), "utf8"),
+    readFile(new URL("../public/js/ui/render.js", import.meta.url), "utf8"),
+    readPublicJavaScript(),
+    readFile(new URL("../src/input.css", import.meta.url), "utf8"),
+  ]);
+  const removedCopy = "Swipe the card or use either button. Your choice is final.";
+  const gameMain = elementSourceById(html, "game-main");
+  const controls = elementSourceById(gameMain, "choice-controls");
+  const controlsStart = gameMain.indexOf(controls);
+  const trailingMarkup = gameMain
+    .slice(controlsStart + controls.length, gameMain.lastIndexOf("</main>"))
+    .trim();
+
+  assert.doesNotMatch(html, /\bid=(["'])choice-help\1/);
+  assert.ok(!html.includes(removedCopy));
+  assert.ok(!javascript.includes(removedCopy));
+  assert.ok(!css.includes(removedCopy));
+  assert.doesNotMatch(renderer, /byId\((["'])choice-help\1\)/);
+  assert.doesNotMatch(renderer, /elements\.choiceHelp\b/);
+  assert.doesNotMatch(css, /#choice-help\b/);
+  assert.doesNotMatch(css, /#game-main\s*>\s*p:last-child/);
+  assert.equal(trailingMarkup, "");
+  assert.match(gameMain, /\bid=(["'])result-live\1/);
+  assert.match(controls, /\bid=(["'])choice-left\1/);
+  assert.match(controls, /\bid=(["'])inventory-open\1/);
+  assert.match(controls, /\bid=(["'])choice-right\1/);
+});
+
 test("story HUD exposes arc title and beat in one labelled heading line", async () => {
   const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
   const storyHud = elementSourceById(html, "story-hud");
@@ -448,6 +487,7 @@ test("short-height CSS compacts one resource row without hiding its values or me
     "choice-left",
     "inventory-open",
     "choice-right",
+    "result-live",
   ]) {
     assert.ok(hiddenSelectors.every((selector) => !selector.includes(`#${id}`)), `#${id} must remain visible`);
   }

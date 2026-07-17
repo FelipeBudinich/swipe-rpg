@@ -146,6 +146,25 @@ test("renderer source uses explicit preview targets and text-safe reward renderi
   assert.match(source, /rewardSummary\.replaceChildren\(\)/);
   assert.match(source, /lastCardAnnouncementKey/);
   assert.match(source, /card\?\.resolutionToken/);
+  assert.doesNotMatch(source, /choiceHelp|choice-help/);
+});
+
+test("renderer shows the action row only on interactive cards", async () => {
+  const source = await readFile(new URL("../public/js/ui/render.js", import.meta.url), "utf8");
+  const interactiveStart = source.indexOf("const setInteractiveSurface =");
+  const specialStart = source.indexOf("const setSpecialSurface =", interactiveStart);
+  const announceStart = source.indexOf("const announceSpecial =", specialStart);
+  const interactiveSource = source.slice(interactiveStart, specialStart);
+  const specialSource = source.slice(specialStart, announceStart);
+
+  assert.ok(interactiveStart >= 0 && specialStart > interactiveStart && announceStart > specialStart);
+  assert.match(interactiveSource, /elements\.choiceControls\.hidden\s*=\s*false/);
+  assert.match(specialSource, /elements\.choiceControls\.hidden\s*=\s*true/);
+  assert.match(source, /setSpecialSurface\("transition", `Story transition:/);
+  assert.match(source, /setSpecialSurface\("terminal", presentation\.kind/);
+  assert.match(source, /setInteractiveSurface\(\);\s*renderCard\(/);
+  assert.doesNotMatch(interactiveSource, /choiceHelp|choice-help/);
+  assert.doesNotMatch(specialSource, /choiceHelp|choice-help/);
 });
 
 test("HUD renderer updates every preserved value, meter, and accessible label", async () => {

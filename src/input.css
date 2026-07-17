@@ -410,10 +410,6 @@
     padding-bottom: 0.4rem;
   }
 
-  #game-main > p:last-child {
-    display: none;
-  }
-
   #app[data-mode="combat"] #card {
     min-height: 11rem !important;
   }

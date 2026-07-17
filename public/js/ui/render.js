@@ -376,7 +376,6 @@ export function createRenderer({
     rightDetail: byId("choice-right-detail"),
     cardLive: byId("card-live"),
     choiceControls: byId("choice-controls"),
-    choiceHelp: byId("choice-help"),
     transition: byId("story-transition"),
     transitionBeat: byId("story-transition-beat"),
     transitionTitle: byId("story-transition-title"),
@@ -547,7 +546,6 @@ export function createRenderer({
     elements.card.hidden = false;
     elements.cardBackdrop.hidden = false;
     elements.choiceControls.hidden = false;
-    elements.choiceHelp.hidden = false;
     elements.transition.hidden = true;
     elements.terminal.hidden = true;
     elements.card.removeAttribute("inert");
@@ -562,7 +560,6 @@ export function createRenderer({
     elements.card.hidden = true;
     elements.cardBackdrop.hidden = true;
     elements.choiceControls.hidden = true;
-    elements.choiceHelp.hidden = true;
     elements.card.setAttribute("inert", "");
     elements.card.tabIndex = -1;
     elements.transition.hidden = surface !== "transition";
