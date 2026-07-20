@@ -17,6 +17,7 @@ import {
   normalizeChoiceCosts,
 } from "../public/js/game/choice-availability.js";
 import { createInitialState, normalizeState } from "../public/js/game/state.js";
+import { deriveChoicePresentation } from "../public/js/ui/render.js";
 
 const deckById = Object.fromEntries(
   DEEP_SOUTH_STORY.decks.map((deck) => [deck.id, deck]),
@@ -170,8 +171,20 @@ test("a fresh run starts on the first sequential Intro card with exact resources
   assert.equal(card.artId, "intro-01-fathers-photograph");
   assert.match(card.artAlt, /aged photograph/u);
   assert.equal(card.detail, "");
-  assert.ok(card.choices.left);
-  assert.ok(card.choices.right);
+  for (const direction of ["left", "right"]) {
+    assert.deepEqual(card.choices[direction], {
+      label: "Turn the photograph over",
+      result: "",
+      effects: { eldritchLore: 1 },
+    });
+    assert.equal(
+      getDirectionAvailability(state, card, direction).available,
+      true,
+    );
+    const presentation = deriveChoicePresentation(state, card, direction);
+    assert.equal(presentation.detail, "+1 Eldritch Lore");
+    assert.deepEqual(presentation.affects, ["eldritchLore"]);
+  }
   assert.deepEqual(state.resources, {
     eldritchLore: 0,
     crew: 0,
@@ -179,14 +192,13 @@ test("a fresh run starts on the first sequential Intro card with exact resources
   });
 });
 
-test("the diary toggles both ways and records its reverse discovery exactly once", () => {
+test("turning the diary left reveals its reverse and records the discovery once", () => {
   const front = createGame({ seed: 101 });
-  const frontToken = front.card.resolutionToken;
   const decisionCount = front.state.decisionCount;
   const rngState = front.state.rngState;
   const drawStateByDeck = structuredClone(front.state.drawStateByDeck);
 
-  let game = resolve(front.state, front.card, "left");
+  const game = resolve(front.state, front.card, "left");
   assert.equal(game.ignored, false);
   assert.equal(game.state.introCardFace, "reverse");
   assert.deepEqual(game.state.discoveries, { fatherDiaryReverse: true });
@@ -208,30 +220,77 @@ test("the diary toggles both ways and records its reverse discovery exactly once
     game.card.detail,
     "Discovery recorded · +1 Eldritch Lore",
   );
-  assert.notEqual(game.card.resolutionToken, frontToken);
+  assert.notEqual(game.card.resolutionToken, front.card.resolutionToken);
+  assert.equal(game.card.choices.left, undefined);
+  assert.equal(game.card.choices.right, undefined);
+  assert.equal(
+    getDirectionAvailability(game.state, game.card, "left").available,
+    false,
+  );
+  assert.equal(
+    getDirectionAvailability(game.state, game.card, "right").available,
+    false,
+  );
+});
 
-  const stale = resolveChoice(game.state, "right", {
+test("turning the diary right has the same meaningful result as turning it left", () => {
+  const leftStart = createGame({ seed: 107 });
+  const rightStart = createGame({ seed: 107 });
+  const left = resolve(leftStart.state, leftStart.card, "left");
+  const right = resolve(rightStart.state, rightStart.card, "right");
+  const meaningfulResult = (result) => ({
+    ignored: result.ignored,
+    face: result.state.introCardFace,
+    resources: result.state.resources,
+    discoveries: result.state.discoveries,
+    introCardIndex: result.state.introCardIndex,
+    currentDeckId: result.state.currentDeckId,
+    drawStateByDeck: result.state.drawStateByDeck,
+    rngState: result.state.rngState,
+    decisionCount: result.state.decisionCount,
+    pendingFeedback: result.state.pendingFeedback,
+    changes: result.changes,
+    cardId: result.card.id,
+    cardFace: result.card.introFace,
+    cardTitle: result.card.title,
+    cardArtId: result.card.artId,
+    choices: result.card.choices,
+  });
+
+  assert.deepEqual(meaningfulResult(right), meaningfulResult(left));
+});
+
+test("the revealed diary cannot return to its front face", () => {
+  const front = createGame({ seed: 108 });
+  const frontToken = front.card.resolutionToken;
+  const reverse = resolve(front.state, front.card, "left");
+  const snapshot = structuredClone(reverse.state);
+
+  for (const direction of ["left", "right"]) {
+    const result = resolve(reverse.state, reverse.card, direction);
+    assert.equal(result.ignored, true);
+    assert.equal(result.reason, "intro-direction-ignored");
+    assert.strictEqual(result.state, reverse.state);
+    assert.deepEqual(result.state, snapshot);
+    assert.equal(result.state.introCardFace, "reverse");
+    assert.equal(result.state.resources.eldritchLore, 1);
+    assert.deepEqual(result.state.discoveries, {
+      fatherDiaryReverse: true,
+    });
+    assert.equal(result.state.pendingFeedback, null);
+    assert.equal(result.state.decisionCount, 0);
+    assert.equal(result.card.id, "intro-fathers-diary");
+    assert.equal(result.card.introFace, "reverse");
+  }
+
+  const stale = resolveChoice(reverse.state, "right", {
     expectedToken: frontToken,
   });
   assert.equal(stale.ignored, true);
   assert.equal(stale.reason, "stale-resolution");
-  assert.strictEqual(stale.state, game.state);
-
-  game = resolve(game.state, game.card, "right");
-  assert.equal(game.state.introCardFace, "front");
-  assert.equal(game.state.resources.eldritchLore, 1);
-  assert.deepEqual(game.changes, {});
-  assert.equal(game.card.title, "My father’s photograph");
-  assert.equal(game.card.introFace, "front");
-
-  game = resolve(game.state, game.card, "right");
-  assert.equal(game.state.introCardFace, "reverse");
-  assert.equal(game.card.introFace, "reverse");
-  assert.equal(game.state.resources.eldritchLore, 1);
-  assert.deepEqual(game.state.discoveries, { fatherDiaryReverse: true });
-  assert.deepEqual(game.changes, {});
-  assert.equal(game.state.pendingFeedback, null);
-  assert.equal(game.state.decisionCount, decisionCount);
+  assert.strictEqual(stale.state, reverse.state);
+  assert.equal(stale.state.introCardFace, "reverse");
+  assert.equal(stale.state.resources.eldritchLore, 1);
 });
 
 test("up advances from the reverse diary without changing its face or replaying its reward", () => {
@@ -264,13 +323,42 @@ test("a reloaded diary discovery cannot award Eldritch Lore again", () => {
   game = getNextCard(reloadedState);
   assert.equal(game.state.introCardFace, "reverse");
   assert.deepEqual(game.state.discoveries, { fatherDiaryReverse: true });
+  assert.equal(game.card.choices.left, undefined);
+  assert.equal(game.card.choices.right, undefined);
 
-  game = resolve(game.state, game.card, "right");
-  game = resolve(game.state, game.card, "left");
+  for (const direction of ["left", "right"]) {
+    const result = resolve(game.state, game.card, direction);
+    assert.equal(result.ignored, true);
+    assert.equal(result.reason, "intro-direction-ignored");
+    assert.strictEqual(result.state, game.state);
+    assert.equal(result.state.introCardFace, "reverse");
+    assert.equal(result.state.resources.eldritchLore, 1);
+    assert.equal(result.state.pendingFeedback, null);
+    assert.deepEqual(result.changes, {});
+  }
+});
+
+test("a discovered front-face save repairs to the one-way reverse face", () => {
+  const base = createInitialState({
+    seed: 109,
+    decks: DEEP_SOUTH_STORY.decks,
+  });
+  const loaded = normalizeState(
+    {
+      ...base,
+      introCardFace: "front",
+      discoveries: { fatherDiaryReverse: true },
+      resources: { ...base.resources, eldritchLore: 1 },
+    },
+    { decks: DEEP_SOUTH_STORY.decks },
+  );
+  const game = getNextCard(loaded);
+
   assert.equal(game.state.introCardFace, "reverse");
+  assert.equal(game.card.introFace, "reverse");
+  assert.equal(game.card.choices.left, undefined);
+  assert.equal(game.card.choices.right, undefined);
   assert.equal(game.state.resources.eldritchLore, 1);
-  assert.deepEqual(game.changes, {});
-  assert.equal(game.state.pendingFeedback, null);
 });
 
 test("an undiscovered persisted reverse repairs to front and keeps its reward earnable", () => {

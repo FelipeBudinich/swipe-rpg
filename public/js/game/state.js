@@ -77,10 +77,6 @@ function introIndex(value, deck) {
   return Math.min(maximum, nonNegativeInteger(value));
 }
 
-function normalizedIntroCardFace(value) {
-  return INTRO_CARD_FACES.includes(value) ? value : "front";
-}
-
 function normalizedDiscoveries(value) {
   const source = asRecord(value);
   return {
@@ -225,14 +221,10 @@ export function normalizeState(raw, options = {}) {
   const discoveries = isCurrentSave
     ? normalizedDiscoveries(source.discoveries)
     : { ...fallback.discoveries };
-  const candidateIntroCardFace = isCurrentSave
-    ? normalizedIntroCardFace(source.introCardFace)
-    : fallback.introCardFace;
   const introCardFace =
-    candidateIntroCardFace === "reverse" &&
-    discoveries.fatherDiaryReverse !== true
-      ? "front"
-      : candidateIntroCardFace;
+    discoveries.fatherDiaryReverse === true
+      ? "reverse"
+      : "front";
 
   const normalized = {
     ...fallback,

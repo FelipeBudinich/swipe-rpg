@@ -57,15 +57,22 @@ test("swipes and arrow keys share canonical direction availability", () => {
   assert.doesNotMatch(source, /choice\.disabled|choiceForDirection/u);
 });
 
-test("reversible face art joins the allowlist and horizontal Card 1 commits use flip mode", () => {
+test("two-sided face art joins the allowlist and only the front commits in flip mode", () => {
   assert.match(source, /Object\.values\(card\.faces \?\? \{\}\)/u);
   assert.match(source, /\.map\(\(face\) => face\.artId\)/u);
   assert.match(source, /function getCardCommitMode\(direction\)/u);
   assert.match(
     source,
-    /currentCard\?\.introFace === "front" \|\| currentCard\?\.introFace === "reverse"/u,
+    /const canTurnPhotograph = currentCard\?\.introFace === "front"/u,
   );
-  assert.match(source, /return horizontal && reversibleFace \? "flip" : "exit"/u);
+  assert.match(
+    source,
+    /return horizontal && canTurnPhotograph \? "flip" : "exit"/u,
+  );
+  assert.doesNotMatch(
+    source,
+    /currentCard\?\.introFace === "reverse"/u,
+  );
   assert.match(source, /getCommitMode: getCardCommitMode/u);
   assert.match(source, /onCommitSettled: \(mode\) =>/u);
 });

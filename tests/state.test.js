@@ -107,43 +107,75 @@ test("Intro position, reverse face, discovery, and skip confirmation survive nor
   assert.equal(normalized.currentCardToken, null);
 });
 
-test("v4 Intro fields accept only canonical face and strict discovery values", () => {
+test("v4 Intro face normalization enforces the one-way discovery invariant", () => {
   const base = createInitialState({ seed: 181, decks: TEST_DECKS });
 
-  for (const invalidFace of [undefined, null, "back", "Reverse", 1, {}]) {
+  for (const {
+    introCardFace,
+    fatherDiaryReverse,
+    expectedFace,
+  } of [
+    {
+      introCardFace: "front",
+      fatherDiaryReverse: false,
+      expectedFace: "front",
+    },
+    {
+      introCardFace: "reverse",
+      fatherDiaryReverse: false,
+      expectedFace: "front",
+    },
+    {
+      introCardFace: "reverse",
+      fatherDiaryReverse: true,
+      expectedFace: "reverse",
+    },
+    {
+      introCardFace: "front",
+      fatherDiaryReverse: true,
+      expectedFace: "reverse",
+    },
+  ]) {
     const normalized = normalizeState(
-      { ...base, introCardFace: invalidFace },
+      {
+        ...base,
+        introCardFace,
+        discoveries: { fatherDiaryReverse },
+      },
       { decks: TEST_DECKS },
     );
-    assert.equal(normalized.introCardFace, "front");
+    assert.equal(normalized.introCardFace, expectedFace);
+    assert.equal(
+      normalized.discoveries.fatherDiaryReverse,
+      fatherDiaryReverse,
+    );
   }
 
-  const canonical = normalizeState(
+  const discoveredFront = normalizeState(
     {
       ...base,
       currentDeckId: "castro",
-      introCardFace: "reverse",
+      introCardIndex: 1,
+      introSkipPending: true,
+      introCardFace: "front",
       discoveries: {
         fatherDiaryReverse: true,
         unknownDiscovery: true,
       },
+      resources: { eldritchLore: 3, crew: 2, sanity: 2 },
     },
     { decks: TEST_DECKS },
   );
-  assert.equal(canonical.introCardFace, "reverse");
-  assert.deepEqual(canonical.discoveries, { fatherDiaryReverse: true });
-
-  const undiscoveredReverse = normalizeState(
-    {
-      ...base,
-      introCardFace: "reverse",
-      discoveries: { fatherDiaryReverse: false },
-    },
-    { decks: TEST_DECKS },
-  );
-  assert.equal(undiscoveredReverse.introCardFace, "front");
-  assert.deepEqual(undiscoveredReverse.discoveries, {
-    fatherDiaryReverse: false,
+  assert.equal(discoveredFront.introCardFace, "reverse");
+  assert.deepEqual(discoveredFront.discoveries, {
+    fatherDiaryReverse: true,
+  });
+  assert.equal(discoveredFront.introCardIndex, 1);
+  assert.equal(discoveredFront.introSkipPending, false);
+  assert.deepEqual(discoveredFront.resources, {
+    eldritchLore: 3,
+    crew: 2,
+    sanity: 2,
   });
 
   for (const discoveries of [
@@ -161,6 +193,7 @@ test("v4 Intro fields accept only canonical face and strict discovery values", (
     assert.deepEqual(normalized.discoveries, {
       fatherDiaryReverse: false,
     });
+    assert.equal(normalized.introCardFace, "front");
     assert.equal(normalized.resources.eldritchLore, 0);
   }
 });

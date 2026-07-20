@@ -118,9 +118,8 @@ async function settleCardArt() {
 
 function getCardCommitMode(direction) {
   const horizontal = direction === "left" || direction === "right";
-  const reversibleFace =
-    currentCard?.introFace === "front" || currentCard?.introFace === "reverse";
-  return horizontal && reversibleFace ? "flip" : "exit";
+  const canTurnPhotograph = currentCard?.introFace === "front";
+  return horizontal && canTurnPhotograph ? "flip" : "exit";
 }
 
 async function commitChoice(direction, { mode = "exit" } = {}) {

@@ -46,7 +46,7 @@ The Intro is sequential. Plot decks draw without replacement, retain their own d
 - Swipe or press **Arrow Left** or **Arrow Right** for an available local action.
 - Select **Continue** to acknowledge a persistent choice outcome.
 
-During the Intro, up reads the next card. Down opens a persisted skip confirmation; down again enters Castro, while up cancels without advancing. The first card is reversible: left or right turns the photograph over, revealing a second coordinate and granting one Eldritch Lore exactly once per run. Left and right are unavailable on Intro cards 2–8.
+During the Intro, up reads the next card. Down opens a persisted skip confirmation; down again enters Castro, while up cancels without advancing. On the first card, left or right turns the photograph over; the directional preview advertises `+1 Eldritch Lore`, and committing either direction grants that reward exactly once per run. Once revealed, the reverse cannot be turned back: only up and down remain available, and reloading preserves the reverse face. The discovery stays on the same card and does not create a persistent outcome card. Left and right are also unavailable on Intro cards 2–8.
 
 The top HUD shows the story title and expedition resources. The current card
 header shows the chapter, deck, and unresolved-card count:
@@ -126,7 +126,7 @@ Run state is saved after every navigation, choice, outcome acknowledgement, and 
 - Story identity and playing/lost status
 - Current deck and Intro position
 - Intro skip-confirmation state
-- The reversible diary face and its one-time discovery flag
+- The diary's one-way revealed face and its one-time discovery flag
 - Current card identity and deterministic token
 - Independent draw/discard state for every plot deck
 - Seeded random state

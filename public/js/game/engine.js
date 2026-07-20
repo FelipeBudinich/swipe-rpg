@@ -82,7 +82,7 @@ function introFace(value) {
   return value === "reverse" ? "reverse" : "front";
 }
 
-function reversibleIntroFaces(card) {
+function introFaces(card) {
   const faces = asRecord(card?.faces);
   const front = asRecord(faces.front);
   const reverse = asRecord(faces.reverse);
@@ -95,23 +95,35 @@ function introNavigationChoice(label) {
   return { label, result: "", effects: {} };
 }
 
+function introTurnChoice(reverseFace, state) {
+  const discoveryId = reverseFace.discoveryId;
+  const rewardAvailable =
+    typeof discoveryId === "string" &&
+    Object.hasOwn(INITIAL_DISCOVERIES, discoveryId) &&
+    state?.discoveries?.[discoveryId] !== true;
+
+  return {
+    label: "Turn the photograph over",
+    result: "",
+    effects: rewardAvailable
+      ? asRecord(reverseFace.firstRevealEffects)
+      : {},
+  };
+}
+
 function presentIntroCard(card, token, state) {
   if (!card) return null;
 
-  const faces = reversibleIntroFaces(card);
+  const faces = introFaces(card);
   const selectedFace = faces ? introFace(state?.introCardFace) : "front";
   const face = faces?.[selectedFace] ?? card;
-  const toggleLabel =
-    selectedFace === "front"
-      ? "Turn the photograph over"
-      : "Return to the photograph";
   const choices = {
     up: introNavigationChoice("Keep reading"),
     down: introNavigationChoice("Skip toward Castro"),
-    ...(faces
+    ...(faces && selectedFace === "front"
       ? {
-          left: introNavigationChoice(toggleLabel),
-          right: introNavigationChoice(toggleLabel),
+          left: introTurnChoice(faces.reverse, state),
+          right: introTurnChoice(faces.reverse, state),
         }
       : {}),
   };
@@ -303,42 +315,37 @@ function resolveIntro(state, card, direction, story, unchangedState = state) {
   }
 
   if (direction === "left" || direction === "right") {
-    const faces = reversibleIntroFaces(card);
-    if (!faces) {
+    const faces = introFaces(card);
+    if (!faces || introFace(state.introCardFace) !== "front") {
       return ignored(unchangedState, story, "intro-direction-ignored");
     }
 
-    const nextFace = introFace(state.introCardFace) === "front"
-      ? "reverse"
-      : "front";
     let nextState = {
       ...state,
-      introCardFace: nextFace,
+      introCardFace: "reverse",
       currentCardToken: null,
     };
     let changes = {};
 
-    if (nextFace === "reverse") {
-      const discoveryId = faces.reverse.discoveryId;
-      const knownDiscovery =
-        typeof discoveryId === "string" &&
-        Object.hasOwn(INITIAL_DISCOVERIES, discoveryId);
-      const alreadyDiscovered =
-        knownDiscovery && state.discoveries?.[discoveryId] === true;
-      if (knownDiscovery && !alreadyDiscovered) {
-        const applied = applyResourceEffects(
-          nextState,
-          faces.reverse.firstRevealEffects,
-        );
-        nextState = {
-          ...applied.state,
-          discoveries: {
-            ...INITIAL_DISCOVERIES,
-            [discoveryId]: true,
-          },
-        };
-        changes = applied.changes;
-      }
+    const discoveryId = faces.reverse.discoveryId;
+    const knownDiscovery =
+      typeof discoveryId === "string" &&
+      Object.hasOwn(INITIAL_DISCOVERIES, discoveryId);
+    const alreadyDiscovered =
+      knownDiscovery && state.discoveries?.[discoveryId] === true;
+    if (knownDiscovery && !alreadyDiscovered) {
+      const applied = applyResourceEffects(
+        nextState,
+        faces.reverse.firstRevealEffects,
+      );
+      nextState = {
+        ...applied.state,
+        discoveries: {
+          ...INITIAL_DISCOVERIES,
+          [discoveryId]: true,
+        },
+      };
+      changes = applied.changes;
     }
 
     const next = getNextCard(nextState, story);

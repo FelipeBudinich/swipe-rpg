@@ -631,19 +631,83 @@ test("card count changes only after Continue and survives chapter navigation", (
   );
 });
 
-test("the reversible Intro face exposes horizontal flips while ordinary cards do not", () => {
+test("the first Intro card previews its authored turn reward only on the front", (t) => {
+  installRendererDocument(t);
+  const renderer = createRenderer({
+    story,
+    allowedArtIds: new Set([
+      "intro-01-fathers-photograph",
+      "intro-01-chiloe-map",
+    ]),
+  });
+  let game = createGame({ seed: 74 });
+  renderer.render(game.state, game.card);
+
+  for (const direction of ["left", "right"]) {
+    const presentation = deriveChoicePresentation(
+      game.state,
+      game.card,
+      direction,
+    );
+    assert.equal(presentation.available, true);
+    assert.equal(presentation.label, "Turn the photograph over");
+    assert.equal(presentation.detail, "+1 Eldritch Lore");
+    assert.deepEqual(presentation.affects, ["eldritchLore"]);
+    assert.equal(
+      choiceForDirection(game.state, game.card, direction)?.label,
+      "Turn the photograph over",
+    );
+    assert.equal(
+      renderer.elements.choiceOverlayLabels[direction].textContent,
+      "Turn the photograph over",
+    );
+    assert.equal(
+      renderer.elements.choiceOverlayDetails[direction].textContent,
+      "+1 Eldritch Lore",
+    );
+    assert.equal(
+      renderer.elements.choiceOverlayDetails[direction].hidden,
+      false,
+    );
+
+    renderer.previewChoice(direction);
+    assert.equal(
+      renderer.elements.eldritchLoreHud.dataset.previewed,
+      "true",
+    );
+  }
+
+  game = resolve(game, "left");
+  renderer.render(game.state, game.card);
+  assert.equal(game.card.introFace, "reverse");
+
+  for (const direction of ["left", "right"]) {
+    const presentation = deriveChoicePresentation(
+      game.state,
+      game.card,
+      direction,
+    );
+    assert.equal(presentation.available, false);
+    assert.equal(presentation.label, "No option");
+    assert.deepEqual(presentation.affects, []);
+    assert.equal(choiceForDirection(game.state, game.card, direction), null);
+    assert.equal(
+      renderer.elements.choiceOverlayDetails[direction].hidden,
+      true,
+    );
+
+    renderer.previewChoice(direction);
+    assert.equal(
+      renderer.elements.eldritchLoreHud.dataset.previewed,
+      undefined,
+    );
+  }
+});
+
+test("ordinary Intro cards and skip confirmation expose only vertical choices", () => {
   const state = {
     currentDeckId: "it-begins-here",
     resources: { eldritchLore: 0, crew: 0, sanity: 3 },
-  };
-  const reversibleCard = {
-    introFace: "front",
-    choices: {
-      up: { label: "Keep reading", effects: {} },
-      down: { label: "Skip toward Castro", effects: {} },
-      left: { label: "Turn the photograph over", effects: {} },
-      right: { label: "Turn the photograph over", effects: {} },
-    },
   };
   const ordinaryCard = {
     choices: {
@@ -657,19 +721,6 @@ test("the reversible Intro face exposes horizontal flips while ordinary cards do
       down: { label: "Skip to Castro", effects: {} },
     },
   };
-  assert.equal(choiceForDirection(state, reversibleCard, "up").label, "Keep reading");
-  assert.equal(
-    choiceForDirection(state, reversibleCard, "down").label,
-    "Skip toward Castro",
-  );
-  assert.equal(
-    choiceForDirection(state, reversibleCard, "left").label,
-    "Turn the photograph over",
-  );
-  assert.equal(
-    choiceForDirection(state, reversibleCard, "right").label,
-    "Turn the photograph over",
-  );
   assert.equal(choiceForDirection(state, ordinaryCard, "left"), null);
   assert.equal(choiceForDirection(state, ordinaryCard, "right"), null);
   assert.equal(
@@ -783,26 +834,15 @@ test("card announcements lead with supplied chapter context and name every direc
 });
 
 test("reverse-face announcements include the coordinate and internal discovery annotation", () => {
-  const announcement = cardAnnouncement(
-    {
-      currentDeckId: "it-begins-here",
-      resources: { eldritchLore: 1, crew: 0, sanity: 3 },
-    },
-    {
-      title: "The map on the reverse",
-      text: "On the reverse, 42°36′S, 73°57′W beckoned.",
-      artLabel: "42°36′S, 73°57′W",
-      detail: "Discovery recorded · +1 Eldritch Lore",
-      choices: {
-        up: { label: "Keep reading", effects: {} },
-        down: { label: "Skip toward Castro", effects: {} },
-        left: { label: "Return to the photograph", effects: {} },
-        right: { label: "Return to the photograph", effects: {} },
-      },
-    },
-  );
+  let game = createGame({ seed: 75 });
+  game = resolve(game, "right");
+  const announcement = cardAnnouncement(game.state, game.card);
+
   assert.match(announcement, /42°36′S, 73°57′W/u);
   assert.match(announcement, /Discovery recorded · \+1 Eldritch Lore/u);
+  assert.match(announcement, /Left: No option/u);
+  assert.match(announcement, /Right: No option/u);
+  assert.doesNotMatch(announcement, /Return to the photograph/u);
 });
 
 test("feedback presentation shows only actual nonzero expedition changes", () => {
