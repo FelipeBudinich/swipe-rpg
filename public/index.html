@@ -35,7 +35,7 @@
 
         <div
           id="player-resource-row"
-          class="mt-1.5 grid grid-cols-[minmax(0,1.45fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] gap-1.5"
+          class="grid grid-cols-[minmax(0,1.45fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] gap-1.5"
           aria-label="Expedition resources"
         >
           <section
@@ -44,7 +44,7 @@
             data-resource="eldritchLore"
             aria-label="Eldritch Lore: 0"
           >
-            <span class="block truncate text-[0.58rem] font-bold uppercase tracking-[0.04em] text-[#a8c9bd]">Eldritch Lore</span>
+            <span class="block text-[0.58rem] font-bold uppercase leading-tight tracking-[0.04em] text-[#a8c9bd]">Eldritch Lore</span>
             <strong id="hud-eldritch-lore" class="block text-sm font-black tabular-nums text-[#d8fff7]">0</strong>
             <span id="hud-eldritch-lore-delta" class="resource-delta" aria-hidden="true"></span>
           </section>
@@ -149,17 +149,17 @@
             data-preview-direction="none"
             data-intro-face="front"
           >
-            <div id="choice-up-overlay" class="choice-overlay choice-overlay-up absolute inset-x-0 top-0 z-20 flex h-1/2 items-start justify-center bg-gradient-to-b from-[#164850]/95 to-transparent px-4 py-4" aria-hidden="true">
-              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg">↑ <span id="choice-up-overlay-label">Up</span></span>
+            <div id="choice-up-overlay" class="choice-overlay" aria-hidden="true">
+              <span class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg">↑ <span id="choice-up-overlay-label">Up</span></span>
             </div>
-            <div id="choice-down-overlay" class="choice-overlay choice-overlay-down absolute inset-x-0 bottom-0 z-20 flex h-1/2 items-end justify-center bg-gradient-to-t from-[#4b354e]/95 to-transparent px-4 py-4" aria-hidden="true">
-              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#eadcff] shadow-lg">↓ <span id="choice-down-overlay-label">Down</span></span>
+            <div id="choice-down-overlay" class="choice-overlay" aria-hidden="true">
+              <span class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#eadcff] shadow-lg">↓ <span id="choice-down-overlay-label">Down</span></span>
             </div>
-            <div id="choice-left-overlay" class="choice-overlay absolute inset-y-0 left-0 z-20 flex w-1/2 items-center justify-start bg-gradient-to-r from-[#174d50]/95 to-transparent px-4" aria-hidden="true">
-              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-left text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg">← <span id="choice-left-overlay-label">Left</span></span>
+            <div id="choice-left-overlay" class="choice-overlay" aria-hidden="true">
+              <span class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg">← <span id="choice-left-overlay-label">Left</span></span>
             </div>
-            <div id="choice-right-overlay" class="choice-overlay absolute inset-y-0 right-0 z-20 flex w-1/2 items-center justify-end bg-gradient-to-l from-[#643b46]/95 to-transparent px-4" aria-hidden="true">
-              <span class="rounded-lg bg-[#07131d]/90 px-3 py-2 text-right text-xs font-black uppercase tracking-wider text-[#ffd8cf] shadow-lg"><span id="choice-right-overlay-label">Right</span> →</span>
+            <div id="choice-right-overlay" class="choice-overlay" aria-hidden="true">
+              <span class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#ffd8cf] shadow-lg"><span id="choice-right-overlay-label">Right</span> →</span>
             </div>
 
             <header class="shrink-0 border-b border-[#a9a087] bg-[#d8d1bd] px-4 py-2 text-center">

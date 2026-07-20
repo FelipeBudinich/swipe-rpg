@@ -58,6 +58,11 @@ test("document identity uses one visible Deep South h1 and a wrapping chapter h2
 test("HUD contains only the canonical deck label and three expedition resources", () => {
   const hud = elementSourceById(html, "player-hud");
   const row = elementSourceById(hud, "player-resource-row");
+  assert.ok(
+    hud.indexOf('id="story-hud"') < hud.indexOf('id="player-resource-row"'),
+    "Story information must remain before expedition resources",
+  );
+  assert.doesNotMatch(openingTagById(row, "player-resource-row"), /\bmt-/u);
   const sections = [...row.matchAll(/<section\b[^>]*\bid="([^"]+-hud)"/g)].map(
     (match) => match[1],
   );
@@ -75,6 +80,9 @@ test("HUD contains only the canonical deck label and three expedition resources"
     assert.match(openingTagById(row, id), new RegExp(`data-resource="${resource}"`));
     assert.match(section, new RegExp(label));
     assert.match(section, new RegExp(`>${initialValue}<`));
+    if (id === "eldritch-lore-hud") {
+      assert.doesNotMatch(section, /\btruncate\b/u);
+    }
   }
   assert.equal((hud.match(/<progress\b/g) ?? []).length, 0);
 });
@@ -112,6 +120,14 @@ test("decision card has four directional overlays and text-safe accessible copy 
   for (const direction of ["up", "down", "left", "right"]) {
     assert.match(card, new RegExp(`id="choice-${direction}-overlay"`));
     assert.match(card, new RegExp(`id="choice-${direction}-overlay-label"`));
+    const overlay = elementSourceById(card, `choice-${direction}-overlay`);
+    assert.match(openingTagById(overlay, `choice-${direction}-overlay`), /class="choice-overlay"/);
+    assert.match(openingTagById(overlay, `choice-${direction}-overlay`), /aria-hidden="true"/);
+    assert.match(overlay, /\bchoice-overlay-badge\b/u);
+    assert.doesNotMatch(
+      openingTagById(overlay, `choice-${direction}-overlay`),
+      /\b(?:top-0|bottom-0|left-0|right-0|inset-[xy]-0|h-1\/2|w-1\/2|items-start|items-end|justify-start|justify-end|bg-gradient-to-[btlr])\b/u,
+    );
   }
   assert.match(card, /id="card-title"/);
   assert.match(card, /id="card-text"/);
@@ -242,6 +258,30 @@ test("HTML contains no duplicate IDs", () => {
 });
 
 test("CSS supports four-axis previews and a responsive two-column action grid", () => {
+  assert.match(
+    css,
+    /#player-hud\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*clamp\(11\.5rem,\s*44%,\s*14rem\);[^}]*align-items:\s*stretch;[^}]*gap:\s*0\.375rem;/s,
+  );
+  assert.match(
+    css,
+    /#story-hud,\s*#player-resource-row\s*\{[^}]*min-width:\s*0;/s,
+  );
+  assert.match(
+    css,
+    /#story-hud\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*justify-content:\s*center;/s,
+  );
+  assert.match(
+    css,
+    /#player-resource-row\s*\{[^}]*align-self:\s*stretch;[^}]*margin-top:\s*0;/s,
+  );
+  assert.match(
+    css,
+    /\.choice-overlay\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;/s,
+  );
+  assert.match(
+    css,
+    /\.choice-overlay-badge\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;[^}]*text-align:\s*center;/s,
+  );
   for (const direction of ["up", "down", "left", "right"]) {
     assert.match(
       css,
@@ -250,6 +290,10 @@ test("CSS supports four-axis previews and a responsive two-column action grid", 
     assert.match(
       css,
       new RegExp(`#choice-${direction}-overlay\\s*\\{[^}]*opacity:\\s*var\\(--choice-${direction}-opacity\\)`, "s"),
+    );
+    assert.match(
+      css,
+      new RegExp(`#choice-${direction}-overlay::before\\s*\\{[^}]*inset:`, "s"),
     );
   }
   assert.match(
@@ -322,5 +366,9 @@ test("narrow and short viewport rules preserve resources, choices, and feedback"
   );
   assert.match(short, /#choice-feedback-controls/);
   assert.match(short, /#choice-feedback-changes/);
+  assert.doesNotMatch(
+    short,
+    /#player-resource-row\s*\{[^}]*margin-top:/s,
+  );
   assert.doesNotMatch(short, /display:\s*none|visibility:\s*hidden/);
 });
