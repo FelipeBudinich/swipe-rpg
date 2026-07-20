@@ -7,11 +7,17 @@ import {
   isNewInputBlocked,
 } from "../public/js/ui/interaction-lock.js";
 
-test("terminal and explicit confirmation surfaces block new input", () => {
+test("terminal, confirmation, and secondary-view surfaces block story input", () => {
   assert.equal(hasBlockingSurface({ terminalActive: true }), true);
   assert.equal(hasBlockingSurface({ confirmationOpen: true }), true);
   assert.equal(isNewInputBlocked({ terminalActive: true }), true);
   assert.equal(isNewInputBlocked({ confirmationOpen: true }), true);
+  assert.equal(hasBlockingSurface({ secondaryViewActive: true }), true);
+  assert.equal(isNewInputBlocked({ secondaryViewActive: true }), true);
+  assert.equal(
+    isActiveCommitResolutionBlocked({ secondaryViewActive: true }),
+    true,
+  );
   assert.equal(hasBlockingSurface({ feedbackActive: true }), false);
 });
 

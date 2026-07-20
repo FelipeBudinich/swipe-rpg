@@ -11,8 +11,10 @@ import {
   DIRECTIONS,
   cardAnnouncement,
   createRenderer,
+  deriveChapterMapPresentation,
   deriveChoicePresentation,
   deriveDeckHud,
+  deriveEffectLogPresentation,
   deriveLossPresentation,
   resolveArtSource,
 } from "../public/js/ui/render.js";
@@ -81,6 +83,15 @@ const RENDERER_ELEMENT_IDS = [
   "terminal-copy",
   "terminal-stats",
   "terminal-restart",
+  "chapter-map-panel",
+  "chapter-map-current",
+  "chapter-map-route",
+  "effect-log-panel",
+  "effect-log-summary",
+  "effect-log-empty",
+  "effect-log-list",
+  "effect-log-restart",
+  "effect-log-restart-warning",
   ...DIRECTIONS.flatMap((direction) => [
     `choice-${direction}-overlay`,
     `choice-${direction}-overlay-label`,
@@ -446,6 +457,88 @@ test("deck HUD counts active unlocked cards once and remains face-neutral", () =
       },
     });
     assert.equal(added.cardsLeft, unlocked.length + 1);
+  }
+});
+
+test("chapter map derives all nine canonical locations without completion claims", () => {
+  const game = createGame({ seed: 6051 });
+  const map = deriveChapterMapPresentation(game.state, game.card);
+  assert.equal(map.nodes.length, 9);
+  assert.deepEqual(map.nodes[0], {
+    id: "it-begins-here",
+    title: "It begins here",
+    stageLabel: "Prologue",
+    position: "current",
+    current: true,
+  });
+  assert.equal(map.nodes.at(-1).title, "Gather Evidence");
+  assert.equal(map.nodes.filter(({ current }) => current).length, 1);
+  assert.equal(map.currentLabel, "Current location: It begins here");
+  assert.equal(map.currentCardTitle, "My father’s photograph");
+  assert.doesNotMatch(JSON.stringify(map), /completed|cleared|locked|unvisited/iu);
+});
+
+test("effect log presentation is newest-first with chronological sequences", () => {
+  const game = createGame({ seed: 6052 });
+  const presentation = deriveEffectLogPresentation({
+    ...game.state,
+    effectLog: [
+      {
+        id: "effect:reveal:first",
+        kind: "reveal",
+        cardId: "intro-fathers-diary",
+        direction: "left",
+        effect: {
+          resources: { eldritchLore: 1 },
+          discoveries: ["fatherDiaryReverse"],
+        },
+      },
+      {
+        id: "effect:entry:second",
+        kind: "entry",
+        cardId: "castro-empty-berths",
+        direction: "up",
+        effect: { resources: { crew: 1 } },
+      },
+    ],
+  });
+  assert.deepEqual(presentation.map(({ id, sequence }) => [id, sequence]), [
+    ["effect:entry:second", 2],
+    ["effect:reveal:first", 1],
+  ]);
+  assert.equal(presentation[0].kindLabel, "Arrival effect");
+  assert.equal(presentation[0].directionLabel, "Up");
+  assert.equal(presentation[0].chapterLabel, "Chapter 1, Castro");
+  assert.equal(presentation[0].detail, "+1 Crew");
+  assert.equal(presentation[1].cardTitle, "The map on the reverse");
+});
+
+test("renderer keeps hidden Map and Log content current and clears previews", (t) => {
+  installRendererDocument(t);
+  const renderer = createTestRenderer();
+  const game = resolve(createGame({ seed: 6053 }), "left");
+  renderer.render(game.state, game.card);
+  assert.equal(renderer.elements.mapRoute.children.length, 9);
+  assert.equal(
+    renderer.elements.mapRoute.children.filter(
+      (node) => node.getAttribute("aria-current") === "location",
+    ).length,
+    1,
+  );
+  assert.equal(renderer.elements.logSummary.textContent, "1 effect recorded");
+  assert.equal(renderer.elements.logEmpty.hidden, true);
+  assert.equal(renderer.elements.logList.hidden, false);
+  assert.equal(renderer.elements.logList.children.length, 1);
+  assert.equal(
+    renderer.elements.logList.children[0].dataset.effectKind,
+    "reveal",
+  );
+
+  renderer.previewChoice("down");
+  renderer.elements.eldritchLoreHud.dataset.previewed = "true";
+  renderer.clearPreview();
+  for (const resource of ["eldritchLoreHud", "crewHud", "sanityHud"]) {
+    assert.equal(renderer.elements[resource].dataset.previewed, undefined);
   }
 });
 

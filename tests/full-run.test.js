@@ -3,12 +3,14 @@ import test from "node:test";
 
 import {
   DEEP_SOUTH_DECK_IDS,
+  DEEP_SOUTH_STORY,
 } from "../public/js/data/deep-south.js";
 import {
   createGame,
   planDirection,
   resolveChoice,
 } from "../public/js/game/engine.js";
+import { formatCardEffect } from "../public/js/game/card-effects.js";
 import {
   auditSeeds,
   simulateRun,
@@ -71,6 +73,16 @@ test("audit transcripts are deterministic, outcome-free, and unstalled", () => {
       (entry) => Object.hasOwn(entry, "pendingFeedback"),
     ),
     false,
+  );
+  assert.deepEqual(first.state.effectLog, second.state.effectLog);
+  assert.equal(
+    new Set(first.state.effectLog.map(({ id }) => id)).size,
+    first.state.effectLog.length,
+  );
+  assert.equal(
+    first.state.effectLog.every(({ effect }) =>
+      Boolean(formatCardEffect(effect, DEEP_SOUTH_STORY))),
+    true,
   );
 });
 

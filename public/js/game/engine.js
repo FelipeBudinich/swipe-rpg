@@ -13,6 +13,10 @@ import {
   DIRECTIONS,
   planDirection,
 } from "./direction-plan.js";
+import {
+  appendEffectLog,
+  effectLogEntryId,
+} from "./run-log.js";
 import { createInitialState } from "./state.js";
 
 export { DIRECTIONS, planDirection };
@@ -277,6 +281,17 @@ function resolveReveal(state, card, plan, story) {
   const applied = applyCardEffect(state, availability.effect, story);
   if (!applied.valid) return ignored(state, story, "invalid-effect");
   const sourceToken = state.currentCardToken;
+  const logged = appendEffectLog(
+    applied.state,
+    {
+      id: effectLogEntryId("reveal", sourceToken),
+      kind: "reveal",
+      cardId: authoredCard.id,
+      direction: plan.direction,
+      effect: availability.effect,
+    },
+    story,
+  );
   const sourceDeck = getDeckById(state.currentDeckId, story);
   const decisionCount =
     sourceDeck?.type === "plot"
@@ -286,7 +301,7 @@ function resolveReveal(state, card, plan, story) {
     new Set([...(state.revealedCardIds ?? []), authoredCard.id]),
   );
   const nextState = withTerminalPending({
-    ...applied.state,
+    ...logged.state,
     revealedCardIds,
     decisionCount,
     currentCardId: authoredCard.id,
@@ -303,22 +318,37 @@ function resolveReveal(state, card, plan, story) {
     effectDetail: formatCardEffect(availability.effect, story),
     changes: applied.changes,
     addedCardsByDeck: applied.addedCardsByDeck,
+    effectLogEntry: logged.entry,
   };
 }
 
-function applyDestinationEffect(state, effect, story) {
-  const applied = applyCardEffect(state, effect, story);
-  return applied.valid
-    ? {
-        ...applied,
-        state: withTerminalPending(applied.state),
-      }
-    : {
-        state,
-        valid: true,
-        changes: {},
-        addedCardsByDeck: {},
-      };
+function applyDestinationEffect(state, plan, sourceToken, story) {
+  const applied = applyCardEffect(state, plan.effect, story);
+  if (!applied.valid) {
+    return {
+      state,
+      valid: true,
+      changes: {},
+      addedCardsByDeck: {},
+      effectLogEntry: null,
+    };
+  }
+  const logged = appendEffectLog(
+    applied.state,
+    {
+      id: effectLogEntryId("entry", sourceToken),
+      kind: "entry",
+      cardId: plan.destinationCardId,
+      direction: plan.direction,
+      effect: plan.effect,
+    },
+    story,
+  );
+  return {
+    ...applied,
+    state: withTerminalPending(logged.state),
+    effectLogEntry: logged.entry,
+  };
 }
 
 function resolveIntroNavigation(state, card, plan, story) {
@@ -391,7 +421,8 @@ function resolveIntroNavigation(state, card, plan, story) {
     };
     const applied = applyDestinationEffect(
       destinationState,
-      plan.effect,
+      plan,
+      sourceToken,
       story,
     );
     const next = getNextCard(applied.state, story);
@@ -404,6 +435,7 @@ function resolveIntroNavigation(state, card, plan, story) {
       effectDetail: formatCardEffect(plan.effect, story),
       changes: applied.changes,
       addedCardsByDeck: applied.addedCardsByDeck,
+      effectLogEntry: applied.effectLogEntry,
     };
   }
 
@@ -436,7 +468,8 @@ function resolvePlannedDestination(
   };
   const applied = applyDestinationEffect(
     destinationState,
-    plan.effect,
+    plan,
+    sourceToken,
     story,
   );
   const next = getNextCard(applied.state, story);
@@ -449,6 +482,7 @@ function resolvePlannedDestination(
     effectDetail: formatCardEffect(plan.effect, story),
     changes: applied.changes,
     addedCardsByDeck: applied.addedCardsByDeck,
+    effectLogEntry: applied.effectLogEntry,
   };
 }
 
@@ -525,6 +559,13 @@ export function restartGame(
       reason: "run-active",
     };
   }
+  return restartRun(state, { seed, story });
+}
+
+export function restartRun(
+  state,
+  { seed = state?.runSeed, story = DEEP_SOUTH_STORY } = {},
+) {
   return {
     ...createGame({ seed: normalizeSeed(seed), story }),
     ignored: false,

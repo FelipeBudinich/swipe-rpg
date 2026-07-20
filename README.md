@@ -30,14 +30,18 @@ intervening outcome card, Continue control, modal, or acknowledgement step.
   draw, discard, and refill behavior.
 - `public/js/game/card-effects.js` normalizes, formats, previews, and applies
   resource, discovery, and card-addition effects.
+- `public/js/game/run-log.js` normalizes and appends the persisted history of
+  successfully applied reveal and destination-entry effects.
 - `public/js/game/direction-plan.js` is the single authority for direction
   availability, destinations, effects, labels, and deterministic peeks.
 - `public/js/game/engine.js` commits canonical flips and navigation, loss, and
   restart.
 - `public/js/game/choice-availability.js` exposes the canonical direction plan
   to input callers.
-- `public/js/ui/render.js` renders the HUD, story card, transient direction
-  previews, and terminal surface.
+- `public/js/ui/render.js` renders the HUD, Location card or terminal surface,
+  read-only chapter Map, effect Log, and transient direction previews.
+- `public/js/ui/view-tabs.js` owns the accessible, non-persisted
+  Location/Map/Log tab state.
 - `public/js/ui/swipe-controller.js` implements four-axis Pointer Events
   gestures.
 - `public/js/ui/directional-input.js` maps keyboard arrows to the same direction
@@ -86,6 +90,22 @@ exact deterministic destination without consuming RNG or mutating a pile.
   onward.
 - Swipe or press **Arrow Down** to return toward the previous chapter. Down is
   unavailable in Castro.
+
+The persistent bottom row has three equal-width views:
+
+- **Location** is selected on every load and contains the active story card or
+  the existing terminal summary.
+- **Map** shows Intro and Chapters 1–8 in canonical route order. It marks the
+  current chapter but is read-only: it cannot travel, mutate state, consume
+  RNG, or describe earlier chapters as completed.
+- **Log** lists successfully committed, non-null reveal and destination-entry
+  effects newest first. It also offers **Restart Run** through a two-step,
+  five-second confirmation that works during active and lost runs.
+
+Story arrows operate only in Location. When a bottom tab has focus,
+Arrow Left and Arrow Right switch views; Arrow Up and Arrow Down do not resolve
+story actions. Leaving Log cancels an armed restart. The existing terminal
+**Begin Again** control remains available.
 
 There are no visible directional buttons. Direction feedback appears
 transiently below the card header. On a front, both horizontal previews use the
@@ -178,6 +198,29 @@ and restart under the existing local-storage key. Schema version 5 persists:
 - Current card identity and face-aware deterministic token
 - Independent draw/discard state, run seed, and RNG state
 - Decision count, terminal-pending state, and the three resources
+- `effectLog`, the chronological normalized history of applied effects
+
+Each effect-log entry stores only deterministic canonical data:
+
+```js
+{
+  id: "effect:reveal:<source-token>",
+  kind: "reveal", // or "entry"
+  cardId: "intro-fathers-diary",
+  direction: "left",
+  effect: {
+    resources: { eldritchLore: 1 },
+    discoveries: ["fatherDiaryReverse"]
+  }
+}
+```
+
+Reveal entries belong to the revealed card; entry entries belong to the
+destination card. Direction previews, blocked or stale resolutions, null entry
+effects, skip-confirmation actions, and terminal acknowledgement are not
+recorded. Restart clears the Log. Existing version-5 and migrated version-4
+saves begin with an empty Log because earlier effect order cannot be
+reconstructed safely; no historical effects are fabricated.
 
 Compatible version-4 saves migrate without replaying effects. The old
 photograph discovery/reverse state maps to the generic revealed-card

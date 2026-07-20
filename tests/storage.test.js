@@ -65,6 +65,13 @@ test("version-5 reveal, unlock, draw, RNG, and terminal state round-trip", () =>
     },
     rngState: 987654,
     resources: { eldritchLore: 2, crew: 1, sanity: 0 },
+    effectLog: [{
+      id: "effect:reveal:stored",
+      kind: "reveal",
+      cardId: "castro-logbook-under-rain",
+      direction: "left",
+      effect: { resources: { eldritchLore: 1, sanity: -1 } },
+    }],
   };
   assert.equal(saveState(state, { storage }), true);
   const loaded = loadState({
@@ -81,6 +88,38 @@ test("version-5 reveal, unlock, draw, RNG, and terminal state round-trip", () =>
   );
   assert.equal(Object.hasOwn(loaded, "pendingFeedback"), false);
   assert.equal(Object.hasOwn(loaded, "introCardFace"), false);
+  assert.equal(loaded.effectLog.length, 1);
+});
+
+test("malformed stored effect-log entries are discarded safely", () => {
+  const storage = memoryStorage();
+  const state = {
+    ...createInitialState({ seed: 321 }),
+    effectLog: [
+      {
+        id: "effect:entry:valid",
+        kind: "entry",
+        cardId: "castro-empty-berths",
+        direction: "up",
+        effect: { resources: { crew: 1 } },
+      },
+      {
+        id: "effect:entry:invalid",
+        kind: "entry",
+        cardId: "missing",
+        direction: "up",
+        effect: { resources: { crew: 99 } },
+      },
+    ],
+  };
+  assert.equal(saveState(state, { storage }), true);
+  const loaded = loadState({
+    storage,
+    createFallback: () => createInitialState({ seed: 99 }),
+    normalize: normalizeState,
+  });
+  assert.equal(loaded.effectLog.length, 1);
+  assert.equal(loaded.effectLog[0].id, "effect:entry:valid");
 });
 
 test("compatible v4 pending payload migrates without replaying resources", () => {

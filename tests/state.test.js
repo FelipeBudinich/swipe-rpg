@@ -26,6 +26,7 @@ test("fresh version-5 state contains generic reveal and unlock collections", () 
   assert.equal(state.introSkipPending, false);
   assert.deepEqual(state.discoveries, INITIAL_DISCOVERIES);
   assert.deepEqual(state.revealedCardIds, []);
+  assert.deepEqual(state.effectLog, []);
   assert.deepEqual(state.resources, INITIAL_RESOURCES);
   assert.equal(Object.hasOwn(state, "pendingFeedback"), false);
   assert.equal(Object.hasOwn(state, "introCardFace"), false);
@@ -92,6 +93,32 @@ test("current saves retain compatible progress and filter unknown IDs", () => {
   assert.deepEqual(state.resources, raw.resources);
 });
 
+test("current saves normalize effect logs without fabricating missing history", () => {
+  const base = createInitialState({ seed: 1021 });
+  const valid = {
+    id: "effect:reveal:stored-token",
+    kind: "reveal",
+    cardId: "intro-fathers-diary",
+    direction: "right",
+    effect: { resources: { eldritchLore: 1 }, unknown: true },
+  };
+  const normalized = normalizeState({
+    ...base,
+    effectLog: [
+      valid,
+      { ...valid, id: "effect:reveal:bad", cardId: "unknown" },
+    ],
+  });
+  assert.deepEqual(normalized.effectLog, [{
+    id: valid.id,
+    kind: valid.kind,
+    cardId: valid.cardId,
+    direction: valid.direction,
+    effect: { resources: { eldritchLore: 1 } },
+  }]);
+  assert.deepEqual(normalizeState({ ...base, effectLog: undefined }).effectLog, []);
+});
+
 test("version-4 photograph state migrates to the generic one-way reveal", () => {
   const base = createInitialState({ seed: 103 });
   for (const introCardFace of ["front", "reverse"]) {
@@ -109,6 +136,7 @@ test("version-4 photograph state migrates to the generic one-way reveal", () => 
     assert.equal(migrated.discoveries.fatherDiaryReverse, true);
     assert.equal(migrated.resources.eldritchLore, 1);
     assert.equal(Object.hasOwn(migrated, "introCardFace"), false);
+    assert.deepEqual(migrated.effectLog, []);
   }
 
   const inconsistentReverse = normalizeState({

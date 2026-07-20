@@ -34,6 +34,7 @@ test("main wires the canonical story, state, planner, renderer, and swipe contro
   assert.match(source, /planDirection/u);
   assert.match(source, /createRenderer/u);
   assert.match(source, /createSwipeController/u);
+  assert.match(source, /createViewTabs/u);
   assert.doesNotMatch(
     source,
     /inventory|equipment|combat|storyTransition|checkpoint|progression/ui,
@@ -117,7 +118,34 @@ test("keyboard arrows use one tested adapter and blocked feedback is concise", (
   assert.match(source, /document\.addEventListener\("keydown"/u);
   assert.match(source, /onChoose: commitNewChoice/u);
   assert.match(source, /onBlocked: announceUnavailableDirection/u);
-  assert.doesNotMatch(source, /key\.toLowerCase|["']a["']|["']d["']/u);
+  assert.match(source, /isEditableTarget: isUiControlTarget/u);
+  assert.match(source, /\["button", "a", "input", "textarea", "select"\]/u);
+  assert.doesNotMatch(
+    source,
+    /key\.toLowerCase|event\.key\s*===\s*["'][ad]["']/u,
+  );
+});
+
+test("secondary views reset card presentation and block only story input", () => {
+  assert.match(source, /secondaryViewActive:\s*viewTabs\?\.activeView !== "location"/u);
+  assert.match(source, /swipeController\.resetForNextCard\(\)/u);
+  assert.match(source, /renderer\.clearPreview\(\)/u);
+  assert.match(source, /onCommitStart: updateControlLocks/u);
+  assert.match(
+    source,
+    /viewTabs\?\.setDisabled\(\s*inputLocked \|\| swipeController\?\.isCommitting === true/u,
+  );
+  assert.match(source, /map: elements\.mapPanel/u);
+  assert.match(source, /log: elements\.logPanel/u);
+});
+
+test("Log restart uses the unconditional engine path with timed confirmation", () => {
+  assert.match(source, /Engine\.restartRun\(state, \{ seed: randomSeed\(\) \}\)/u);
+  assert.match(source, /Engine\.restartGame\(state, \{ seed: randomSeed\(\) \}\)/u);
+  assert.match(source, /Confirm Restart/u);
+  assert.match(source, /5000/u);
+  assert.match(source, /viewTabs\.activate\("location"\)/u);
+  assert.doesNotMatch(source, /effectLog\s*=|effectLog\.push/u);
 });
 
 test("startup normalizes, prepares, persists, renders, and focuses", () => {

@@ -13,14 +13,16 @@
   </head>
   <body class="min-h-full overflow-x-hidden bg-[#07131d] font-sans text-[#f4ead8] antialiased selection:bg-[#8ab7a8] selection:text-[#07131d]">
     <a
+      id="skip-to-current-location"
       href="#card-stack"
       class="fixed left-3 top-3 z-50 -translate-y-24 rounded-md bg-[#f4ead8] px-4 py-3 font-bold text-[#07131d] shadow-xl transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#79d4c5]"
-    >Skip to the current story card</a>
+    >Skip to the current location</a>
 
     <div
       id="app"
       class="safe-screen relative mx-auto flex w-full max-w-[34rem] flex-col gap-2"
       data-mode="intro"
+      data-view="location"
       aria-busy="true"
     >
       <header
@@ -79,6 +81,9 @@
           id="card-stack"
           class="relative flex min-h-0 flex-1 items-stretch justify-center"
           aria-label="Current story card"
+          role="tabpanel"
+          aria-labelledby="view-location-tab"
+          data-view-panel="location"
           tabindex="-1"
         >
           <div
@@ -213,7 +218,114 @@
           </article>
         </section>
 
+        <section
+          id="chapter-map-panel"
+          class="utility-panel"
+          role="tabpanel"
+          aria-labelledby="view-map-tab"
+          data-view-panel="map"
+          tabindex="0"
+          hidden
+          inert
+        >
+          <header class="utility-panel-header">
+            <p class="utility-panel-kicker">Expedition Map</p>
+            <h2 id="chapter-map-title">Route through the Deep South</h2>
+            <p id="chapter-map-current"></p>
+          </header>
+          <ol
+            id="chapter-map-route"
+            class="chapter-map-route"
+            aria-label="Ordered chapter route"
+          ></ol>
+        </section>
+
+        <section
+          id="effect-log-panel"
+          class="utility-panel"
+          role="tabpanel"
+          aria-labelledby="view-log-tab"
+          data-view-panel="log"
+          tabindex="0"
+          hidden
+          inert
+        >
+          <header class="utility-panel-header">
+            <p class="utility-panel-kicker">Expedition Log</p>
+            <h2 id="effect-log-title">Applied Effects</h2>
+            <p id="effect-log-summary">No effects recorded</p>
+          </header>
+          <div class="effect-log-scroll">
+            <p id="effect-log-empty">No effects have been applied during this run.</p>
+            <ol
+              id="effect-log-list"
+              class="effect-log-list"
+              aria-label="Effects applied during this run"
+              hidden
+            ></ol>
+          </div>
+          <footer class="effect-log-actions">
+            <p
+              id="effect-log-restart-warning"
+              class="effect-log-restart-warning"
+              role="status"
+              hidden
+            >Activate Confirm Restart to permanently erase this run.</p>
+            <button
+              id="effect-log-restart"
+              type="button"
+              aria-describedby="effect-log-restart-warning"
+              aria-label="Restart the current run"
+            >Restart Run</button>
+          </footer>
+        </section>
+
       </main>
+
+      <nav
+        id="view-navigation"
+        class="view-navigation"
+        aria-label="Expedition views"
+      >
+        <div
+          id="view-tablist"
+          class="view-tablist"
+          role="tablist"
+          aria-label="Choose expedition view"
+        >
+          <button
+            id="view-location-tab"
+            class="view-tab"
+            type="button"
+            role="tab"
+            data-view-tab="location"
+            aria-controls="card-stack"
+            aria-selected="true"
+            aria-label="Current location"
+            tabindex="0"
+          >Location</button>
+          <button
+            id="view-map-tab"
+            class="view-tab"
+            type="button"
+            role="tab"
+            data-view-tab="map"
+            aria-controls="chapter-map-panel"
+            aria-selected="false"
+            tabindex="-1"
+          >Map</button>
+          <button
+            id="view-log-tab"
+            class="view-tab"
+            type="button"
+            role="tab"
+            data-view-tab="log"
+            aria-controls="effect-log-panel"
+            aria-selected="false"
+            tabindex="-1"
+          >Log</button>
+        </div>
+      </nav>
 
       <p id="card-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
     </div>

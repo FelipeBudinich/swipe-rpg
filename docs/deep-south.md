@@ -24,6 +24,7 @@ HUD copy.
   currentCardToken: null,
   lastResolvedToken: null,
   decisionCount: 0,
+  effectLog: [],
   runSeed,
   rngState,
   drawStateByDeck,
@@ -37,13 +38,57 @@ HUD copy.
 
 Unknown revealed IDs, unlock IDs, and discovery IDs are discarded. Synthetic
 control cards are never revealed. A new run clears all reveals, discoveries,
-dynamic unlocks, and draw state.
+dynamic unlocks, effect-log entries, and draw state.
+
+`effectLog` is additive version-5 state. Missing values normalize to `[]`, so
+the save version and storage key do not change. A normalized entry contains:
+
+```js
+{
+  id: "effect:entry:<source-token>",
+  kind: "entry", // or "reveal"
+  cardId: "castro-empty-berths",
+  direction: "up",
+  effect: { resources: { crew: 1 } }
+}
+```
+
+The ID is deterministic and idempotent. Only canonical card IDs, four physical
+directions, supported kinds, and nonempty normalized effects survive. Reveal
+entries own the revealed card's applied back effect; entry entries own the
+destination card's applied entry effect. The Log excludes previews, blocked or
+stale attempts, skip-confirmation actions, null effects, and terminal
+acknowledgement. It preserves chronological order in state and is displayed
+newest first.
 
 Version-4 saves migrate in place. A completed or reverse photograph maps to
 `revealedCardIds: ["intro-fathers-diary"]`; v4 plot cards remain unlocked; an
 old pending outcome is discarded without replaying its already-applied effect.
 The migration preserves compatible resources, deck, Intro index,
 skip-confirmation state, decisions, seed, RNG, and draw piles.
+Neither version-4 migration nor an existing version-5 save without `effectLog`
+fabricates historical effects; recording begins with the next successful
+non-null effect.
+
+## Persistent bottom views
+
+The top HUD remains visible above three UI-only tabs. Selected-view state is
+never persisted, and every reload selects Location.
+
+- **Location** contains `#card-stack`, including the active card and existing
+  terminal summary.
+- **Map** lists the Intro plus all eight plot chapters in canonical order and
+  marks the current deck with `aria-current="location"`. It is read-only,
+  allows internal scrolling, and makes no completed/locked/visited claims.
+- **Log** presents normalized applied effects and an active-or-lost run restart
+  protected by a same-button confirmation that expires after about five
+  seconds. Restart clears the run and log, returns to Location, and focuses the
+  first card. Terminal **Begin Again** remains the lost-only restart path.
+
+Map and Log are blocking presentation surfaces for story input. They do not
+mutate state, choose destinations, consume RNG, or alter draw piles. Left and
+Right on the tablist switch tabs; Up and Down on tabs do not resolve story
+directions. The physical card mappings and swipe thresholds are unchanged.
 
 ## Universal card contract
 

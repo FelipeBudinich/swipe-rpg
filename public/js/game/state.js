@@ -14,6 +14,7 @@ import {
   normalizeDrawStateByDeck,
 } from "./deck-draw.js";
 import { normalizeResources } from "./effects.js";
+import { normalizeEffectLog } from "./run-log.js";
 
 export const SAVE_VERSION = 5;
 export const STORY_ID = DEEP_SOUTH_STORY_ID;
@@ -182,6 +183,7 @@ export function createInitialState(options = {}) {
     currentCardToken: null,
     lastResolvedToken: null,
     decisionCount: 0,
+    effectLog: [],
     runSeed: seed,
     rngState: seed,
     drawStateByDeck: createDrawStateByDeck(
@@ -305,6 +307,9 @@ export function normalizeState(raw, options = {}) {
         ? source.lastResolvedToken
         : null,
     decisionCount: nonNegativeInteger(source.decisionCount),
+    effectLog: isVersionFour
+      ? []
+      : normalizeEffectLog(source.effectLog, story),
     runSeed: normalizeSeed(source.runSeed ?? fallback.runSeed),
     rngState: normalizeSeed(
       source.rngState ?? source.runSeed ?? fallback.rngState,

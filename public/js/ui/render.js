@@ -8,6 +8,7 @@ import {
   DIRECTIONS,
   planDirection,
 } from "../game/direction-plan.js";
+import { normalizeEffectLog } from "../game/run-log.js";
 
 export { DIRECTIONS };
 
@@ -128,6 +129,106 @@ export function deriveDeckHud(state, story = DEEP_SOUTH_STORY) {
     cardsLeft,
     cardsLeftLabel,
   };
+}
+
+function storyDecks(story) {
+  return Array.isArray(story?.decks) ? story.decks : [];
+}
+
+function deckStageLabel(deck, story) {
+  if (deck?.type === "intro") return "Prologue";
+  const plotDecks = storyDecks(story).filter(({ type }) => type === "plot");
+  const fallback = plotDecks.findIndex(({ id }) => id === deck?.id) + 1;
+  const step = Number.isInteger(deck?.plotStep) && deck.plotStep > 0
+    ? deck.plotStep
+    : fallback;
+  return `Chapter ${step}`;
+}
+
+function cardAndDeckById(cardId, story) {
+  for (const deck of storyDecks(story)) {
+    const card = (deck.cards ?? []).find(({ id }) => id === cardId);
+    if (card) return { card, deck };
+  }
+  return { card: null, deck: null };
+}
+
+export function deriveChapterMapPresentation(
+  state,
+  currentCard,
+  story = DEEP_SOUTH_STORY,
+) {
+  const decks = storyDecks(story);
+  const currentIndex = Math.max(
+    0,
+    decks.findIndex(({ id }) => id === state?.currentDeckId),
+  );
+  const currentDeck = decks[currentIndex] ?? null;
+  const authored = cardAndDeckById(state?.currentCardId, story).card;
+  const authoredFace = new Set(state?.revealedCardIds ?? []).has(authored?.id)
+    ? authored?.faces?.back
+    : authored?.faces?.front;
+  const currentCardTitle = String(
+    currentCard?.title ?? authoredFace?.title ?? "",
+  );
+  const currentLabel = currentDeck?.type === "intro"
+    ? "Current location: It begins here"
+    : `Current location: ${deckStageLabel(currentDeck, story)}, ${String(currentDeck?.title ?? "Unknown")}`;
+
+  return {
+    currentDeckId: currentDeck?.id ?? null,
+    currentLabel,
+    currentCardTitle,
+    nodes: decks.map((deck, index) => ({
+      id: deck.id,
+      title: String(deck.title ?? deck.id),
+      stageLabel: deckStageLabel(deck, story),
+      position:
+        index < currentIndex
+          ? "before"
+          : index === currentIndex
+            ? "current"
+            : "after",
+      current: index === currentIndex,
+    })),
+  };
+}
+
+const DIRECTION_LABELS = Object.freeze({
+  up: "Up",
+  down: "Down",
+  left: "Left",
+  right: "Right",
+});
+
+export function deriveEffectLogPresentation(
+  state,
+  story = DEEP_SOUTH_STORY,
+) {
+  const normalized = normalizeEffectLog(state?.effectLog, story);
+  return normalized
+    .map((entry, index) => {
+      const { card, deck } = cardAndDeckById(entry.cardId, story);
+      const title = entry.kind === "reveal"
+        ? card?.faces?.back?.title
+        : card?.faces?.front?.title;
+      const chapterLabel = deck?.type === "intro"
+        ? "It begins here"
+        : `${deckStageLabel(deck, story)}, ${String(deck?.title ?? "Unknown")}`;
+      return {
+        id: entry.id,
+        sequence: index + 1,
+        kind: entry.kind,
+        kindLabel: entry.kind === "reveal" ? "Card revealed" : "Arrival effect",
+        direction: entry.direction,
+        directionLabel: DIRECTION_LABELS[entry.direction],
+        cardId: entry.cardId,
+        cardTitle: String(title ?? entry.cardId),
+        chapterLabel,
+        detail: formatCardEffect(entry.effect, story),
+      };
+    })
+    .reverse();
 }
 
 export function choiceForDirection(
@@ -270,6 +371,15 @@ export function createRenderer({
     terminalCopy: byId("terminal-copy"),
     terminalStats: byId("terminal-stats"),
     terminalRestart: byId("terminal-restart"),
+    mapPanel: byId("chapter-map-panel"),
+    mapCurrent: byId("chapter-map-current"),
+    mapRoute: byId("chapter-map-route"),
+    logPanel: byId("effect-log-panel"),
+    logSummary: byId("effect-log-summary"),
+    logEmpty: byId("effect-log-empty"),
+    logList: byId("effect-log-list"),
+    logRestart: byId("effect-log-restart"),
+    logRestartWarning: byId("effect-log-restart-warning"),
     choiceOverlays: {},
     choiceOverlayLabels: {},
     choiceOverlayDetails: {},
@@ -334,6 +444,77 @@ export function createRenderer({
       `${hud.storyTitle}. Expedition resources. ${values}.`,
     );
     return hud;
+  };
+
+  const renderChapterMap = (state, card) => {
+    const presentation = deriveChapterMapPresentation(state, card, story);
+    elements.mapCurrent.textContent = presentation.currentLabel;
+    const nodes = presentation.nodes.map((node) => {
+      const item = document.createElement("li");
+      item.className = "chapter-map-node";
+      item.dataset.position = node.position;
+      if (node.current) item.setAttribute("aria-current", "location");
+
+      const marker = document.createElement("span");
+      marker.className = "chapter-map-marker";
+      marker.setAttribute("aria-hidden", "true");
+
+      const copy = document.createElement("div");
+      copy.className = "chapter-map-copy";
+      const stage = document.createElement("span");
+      stage.className = "chapter-map-stage";
+      stage.textContent = node.stageLabel;
+      const name = document.createElement("strong");
+      name.className = "chapter-map-name";
+      name.textContent = node.title;
+      copy.append(stage, name);
+      if (node.current && presentation.currentCardTitle) {
+        const currentTitle = document.createElement("span");
+        currentTitle.className = "chapter-map-current-card";
+        currentTitle.textContent = presentation.currentCardTitle;
+        copy.append(currentTitle);
+      }
+      item.append(marker, copy);
+      return item;
+    });
+    elements.mapRoute.replaceChildren(...nodes);
+  };
+
+  const renderEffectLog = (state) => {
+    const entries = deriveEffectLogPresentation(state, story);
+    elements.logSummary.textContent = entries.length === 0
+      ? "No effects recorded"
+      : `${entries.length} ${entries.length === 1 ? "effect" : "effects"} recorded`;
+    elements.logEmpty.hidden = entries.length > 0;
+    elements.logList.hidden = entries.length === 0;
+    const children = entries.map((entry) => {
+      const item = document.createElement("li");
+      item.className = "effect-log-entry";
+      item.dataset.effectKind = entry.kind;
+
+      const meta = document.createElement("div");
+      meta.className = "effect-log-meta";
+      const kind = document.createElement("span");
+      kind.className = "effect-log-kind";
+      kind.textContent = entry.kindLabel;
+      const sequence = document.createElement("span");
+      sequence.className = "effect-log-sequence";
+      sequence.textContent = `Effect ${entry.sequence}`;
+      meta.append(kind, sequence);
+
+      const title = document.createElement("h3");
+      title.className = "effect-log-card-title";
+      title.textContent = entry.cardTitle;
+      const location = document.createElement("p");
+      location.className = "effect-log-location";
+      location.textContent = `${entry.chapterLabel} · ${entry.directionLabel}`;
+      const detail = document.createElement("p");
+      detail.className = "effect-log-detail";
+      detail.textContent = entry.detail;
+      item.append(meta, title, location, detail);
+      return item;
+    });
+    elements.logList.replaceChildren(...children);
   };
 
   const setChoicePreview = (state, card, direction) => {
@@ -464,6 +645,8 @@ export function createRenderer({
       elements.app.setAttribute("aria-busy", "false");
       elements.card.setAttribute("aria-busy", "false");
       const hud = renderHud(state);
+      renderChapterMap(state, card);
+      renderEffectLog(state);
       elements.app.dataset.mode =
         state.status === "lost" && !state.terminalPending
           ? "lost"
@@ -499,6 +682,9 @@ export function createRenderer({
       for (const resource of plan.affectedResources ?? []) {
         resourceTargets[resource].dataset.previewed = "true";
       }
+    },
+    clearPreview() {
+      clearPreviewTargets();
     },
   };
 }

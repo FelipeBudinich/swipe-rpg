@@ -52,6 +52,42 @@ test("the card is the sole four-arrow interaction surface", () => {
   );
 });
 
+test("persistent Location, Map, and Log tabs own three matching panels", () => {
+  for (const id of [
+    "view-navigation",
+    "view-tablist",
+    "view-location-tab",
+    "view-map-tab",
+    "view-log-tab",
+    "chapter-map-panel",
+    "chapter-map-route",
+    "effect-log-panel",
+    "effect-log-list",
+    "effect-log-restart",
+  ]) {
+    assert.match(html, new RegExp(`\\bid="${id}"`, "u"));
+  }
+  assert.equal((html.match(/\brole="tab"/gu) ?? []).length, 3);
+  assert.equal((html.match(/\brole="tabpanel"/gu) ?? []).length, 3);
+  assert.match(
+    openingTagById(html, "card-stack"),
+    /role="tabpanel"[^>]*aria-labelledby="view-location-tab"[^>]*data-view-panel="location"/u,
+  );
+  assert.match(
+    openingTagById(html, "view-location-tab"),
+    /aria-selected="true"[^>]*tabindex="0"/u,
+  );
+  for (const id of ["chapter-map-panel", "effect-log-panel"]) {
+    const panel = openingTagById(html, id);
+    assert.match(panel, /\bhidden\b/u);
+    assert.match(panel, /\binert\b/u);
+  }
+  assert.match(
+    html,
+    /id="skip-to-current-location"[^>]*href="#card-stack"[^>]*>[\s\S]*?Skip to the current location/u,
+  );
+});
+
 test("markup retains the four transient preview labels and details", () => {
   assert.match(
     openingTagById(html, "choice-preview-feedback"),
@@ -126,6 +162,19 @@ test("source CSS keeps transient previews and generic back detail only", () => {
   assert.doesNotMatch(css, /\.choice-feedback-card/u);
   assert.doesNotMatch(css, /#choice-feedback-/u);
   assert.doesNotMatch(css, /@keyframes choice-feedback-enter/u);
+  for (const selector of [
+    ".view-navigation",
+    ".view-tab",
+    ".utility-panel",
+    ".chapter-map-route",
+    ".chapter-map-node",
+    ".effect-log-entry",
+  ]) {
+    assert.match(
+      css,
+      new RegExp(selector.replace(".", "\\."), "u"),
+    );
+  }
 });
 
 test("short and narrow viewport rules retain card and terminal surfaces", () => {
@@ -133,7 +182,7 @@ test("short and narrow viewport rules retain card and terminal surfaces", () => 
   assert.match(css, /@media \(max-height: 650px\)/u);
   assert.match(
     css,
-    /#card,\s*\.terminal-summary\s*\{\s*min-height: 12\.5rem/u,
+    /#card,\s*\.terminal-summary,\s*\.utility-panel\s*\{\s*min-height: 12\.5rem/u,
   );
   assert.doesNotMatch(css, /choice-feedback/u);
 });

@@ -15,6 +15,7 @@ import {
 } from "./ui/interaction-lock.js";
 import { createRenderer } from "./ui/render.js";
 import { createSwipeController } from "./ui/swipe-controller.js";
+import { createViewTabs } from "./ui/view-tabs.js";
 
 function randomSeed() {
   try {
@@ -65,12 +66,16 @@ state = prepared.state;
 let currentCard = prepared.card;
 let inputLocked = false;
 let swipeController;
+let viewTabs;
+let logRestartArmed = false;
+let logRestartTimer = null;
 
 function interactionLockState() {
   return {
     inputLocked,
     controllerCommitting: swipeController?.isCommitting === true,
     terminalActive: state.status === "lost" && !state.terminalPending,
+    secondaryViewActive: viewTabs?.activeView !== "location",
   };
 }
 
@@ -86,11 +91,58 @@ function updateControlLocks() {
   elements.terminalRestart.disabled = Boolean(
     state.status !== "lost" || state.terminalPending || inputLocked,
   );
+  elements.logRestart.disabled = Boolean(
+    inputLocked || swipeController?.isCommitting === true,
+  );
+  viewTabs?.setDisabled(
+    inputLocked || swipeController?.isCommitting === true,
+  );
+}
+
+function isUiControlTarget(target) {
+  const tagName = String(target?.tagName ?? "").toLowerCase();
+  return (
+    ["button", "a", "input", "textarea", "select"].includes(tagName) ||
+    target?.isContentEditable === true ||
+    target?.getAttribute?.("role") === "tab"
+  );
 }
 
 function renderAll() {
   renderer.render(state, currentCard);
   updateControlLocks();
+}
+
+function resetLogRestartConfirmation() {
+  globalThis.clearTimeout(logRestartTimer);
+  logRestartTimer = null;
+  logRestartArmed = false;
+  elements.logRestart.textContent = "Restart Run";
+  delete elements.logRestart.dataset.confirming;
+  elements.logRestart.setAttribute(
+    "aria-label",
+    "Restart the current run",
+  );
+  elements.logRestartWarning.hidden = true;
+}
+
+function armLogRestartConfirmation() {
+  globalThis.clearTimeout(logRestartTimer);
+  logRestartArmed = true;
+  elements.logRestart.textContent = "Confirm Restart";
+  elements.logRestart.dataset.confirming = "true";
+  elements.logRestart.setAttribute(
+    "aria-label",
+    "Confirm permanent restart of the current run",
+  );
+  elements.logRestartWarning.hidden = false;
+  feedback.announce(
+    "Restart confirmation required. Activate Confirm Restart within five seconds to permanently erase this run.",
+  );
+  logRestartTimer = globalThis.setTimeout(
+    resetLogRestartConfirmation,
+    5000,
+  );
 }
 
 async function settleCardArt() {
@@ -163,6 +215,7 @@ swipeController = createSwipeController({
     planDirection(state, currentCard, direction).available,
   onBlocked: announceUnavailableDirection,
   onPreview: (direction) => renderer.previewChoice(direction),
+  onCommitStart: updateControlLocks,
   onCommit: commitChoice,
   onCommitSettled: (mode) => {
     if (mode !== "flip") return;
@@ -173,6 +226,31 @@ swipeController = createSwipeController({
     updateControlLocks();
     feedback.announce("The southern sea shifted. Try that action again.");
     console.error(error);
+  },
+});
+
+viewTabs = createViewTabs({
+  app: elements.app,
+  tablist: document.getElementById("view-tablist"),
+  tabs: {
+    location: document.getElementById("view-location-tab"),
+    map: document.getElementById("view-map-tab"),
+    log: document.getElementById("view-log-tab"),
+  },
+  panels: {
+    location: elements.cardStack,
+    map: elements.mapPanel,
+    log: elements.logPanel,
+  },
+  initialView: "location",
+  canActivate: () =>
+    inputLocked !== true && swipeController.isCommitting !== true,
+  onChange: (nextView, previousView) => {
+    swipeController.resetForNextCard();
+    renderer.clearPreview();
+    if (previousView === "log" && nextView !== "log") {
+      resetLogRestartConfirmation();
+    }
   },
 });
 
@@ -195,10 +273,7 @@ function announceUnavailableDirection(direction) {
 
 const handleArrowKey = createArrowKeyHandler({
   isInputBlocked: isNewInputBlocked,
-  isEditableTarget: (target) =>
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement,
+  isEditableTarget: isUiControlTarget,
   isDirectionAvailable: (direction) =>
     planDirection(state, currentCard, direction).available,
   onChoose: commitNewChoice,
@@ -209,31 +284,75 @@ document.addEventListener("keydown", (event) => {
   handleArrowKey(event);
 });
 
-async function restartLostRun() {
-  if (inputLocked || state.status !== "lost" || state.terminalPending) return;
+async function performRunRestart({ requireLost = false } = {}) {
+  if (
+    inputLocked ||
+    swipeController?.isCommitting === true ||
+    (requireLost && (state.status !== "lost" || state.terminalPending))
+  ) {
+    return false;
+  }
   inputLocked = true;
   updateControlLocks();
+  let didRestart = false;
   try {
-    const restarted = Engine.restartGame(state, { seed: randomSeed() });
-    if (restarted.ignored) return;
+    const restarted = requireLost
+      ? Engine.restartGame(state, { seed: randomSeed() })
+      : Engine.restartRun(state, { seed: randomSeed() });
+    if (restarted.ignored) return false;
     state = restarted.state;
     currentCard = restarted.card;
     saveState(state);
     feedback.clear();
     swipeController.resetForNextCard();
+    resetLogRestartConfirmation();
     renderAll();
     await settleCardArt();
+    didRestart = true;
+    return true;
   } finally {
     inputLocked = false;
     updateControlLocks();
-    renderer.focusPrimarySurface();
+    if (didRestart) {
+      viewTabs.activate("location");
+      feedback.announce("A new expedition begins.");
+      renderer.focusPrimarySurface();
+    }
   }
+}
+
+function restartLostRun() {
+  return performRunRestart({ requireLost: true });
+}
+
+function performActiveRunRestart() {
+  return performRunRestart({ requireLost: false });
 }
 
 elements.terminalRestart.addEventListener("click", () => {
   void restartLostRun();
 });
 
+elements.logRestart.addEventListener("click", () => {
+  if (!logRestartArmed) {
+    armLogRestartConfirmation();
+    return;
+  }
+  void performActiveRunRestart();
+});
+
+document
+  .getElementById("skip-to-current-location")
+  .addEventListener("click", (event) => {
+    if (viewTabs.activeView === "location") return;
+    event.preventDefault();
+    if (!viewTabs.activate("location")) return;
+    globalThis.requestAnimationFrame(() => {
+      renderer.focusPrimarySurface();
+    });
+  });
+
+resetLogRestartConfirmation();
 renderAll();
 saveState(state);
 renderer.focusPrimarySurface();

@@ -7,6 +7,7 @@ import {
   planDirection,
   resolveChoice,
 } from "../public/js/game/engine.js";
+import { formatCardEffect } from "../public/js/game/card-effects.js";
 
 const MAX_DECISIONS = 160;
 
@@ -93,6 +94,18 @@ export function simulateRun(seed, maxDecisions = MAX_DECISIONS) {
     state = result.state;
     card = result.card;
     visitedDeckIds.add(state.currentDeckId);
+    const effectLogIds = state.effectLog.map(({ id }) => id);
+    if (new Set(effectLogIds).size !== effectLogIds.length) {
+      stallReason = "duplicate-effect-log-entry";
+      break;
+    }
+    if (
+      state.effectLog.some(({ effect }) =>
+        !formatCardEffect(effect, DEEP_SOUTH_STORY))
+    ) {
+      stallReason = "empty-effect-log-entry";
+      break;
+    }
     const expectedIncrement =
       wasPlot && (plan.mode === "flip" || plan.mode === "navigate")
         ? 1
