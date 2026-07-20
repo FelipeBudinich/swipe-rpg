@@ -1,24 +1,21 @@
-import { FEEDBACK_ART_BY_TONE } from "../game/choice-feedback.js";
 import { artSourceForId } from "../data/art-assets.js";
+import { DEEP_SOUTH_STORY } from "../data/deep-south.js";
 import {
-  CHOICE_COST_KEYS,
-  CHOICE_COST_LABELS,
-  getDirectionAvailability,
-  normalizeChoiceCosts,
-} from "../game/choice-availability.js";
+  effectAffectedResources,
+  formatCardEffect,
+} from "../game/card-effects.js";
+import {
+  DIRECTIONS,
+  planDirection,
+} from "../game/direction-plan.js";
 
-export const DIRECTIONS = Object.freeze(["up", "down", "left", "right"]);
+export { DIRECTIONS };
 
-export { FEEDBACK_ART_BY_TONE };
-
-const FEEDBACK_TITLE_BY_TONE = Object.freeze({
-  neutral: "Your Choice",
-  reward: "Discovery",
-  damage: "The Cost",
-  danger: "Consequence",
-});
-
-const RESOURCE_FIELDS = Object.freeze(["eldritchLore", "crew", "sanity"]);
+const RESOURCE_FIELDS = Object.freeze([
+  "eldritchLore",
+  "crew",
+  "sanity",
+]);
 const RESOURCE_LABELS = Object.freeze({
   eldritchLore: "Eldritch Lore",
   crew: "Crew",
@@ -38,11 +35,6 @@ function finiteResourceValue(value) {
   return Number.isFinite(number) ? Math.max(0, Math.trunc(number)) : 0;
 }
 
-function finiteDelta(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.trunc(number) : 0;
-}
-
 function punctuationSafeSentence(value) {
   const text = String(value ?? "").trim();
   if (!text) return "";
@@ -56,7 +48,9 @@ export function resolveArtSource(
 ) {
   const allowlist =
     allowedArtIds instanceof Set ? allowedArtIds : new Set(allowedArtIds ?? []);
-  const safeFallback = SAFE_ART_ID.test(fallbackId) ? fallbackId : DEFAULT_ART_ID;
+  const safeFallback = SAFE_ART_ID.test(fallbackId)
+    ? fallbackId
+    : DEFAULT_ART_ID;
   const candidate =
     typeof artId === "string" &&
     SAFE_ART_ID.test(artId) &&
@@ -66,15 +60,10 @@ export function resolveArtSource(
   return artSourceForId(candidate);
 }
 
-export function deriveDeckHud(state, story) {
+export function deriveDeckHud(state, story = DEEP_SOUTH_STORY) {
   const decks = Array.isArray(story?.decks) ? story.decks : [];
-  const feedback = state?.pendingFeedback;
-  const deckId =
-    typeof feedback?.sourceDeckId === "string"
-      ? feedback.sourceDeckId
-      : state?.currentDeckId;
   const deck =
-    decks.find(({ id }) => id === deckId) ??
+    decks.find(({ id }) => id === state?.currentDeckId) ??
     decks[0] ??
     { id: "it-begins-here", title: "It begins here", type: "intro" };
   const plotDecks = decks.filter(({ type }) => type === "plot");
@@ -83,37 +72,49 @@ export function deriveDeckHud(state, story) {
       ? deck.plotStep
       : Math.max(1, plotDecks.findIndex(({ id }) => id === deck.id) + 1);
   const deckCards = Array.isArray(deck.cards) ? deck.cards : [];
+  const defaultUnlockedIds = deckCards
+    .filter((card) => card?.initiallyAvailable !== false)
+    .map((card) => typeof card === "string" ? card : card?.id)
+    .filter(Boolean);
+  const unlockedIds =
+    deck.type === "plot"
+      ? new Set(
+          state?.unlockedCardIdsByDeck?.[deck.id] ??
+            defaultUnlockedIds,
+        )
+      : new Set(deckCards.map((card) => card?.id).filter(Boolean));
   const cardIds = new Set(
     deckCards
       .map((card) => typeof card === "string" ? card : card?.id)
-      .filter((id) => typeof id === "string"),
+      .filter((id) => typeof id === "string" && unlockedIds.has(id)),
   );
   const drawPile = new Set(
     (Array.isArray(state?.drawStateByDeck?.[deck.id]?.drawPile)
       ? state.drawStateByDeck[deck.id].drawPile
       : [])
       .map((card) => typeof card === "string" ? card : card?.id)
-      .filter((id) => typeof id === "string" && id.trim()),
+      .filter(
+        (id) =>
+          typeof id === "string" &&
+          id.trim() &&
+          cardIds.has(id),
+      ),
   );
-  const currentCardBelongsToDeck =
-    !feedback &&
-    state?.currentDeckId === deck.id &&
-    cardIds.has(state?.currentCardId);
-  const feedbackSourceBelongsToDeck =
-    Boolean(feedback) &&
-    feedback.sourceDeckId === deck.id &&
-    cardIds.has(feedback.sourceCardId);
-  const activeCardId = currentCardBelongsToDeck
-    ? state.currentCardId
-    : feedbackSourceBelongsToDeck
-      ? feedback.sourceCardId
+  const activeCardId =
+    state?.currentDeckId === deck.id && cardIds.has(state?.currentCardId)
+      ? state.currentCardId
       : null;
   const cardsLeft =
     deck.type === "intro"
-      ? Math.max(0, deckCards.length - Math.max(0, Number(state?.introCardIndex) || 0))
+      ? Math.max(
+          0,
+          deckCards.length -
+            Math.max(0, Number(state?.introCardIndex) || 0),
+        )
       : drawPile.size +
         (activeCardId && !drawPile.has(activeCardId) ? 1 : 0);
-  const cardsLeftLabel = `${cardsLeft} ${cardsLeft === 1 ? "card" : "cards"} left in deck`;
+  const cardsLeftLabel =
+    `${cardsLeft} ${cardsLeft === 1 ? "card" : "cards"} left in deck`;
   const cardSpeakerLabel =
     deck.type === "intro"
       ? `${deck.title} - ${cardsLeftLabel}`
@@ -129,64 +130,67 @@ export function deriveDeckHud(state, story) {
   };
 }
 
-export function choiceForDirection(_state, card, direction) {
+export function choiceForDirection(
+  state,
+  card,
+  direction,
+  story = DEEP_SOUTH_STORY,
+) {
   if (!DIRECTIONS.includes(direction)) return null;
-  return card?.choices?.[direction] ?? null;
+  const plan = planDirection(state, card, direction, story);
+  return plan.available ? plan : null;
 }
 
-export function affectedResources(choice) {
-  const effects =
-    choice?.effects && typeof choice.effects === "object" ? choice.effects : {};
-  const costs = normalizeChoiceCosts(choice?.costs);
-  return RESOURCE_FIELDS.filter(
-    (resource) =>
-      finiteDelta(effects[resource]) !== 0 || Number(costs[resource] ?? 0) > 0,
+export function affectedResources(choiceOrEffect, story = DEEP_SOUTH_STORY) {
+  if (Array.isArray(choiceOrEffect?.affectedResources)) {
+    return [...choiceOrEffect.affectedResources];
+  }
+  return effectAffectedResources(
+    choiceOrEffect?.effect ?? choiceOrEffect,
+    story,
   );
 }
 
-export function choiceDetail(choice) {
-  const effects =
-    choice?.effects && typeof choice.effects === "object" ? choice.effects : {};
-  const costs = normalizeChoiceCosts(choice?.costs);
-  const costDetail = CHOICE_COST_KEYS.flatMap((resource) => {
-    const cost = Number(costs[resource] ?? 0);
-    return cost ? [`Costs ${cost} ${CHOICE_COST_LABELS[resource]}`] : [];
-  });
-  const effectDetail = RESOURCE_FIELDS.flatMap((resource) => {
-    const delta = finiteDelta(effects[resource]);
-    return delta
-      ? [`${delta > 0 ? "+" : ""}${delta} ${RESOURCE_LABELS[resource]}`]
-      : [];
-  });
-  return [...costDetail, ...effectDetail].join(" · ");
+export function choiceDetail(choiceOrEffect, story = DEEP_SOUTH_STORY) {
+  if (typeof choiceOrEffect?.detail === "string") {
+    return choiceOrEffect.detail;
+  }
+  return formatCardEffect(
+    choiceOrEffect?.effect ?? choiceOrEffect,
+    story,
+  );
 }
 
-export function deriveChoicePresentation(state, card, direction) {
-  const availability = getDirectionAvailability(state, card, direction);
-  const choice = availability.choice;
-  const label = choice ? String(choice.label ?? "Continue") : "No option";
-  const detail = choice
-    ? availability.available
-      ? choiceDetail(choice)
-      : availability.requirementText
-    : "";
-  const directionLabel = `${direction[0].toUpperCase()}${direction.slice(1)}`;
+export function deriveChoicePresentation(
+  state,
+  card,
+  direction,
+  story = DEEP_SOUTH_STORY,
+) {
+  const plan = planDirection(state, card, direction, story);
+  const label = String(plan.label ?? "No option");
+  const detail = plan.available
+    ? String(plan.detail ?? "")
+    : String(plan.requirementText ?? "");
+  const directionLabel =
+    `${direction[0].toUpperCase()}${direction.slice(1)}`;
   return {
-    ...availability,
+    ...plan,
     label,
     detail,
-    affects: choice ? affectedResources(choice) : [],
+    affects: [...(plan.affectedResources ?? [])],
     ariaLabel: `${directionLabel}: ${label}${
-      detail
-        ? `. ${detail}`
-        : choice
-          ? ""
-          : `. ${availability.requirementText}`
+      detail ? `. ${detail}` : ""
     }`,
   };
 }
 
-export function cardAnnouncement(state, card, contextLabel = null) {
+export function cardAnnouncement(
+  state,
+  card,
+  contextLabel = null,
+  story = DEEP_SOUTH_STORY,
+) {
   const speakerLabel =
     contextLabel ?? (card?.speaker ? String(card.speaker) : "");
   const parts = [
@@ -196,70 +200,30 @@ export function cardAnnouncement(state, card, contextLabel = null) {
     card?.detail ? String(card.detail) : "",
   ];
   for (const direction of DIRECTIONS) {
-    const presentation = deriveChoicePresentation(state, card, direction);
+    const presentation = deriveChoicePresentation(
+      state,
+      card,
+      direction,
+      story,
+    );
+    if (
+      !presentation.available &&
+      (card?.cardFace === "back" ||
+        state?.introSkipPending === true) &&
+      (direction === "left" || direction === "right")
+    ) {
+      continue;
+    }
     parts.push(presentation.ariaLabel.replace(/[.!?]+$/, ""));
   }
-  return parts.filter(Boolean).map(punctuationSafeSentence).join(" ");
-}
-
-function feedbackValue(resource, delta) {
-  return `${delta > 0 ? "+" : ""}${delta} ${RESOURCE_LABELS[resource]}`;
-}
-
-function feedbackAnnouncement(resource, delta) {
-  return `${RESOURCE_LABELS[resource]} ${delta > 0 ? "plus" : "minus"} ${Math.abs(delta)}`;
-}
-
-export function deriveFeedbackPresentation(feedback) {
-  if (
-    !feedback ||
-    typeof feedback.id !== "string" ||
-    !feedback.id.trim() ||
-    typeof feedback.resultText !== "string" ||
-    !feedback.resultText.trim()
-  ) {
-    return null;
-  }
-  const changes = Object.fromEntries(
-    RESOURCE_FIELDS.map((resource) => [
-      resource,
-      finiteDelta(feedback.changes?.[resource]),
-    ]),
-  );
-  const tone = Object.hasOwn(FEEDBACK_ART_BY_TONE, feedback.tone)
-    ? feedback.tone
-    : "neutral";
-  const rows = RESOURCE_FIELDS.flatMap((resource) => {
-    const delta = changes[resource];
-    return delta
-      ? [{
-          key: resource,
-          label: RESOURCE_LABELS[resource],
-          value: feedbackValue(resource, delta),
-          direction: delta > 0 ? "gain" : "loss",
-          announcement: feedbackAnnouncement(resource, delta),
-        }]
-      : [];
-  });
-  const title = FEEDBACK_TITLE_BY_TONE[tone];
-  const text = feedback.resultText.trim();
-  return {
-    id: feedback.id,
-    tone,
-    title,
-    text,
-    artId: FEEDBACK_ART_BY_TONE[tone],
-    rows,
-    announcement: `${title}. ${punctuationSafeSentence(text)}${
-      rows.length
-        ? ` ${rows.map(({ announcement }) => announcement).join(". ")}.`
-        : ""
-    } Continue.`,
-  };
+  return parts
+    .filter(Boolean)
+    .map(punctuationSafeSentence)
+    .join(" ");
 }
 
 export function deriveLossPresentation(state) {
-  if (state?.status !== "lost") return null;
+  if (state?.status !== "lost" || state?.terminalPending) return null;
   const resources = state.resources ?? {};
   return {
     title: "The sea remembers",
@@ -277,7 +241,7 @@ export function deriveLossPresentation(state) {
 }
 
 export function createRenderer({
-  story = { id: "deep-south", title: "Deep South", decks: [] },
+  story = DEEP_SOUTH_STORY,
   allowedArtIds = new Set(),
 } = {}) {
   const elements = {
@@ -301,14 +265,6 @@ export function createRenderer({
     text: byId("card-text"),
     detail: byId("card-detail"),
     cardLive: byId("card-live"),
-    choiceFeedbackCard: byId("choice-feedback-card"),
-    choiceFeedbackKicker: byId("choice-feedback-kicker"),
-    choiceFeedbackTitle: byId("choice-feedback-title"),
-    choiceFeedbackText: byId("choice-feedback-text"),
-    choiceFeedbackArt: byId("choice-feedback-art"),
-    choiceFeedbackChanges: byId("choice-feedback-changes"),
-    choiceFeedbackControls: byId("choice-feedback-controls"),
-    choiceFeedbackContinue: byId("choice-feedback-continue"),
     terminal: byId("terminal-summary"),
     terminalTitle: byId("terminal-title"),
     terminalCopy: byId("terminal-copy"),
@@ -320,7 +276,9 @@ export function createRenderer({
   };
 
   for (const direction of DIRECTIONS) {
-    elements.choiceOverlays[direction] = byId(`choice-${direction}-overlay`);
+    elements.choiceOverlays[direction] = byId(
+      `choice-${direction}-overlay`,
+    );
     elements.choiceOverlayLabels[direction] = byId(
       `choice-${direction}-overlay-label`,
     );
@@ -367,7 +325,10 @@ export function createRenderer({
       (resource) =>
         `${RESOURCE_LABELS[resource]} ${finiteResourceValue(resources[resource])}`,
     ).join(". ");
-    elements.resourceRow.setAttribute("aria-label", `Expedition resources. ${values}.`);
+    elements.resourceRow.setAttribute(
+      "aria-label",
+      `Expedition resources. ${values}.`,
+    );
     elements.playerHud.setAttribute(
       "aria-label",
       `${hud.storyTitle}. Expedition resources. ${values}.`,
@@ -378,7 +339,12 @@ export function createRenderer({
   const setChoicePreview = (state, card, direction) => {
     const overlayLabel = elements.choiceOverlayLabels[direction];
     const overlayDetail = elements.choiceOverlayDetails[direction];
-    const presentation = deriveChoicePresentation(state, card, direction);
+    const presentation = deriveChoicePresentation(
+      state,
+      card,
+      direction,
+      story,
+    );
     overlayLabel.textContent = presentation.label;
     const previewDetail = String(presentation.detail ?? "").trim();
     overlayDetail.textContent = previewDetail;
@@ -391,9 +357,9 @@ export function createRenderer({
     const text = String(card?.text ?? "The expedition waits.");
     const detail = String(card?.detail ?? "").trim();
     const artLabel = String(card?.artLabel ?? "").trim();
-    const introFace =
-      card?.introFace === "front" || card?.introFace === "reverse"
-        ? card.introFace
+    const face =
+      card?.cardFace === "front" || card?.cardFace === "back"
+        ? card.cardFace
         : null;
     const hud = deriveDeckHud(state, story);
     elements.speaker.textContent = hud.cardSpeakerLabel;
@@ -410,18 +376,25 @@ export function createRenderer({
     elements.cardArt.draggable = false;
     elements.cardArtLabel.textContent = artLabel;
     elements.cardArtLabel.hidden = !artLabel;
-    elements.card.dataset.cardId = String(card?.id ?? "deep-south-card");
+    elements.card.dataset.cardId = String(
+      card?.id ?? "deep-south-card",
+    );
     elements.card.dataset.deckType = hud.isIntro ? "intro" : "plot";
-    if (introFace) elements.card.dataset.introFace = introFace;
-    else delete elements.card.dataset.introFace;
+    if (face) elements.card.dataset.cardFace = face;
+    else delete elements.card.dataset.cardFace;
     for (const direction of DIRECTIONS) {
       setChoicePreview(state, card, direction);
     }
-    const announcement = cardAnnouncement(state, card, hud.cardSpeakerLabel);
+    const announcement = cardAnnouncement(
+      state,
+      card,
+      hud.cardSpeakerLabel,
+      story,
+    );
     elements.card.setAttribute("aria-label", announcement);
-    const announcementKey = `${String(state.currentCardToken ?? card?.id ?? "card")}:${
-      state.introSkipPending ? "skip" : "normal"
-    }:${introFace ?? "single"}`;
+    const announcementKey =
+      `${String(state.currentCardToken ?? card?.id ?? "card")}:` +
+      `${state.introSkipPending ? "skip" : "normal"}:${face ?? "control"}`;
     if (lastAnnouncementKey !== announcementKey) {
       lastAnnouncementKey = announcementKey;
       elements.cardLive.textContent = announcement;
@@ -431,31 +404,12 @@ export function createRenderer({
   const setInteractiveSurface = () => {
     elements.card.hidden = false;
     elements.cardBackdrop.hidden = false;
-    elements.choiceFeedbackCard.hidden = true;
-    elements.choiceFeedbackControls.hidden = true;
     elements.terminal.hidden = true;
     elements.card.removeAttribute("inert");
     elements.card.tabIndex = 0;
-    elements.choiceFeedbackContinue.disabled = true;
     elements.terminalRestart.disabled = true;
     elements.cardStack.setAttribute("aria-label", "Current story card");
     lastSpecialAnnouncementKey = null;
-  };
-
-  const setFeedbackSurface = () => {
-    activeCard = null;
-    lastAnnouncementKey = null;
-    clearPreviewTargets();
-    elements.card.hidden = true;
-    elements.cardBackdrop.hidden = false;
-    elements.choiceFeedbackCard.hidden = false;
-    elements.choiceFeedbackControls.hidden = false;
-    elements.terminal.hidden = true;
-    elements.card.setAttribute("inert", "");
-    elements.card.tabIndex = -1;
-    elements.choiceFeedbackContinue.disabled = false;
-    elements.terminalRestart.disabled = true;
-    elements.cardStack.setAttribute("aria-label", "Choice outcome");
   };
 
   const setTerminalSurface = () => {
@@ -464,54 +418,11 @@ export function createRenderer({
     clearPreviewTargets();
     elements.card.hidden = true;
     elements.cardBackdrop.hidden = true;
-    elements.choiceFeedbackCard.hidden = true;
-    elements.choiceFeedbackControls.hidden = true;
     elements.terminal.hidden = false;
     elements.card.setAttribute("inert", "");
     elements.card.tabIndex = -1;
-    elements.choiceFeedbackContinue.disabled = true;
     elements.terminalRestart.disabled = false;
     elements.cardStack.setAttribute("aria-label", "Expedition lost");
-  };
-
-  const renderFeedback = (presentation) => {
-    setFeedbackSurface();
-    elements.choiceFeedbackCard.dataset.tone = presentation.tone;
-    elements.choiceFeedbackKicker.textContent = "Outcome";
-    elements.choiceFeedbackTitle.textContent = presentation.title;
-    elements.choiceFeedbackText.textContent = presentation.text;
-    elements.choiceFeedbackArt.src = resolveArtSource(
-      presentation.artId,
-      allowedArtIds,
-      FEEDBACK_ART_BY_TONE[presentation.tone],
-    );
-    elements.choiceFeedbackArt.alt = "";
-    elements.choiceFeedbackChanges.replaceChildren();
-    elements.choiceFeedbackChanges.hidden = presentation.rows.length === 0;
-    for (const row of presentation.rows) {
-      const group = document.createElement("div");
-      group.className = "choice-feedback-change-row";
-      const term = document.createElement("dt");
-      term.className = "choice-feedback-change-label";
-      term.textContent = row.label;
-      const value = document.createElement("dd");
-      value.className = "choice-feedback-change-value";
-      value.dataset.direction = row.direction;
-      value.textContent = row.value;
-      group.append(term, value);
-      elements.choiceFeedbackChanges.append(group);
-    }
-    elements.choiceFeedbackContinue.setAttribute(
-      "aria-label",
-      presentation.rows.length
-        ? "Continue after reviewing the outcome and resource changes"
-        : "Continue after reviewing the outcome",
-    );
-    const announcementKey = `feedback:${presentation.id}`;
-    if (lastSpecialAnnouncementKey !== announcementKey) {
-      lastSpecialAnnouncementKey = announcementKey;
-      elements.cardLive.textContent = presentation.announcement;
-    }
   };
 
   const renderLoss = (presentation) => {
@@ -526,13 +437,15 @@ export function createRenderer({
     elements.terminalStats.replaceChildren();
     for (const stat of presentation.stats) {
       const group = document.createElement("div");
-      group.className = "rounded-lg bg-[#091923] px-2 py-2";
+      group.className =
+        "rounded-lg bg-[#091923] px-2 py-2";
       const term = document.createElement("dt");
       term.className =
         "text-[0.58rem] font-black uppercase tracking-wider text-[#87a1aa]";
       term.textContent = stat.label;
       const value = document.createElement("dd");
-      value.className = "mt-0.5 text-sm font-black text-[#fff6e6]";
+      value.className =
+        "mt-0.5 text-sm font-black text-[#fff6e6]";
       value.textContent = stat.value;
       group.append(term, value);
       elements.terminalStats.append(group);
@@ -552,13 +465,11 @@ export function createRenderer({
       elements.card.setAttribute("aria-busy", "false");
       const hud = renderHud(state);
       elements.app.dataset.mode =
-        state.status === "lost" ? "lost" : hud.isIntro ? "intro" : "plot";
-
-      const feedback = deriveFeedbackPresentation(state.pendingFeedback);
-      if (feedback) {
-        renderFeedback(feedback);
-        return;
-      }
+        state.status === "lost" && !state.terminalPending
+          ? "lost"
+          : hud.isIntro
+            ? "intro"
+            : "plot";
 
       const loss = deriveLossPresentation(state);
       if (loss) {
@@ -570,21 +481,22 @@ export function createRenderer({
       renderCard(state, card);
     },
     focusPrimarySurface() {
-      if (!elements.choiceFeedbackCard.hidden) {
-        elements.choiceFeedbackContinue.focus();
-      } else if (!elements.terminal.hidden) {
+      if (!elements.terminal.hidden) {
         elements.terminalRestart.focus();
       } else {
         elements.card.focus();
       }
     },
     previewChoice(direction) {
-      const choice = choiceForDirection(currentState, activeCard, direction);
+      const plan = planDirection(
+        currentState,
+        activeCard,
+        direction,
+        story,
+      );
       clearPreviewTargets();
-      if (!getDirectionAvailability(currentState, activeCard, direction).available) {
-        return;
-      }
-      for (const resource of affectedResources(choice)) {
+      if (!plan.available) return;
+      for (const resource of plan.affectedResources ?? []) {
         resourceTargets[resource].dataset.previewed = "true";
       }
     },

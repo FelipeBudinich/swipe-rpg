@@ -21,6 +21,16 @@ function uniqueCardIds(cards) {
   return ids;
 }
 
+function availableCardsForDeck(deck, unlockedCardIdsByDeck) {
+  if (!unlockedCardIdsByDeck || !Array.isArray(unlockedCardIdsByDeck[deck?.id])) {
+    return deck?.cards ?? [];
+  }
+  const unlocked = new Set(unlockedCardIdsByDeck[deck.id]);
+  return (Array.isArray(deck?.cards) ? deck.cards : []).filter((card) =>
+    unlocked.has(cardId(card)),
+  );
+}
+
 function normalizedPile(value, allowedIds, excludedIds = new Set()) {
   const seen = new Set(excludedIds);
   const pile = [];
@@ -80,22 +90,35 @@ export function normalizeDeckDrawState(value, cards) {
   };
 }
 
-export function createDrawStateByDeck(decks) {
+export function createDrawStateByDeck(decks, unlockedCardIdsByDeck = null) {
   return Object.fromEntries(
     (Array.isArray(decks) ? decks : [])
       .filter((deck) => deck?.type === "plot" && cardId(deck))
-      .map((deck) => [deck.id, createDeckDrawState()]),
+      .map((deck) => [
+        deck.id,
+        normalizeDeckDrawState(
+          createDeckDrawState(),
+          availableCardsForDeck(deck, unlockedCardIdsByDeck),
+        ),
+      ]),
   );
 }
 
-export function normalizeDrawStateByDeck(value, decks) {
+export function normalizeDrawStateByDeck(
+  value,
+  decks,
+  unlockedCardIdsByDeck = null,
+) {
   const source = asRecord(value);
   return Object.fromEntries(
     (Array.isArray(decks) ? decks : [])
       .filter((deck) => deck?.type === "plot" && cardId(deck))
       .map((deck) => [
         deck.id,
-        normalizeDeckDrawState(source[deck.id], deck.cards),
+        normalizeDeckDrawState(
+          source[deck.id],
+          availableCardsForDeck(deck, unlockedCardIdsByDeck),
+        ),
       ]),
   );
 }
@@ -162,5 +185,27 @@ export function drawFromDeck(
     cardId: drawnCardId ?? null,
     drawState: normalized,
     rngState: nextRngState,
+  };
+}
+
+/**
+ * Purely plan one draw using the same deterministic implementation as commit.
+ */
+export function planDrawFromDeck({
+  drawState,
+  cards,
+  rngState,
+  avoidCardId,
+} = {}) {
+  const planned = drawFromDeck(
+    drawState,
+    cards,
+    rngState,
+    { avoidCardId },
+  );
+  return {
+    cardId: planned.cardId,
+    nextDrawState: planned.drawState,
+    nextRngState: planned.rngState,
   };
 }

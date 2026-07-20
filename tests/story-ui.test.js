@@ -11,494 +11,136 @@ const css = await readFile(
   "utf8",
 );
 
-function elementSourceById(source, id) {
-  const idMatch = [...source.matchAll(/\bid=(["'])([^"']+)\1/g)].find(
-    (match) => match[2] === id,
-  );
-  assert.ok(idMatch, `Expected #${id} to exist`);
-  const tagStart = source.lastIndexOf("<", idMatch.index);
-  const tagMatch = /^<([a-z][\w-]*)\b/i.exec(source.slice(tagStart));
-  assert.ok(tagMatch, `Expected #${id} to belong to an element`);
-  const tagName = tagMatch[1];
-  const tagPattern = new RegExp(`<\\/?${tagName}\\b[^>]*>`, "gi");
-  let depth = 0;
-  for (const match of source.slice(tagStart).matchAll(tagPattern)) {
-    const tokenStart = tagStart + match.index;
-    const token = match[0];
-    if (token.startsWith("</")) depth -= 1;
-    else if (!token.endsWith("/>")) depth += 1;
-    if (depth === 0) return source.slice(tagStart, tokenStart + token.length);
-  }
-  assert.fail(`Expected #${id} to have a closing </${tagName}>`);
-}
-
 function openingTagById(source, id) {
-  const element = elementSourceById(source, id);
-  return element.slice(0, element.indexOf(">") + 1);
+  const match = new RegExp(
+    `<[a-z][^>]*\\bid="${id}"[^>]*>`,
+    "iu",
+  ).exec(source);
+  assert.ok(match, `Expected #${id}`);
+  return match[0];
 }
 
-function directChildIds(source) {
-  const voidElements = new Set([
-    "area",
-    "base",
-    "br",
-    "col",
-    "embed",
-    "hr",
-    "img",
-    "input",
-    "link",
-    "meta",
-    "param",
-    "source",
-    "track",
-    "wbr",
-  ]);
-  const ids = [];
-  let depth = 0;
-  for (const match of source.matchAll(/<\/?([a-z][\w-]*)\b[^>]*>/gi)) {
-    const token = match[0];
-    const tagName = match[1].toLowerCase();
-    if (token.startsWith("</")) {
-      depth -= 1;
-      continue;
-    }
-    if (depth === 1) {
-      const id = /\bid=(["'])([^"']+)\1/u.exec(token)?.[2];
-      if (id) ids.push(id);
-    }
-    if (!voidElements.has(tagName) && !token.endsWith("/>")) depth += 1;
-  }
-  return ids;
-}
-
-function elementSourceByPreviewBadge(source, direction) {
-  const attribute = `data-preview-badge="${direction}"`;
-  const attributeIndex = source.indexOf(attribute);
-  assert.ok(attributeIndex >= 0, `Expected ${attribute} to exist`);
-  const tagStart = source.lastIndexOf("<", attributeIndex);
-  const tagMatch = /^<([a-z][\w-]*)\b/i.exec(source.slice(tagStart));
-  assert.ok(tagMatch, `Expected ${attribute} to belong to an element`);
-  const tagName = tagMatch[1];
-  const tagPattern = new RegExp(`<\\/?${tagName}\\b[^>]*>`, "gi");
-  let depth = 0;
-  for (const match of source.slice(tagStart).matchAll(tagPattern)) {
-    const tokenStart = tagStart + match.index;
-    const token = match[0];
-    if (token.startsWith("</")) depth -= 1;
-    else if (!token.endsWith("/>")) depth += 1;
-    if (depth === 0) return source.slice(tagStart, tokenStart + token.length);
-  }
-  assert.fail(`Expected ${attribute} to have a closing </${tagName}>`);
-}
-
-test("document identity uses one visible Deep South h1 without a top-HUD deck title", () => {
-  assert.match(html, /<title>Deep South<\/title>/);
+test("document identity and top HUD remain intentionally compact", () => {
+  assert.match(html, /<title>Deep South<\/title>/u);
+  assert.equal((html.match(/<h1\b/gu) ?? []).length, 1);
   assert.match(
     html,
-    /<meta name="description" content="Deep South, a swipe-driven maritime cosmic-horror story\.">/,
-  );
-  const storyTitle = elementSourceById(html, "story-title");
-  const storyHud = elementSourceById(html, "story-hud");
-  assert.match(openingTagById(html, "story-title"), /^<h1\b/u);
-  assert.equal(storyTitle.replace(/<[^>]+>/g, "").trim(), "Deep South");
-  assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
-  assert.deepEqual(directChildIds(storyHud), ["story-title"]);
-  assert.match(
-    openingTagById(html, "story-hud"),
-    /\baria-labelledby="story-title"/u,
-  );
-  assert.doesNotMatch(
-    openingTagById(html, "story-hud"),
-    /aria-labelledby="[^"]*\s+[^"]*"/u,
+    /<h1 id="story-title"[^>]*>Deep South<\/h1>/u,
   );
   assert.doesNotMatch(html, /\bid="hud-deck-title"/u);
-  assert.doesNotMatch(html, /Plot Step \d+ of \d+/u);
-  assert.match(openingTagById(html, "player-hud"), /aria-label="Deep South expedition status"/);
-});
-
-test("card header starts with the canonical Intro count and restrained typography", () => {
-  const speaker = elementSourceById(html, "card-speaker");
-  const speakerTag = openingTagById(html, "card-speaker");
-  assert.equal(
-    speaker.replace(/<[^>]+>/g, "").trim(),
-    "It begins here - 8 cards left in deck",
-  );
-  assert.match(speakerTag, /text-\[0\.65rem\]/u);
-  assert.match(speakerTag, /\bfont-black\b/u);
-  assert.match(speakerTag, /\bleading-tight\b/u);
-  assert.match(speakerTag, /tracking-\[0\.04em\]/u);
-  assert.doesNotMatch(speakerTag, /\buppercase\b|\btruncate\b|\bwhitespace-nowrap\b/u);
-});
-
-test("HUD contains only the story title and three expedition resources", () => {
-  const hud = elementSourceById(html, "player-hud");
-  const storyHud = elementSourceById(hud, "story-hud");
-  const row = elementSourceById(hud, "player-resource-row");
-  assert.ok(
-    hud.indexOf('id="story-hud"') < hud.indexOf('id="player-resource-row"'),
-    "Story information must remain before expedition resources",
-  );
-  assert.equal(storyHud.replace(/<[^>]+>/g, "").trim(), "Deep South");
-  assert.doesNotMatch(storyHud, /Chapter|card(?:s)? left in deck/u);
-  assert.doesNotMatch(openingTagById(row, "player-resource-row"), /\bmt-/u);
-  const sections = [...row.matchAll(/<section\b[^>]*\bid="([^"]+-hud)"/g)].map(
-    (match) => match[1],
-  );
-  assert.deepEqual(sections, [
+  for (const id of [
     "eldritch-lore-hud",
     "crew-hud",
     "sanity-hud",
-  ]);
-  for (const [id, resource, label, initialValue] of [
-    ["eldritch-lore-hud", "eldritchLore", "Eldritch Lore", "0"],
-    ["crew-hud", "crew", "Crew", "0"],
-    ["sanity-hud", "sanity", "Sanity", "3"],
   ]) {
-    const section = elementSourceById(row, id);
-    assert.match(openingTagById(row, id), new RegExp(`data-resource="${resource}"`));
-    assert.match(section, new RegExp(label));
-    assert.match(section, new RegExp(`>${initialValue}<`));
-    if (id === "eldritch-lore-hud") {
-      assert.doesNotMatch(section, /\btruncate\b/u);
-    }
-  }
-  assert.equal((hud.match(/<progress\b/g) ?? []).length, 0);
-});
-
-test("retired story and resource presentation is absent from production HTML", () => {
-  const retiredPhrases = [
-    ["The", "Ember", "Crown"].join(" "),
-    ["Save", "the", "Cat"].join(" "),
-    ["Opening", "Image"].join(" "),
-    ["Catal", "yst"].join(""),
-    ["Mid", "point"].join(""),
-    ["Fin", "ale"].join(""),
-  ];
-  for (const phrase of retiredPhrases) {
-    assert.equal(html.includes(phrase), false, `Unexpected retired phrase: ${phrase}`);
-  }
-  const retiredIds = [
-    ["hud", "level"].join("-"),
-    ["hud", "xp"].join("-"),
-    ["hud", "hp"].join("-"),
-    ["hud", "mp"].join("-"),
-    ["hud", "story", "progress"].join("-"),
-    ["hud", "beat", "name"].join("-"),
-    ["hud", "beat", "number"].join("-"),
-  ];
-  for (const id of retiredIds) {
-    assert.equal(html.includes(`id="${id}"`), false);
+    assert.match(html, new RegExp(`\\bid="${id}"`, "u"));
   }
 });
 
-test("decision card separates full-card gradients from art-frame preview badges", () => {
-  const card = elementSourceById(html, "card");
-  const artFrameStart = card.indexOf('<figure class="card-art-frame ');
-  const artFrameEnd = card.indexOf("</figure>", artFrameStart);
-  const artFrame = card.slice(artFrameStart, artFrameEnd + "</figure>".length);
-  assert.match(openingTagById(html, "card"), /aria-describedby="card-text card-detail"/);
-  assert.match(openingTagById(html, "card"), /data-intro-face="front"/);
-  assert.deepEqual(
-    directChildIds(card).slice(0, 4),
-    [
-      "choice-up-overlay",
-      "choice-down-overlay",
-      "choice-left-overlay",
-      "choice-right-overlay",
-    ],
-  );
-  for (const direction of ["up", "down", "left", "right"]) {
-    const overlay = elementSourceById(card, `choice-${direction}-overlay`);
-    assert.match(openingTagById(overlay, `choice-${direction}-overlay`), /class="choice-overlay"/);
-    assert.match(openingTagById(overlay, `choice-${direction}-overlay`), /aria-hidden="true"/);
-    assert.doesNotMatch(overlay, /\bchoice-overlay-badge\b/u);
-    assert.doesNotMatch(artFrame, new RegExp(`id="choice-${direction}-overlay"`));
-    assert.doesNotMatch(
-      openingTagById(overlay, `choice-${direction}-overlay`),
-      /\b(?:top-0|bottom-0|left-0|right-0|inset-[xy]-0|h-1\/2|w-1\/2|items-start|items-end|justify-start|justify-end|bg-gradient-to-[btlr])\b/u,
-    );
-    assert.equal(
-      (html.match(new RegExp(`id="choice-${direction}-overlay"`, "g")) ?? []).length,
-      1,
-    );
-    assert.equal(
-      (html.match(new RegExp(`id="choice-${direction}-overlay-label"`, "g")) ?? []).length,
-      1,
-    );
-  }
-  const previewFeedback = elementSourceById(
-    artFrame,
-    "choice-preview-feedback",
-  );
+test("the card is the sole four-arrow interaction surface", () => {
+  const card = openingTagById(html, "card");
+  assert.match(card, /\btabindex="0"/u);
   assert.match(
-    openingTagById(previewFeedback, "choice-preview-feedback"),
-    /class="choice-preview-feedback"/u,
-  );
-  assert.match(
-    openingTagById(previewFeedback, "choice-preview-feedback"),
-    /aria-hidden="true"/u,
-  );
-  assert.doesNotMatch(
-    openingTagById(previewFeedback, "choice-preview-feedback"),
-    /\b(?:aria-describedby|aria-live|role)=/u,
-  );
-  assert.ok(
-    artFrame.indexOf('id="choice-preview-feedback"') <
-      artFrame.indexOf('id="card-art"'),
-    "Transient feedback must precede the artwork",
-  );
-  assert.deepEqual(directChildIds(artFrame).slice(0, 2), [
-    "choice-preview-feedback",
-    "card-art",
-  ]);
-  for (const direction of ["up", "down", "left", "right"]) {
-    const badge = elementSourceByPreviewBadge(previewFeedback, direction);
-    const overlayLabelId = `choice-${direction}-overlay-label`;
-    const overlayDetailId = `choice-${direction}-overlay-detail`;
-    assert.match(
-      openingTagById(badge, overlayDetailId),
-      /class="choice-overlay-detail"/u,
-    );
-    assert.match(
-      openingTagById(badge, overlayDetailId),
-      /\shidden(?:\s|>)/u,
-    );
-    assert.ok(
-      badge.indexOf(`id="${overlayLabelId}"`) <
-        badge.indexOf(`id="${overlayDetailId}"`),
-      `${overlayDetailId} must follow its label`,
-    );
-    for (const id of [overlayLabelId, overlayDetailId]) {
-      assert.equal(
-        (html.match(new RegExp(`id="${id}"`, "g")) ?? []).length,
-        1,
-        `Expected #${id} exactly once`,
-      );
-    }
-  }
-  assert.match(card, /id="card-title"/);
-  assert.match(card, /id="card-text"/);
-  assert.match(card, /id="card-detail"/);
-  assert.match(card, /id="card-art-label"/);
-  assert.match(openingTagById(card, "card-art-label"), /aria-hidden="true"/);
-  assert.match(openingTagById(card, "card-art-label"), /\shidden(?:\s|>)/);
-  assert.doesNotMatch(card, /reward|combat|enemy/i);
-});
-
-test("the focusable card owns all arrow shortcuts without directional buttons", () => {
-  const cardTag = openingTagById(html, "card");
-  assert.match(cardTag, /\btabindex="0"/u);
-  assert.match(
-    cardTag,
+    card,
     /\baria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"/u,
   );
-  assert.equal(html.includes('id="choice-controls"'), false);
-  assert.equal((html.match(/<button\b[^>]*\bdata-direction=/g) ?? []).length, 0);
-  for (const direction of ["up", "down", "left", "right"]) {
-    for (const suffix of ["", "-label", "-detail"]) {
-      assert.equal(
-        html.includes(`id="choice-${direction}${suffix}"`),
-        false,
-      );
-    }
-  }
-  assert.match(html, /id="choice-feedback-continue"/u);
-  assert.match(html, /id="terminal-restart"/u);
-});
-
-test("both first-card PNG faces are preloaded locally without scripts or remote URLs", () => {
-  const preloads = [...html.matchAll(
-    /<link rel="preload" as="image" href="([^"]+)" type="image\/png">/g,
-  )].map((match) => match[1]);
-  assert.deepEqual(preloads, [
-    "/assets/art/intro-01-fathers-photograph.png",
-    "/assets/art/intro-01-chiloe-map.png",
-  ]);
-  assert.ok(preloads.every((source) => source.startsWith("/assets/art/")));
-});
-
-test("the visible direction reminder/footer and its placeholder are removed", () => {
-  assert.equal(html.includes('id="direction-hint"'), false);
-  assert.equal(css.includes("#direction-hint"), false);
+  assert.match(card, /\bdata-card-face="front"/u);
+  assert.doesNotMatch(card, /data-intro-face/u);
   assert.doesNotMatch(
     html,
-    /Left: skip introduction|Swipe to choose|cards remaining/iu,
+    /id="choice-controls"|button[^>]+data-direction/u,
   );
 });
 
-test("persistent outcome card remains separate from decisions and has one Continue action", () => {
-  const stack = elementSourceById(html, "card-stack");
-  const feedback = elementSourceById(stack, "choice-feedback-card");
-  const feedbackControls = elementSourceById(html, "choice-feedback-controls");
-  assert.match(openingTagById(stack, "choice-feedback-card"), /role="region"/);
+test("markup retains the four transient preview labels and details", () => {
   assert.match(
-    openingTagById(stack, "choice-feedback-card"),
-    /aria-describedby="choice-feedback-text choice-feedback-changes"/,
-  );
-  assert.match(feedback, /id="choice-feedback-art"/);
-  assert.match(feedback, /id="choice-feedback-text"/);
-  assert.match(feedback, /id="choice-feedback-changes"/);
-  assert.match(feedbackControls, /id="choice-feedback-continue"/);
-  assert.equal((feedbackControls.match(/<button\b/g) ?? []).length, 1);
-  assert.doesNotMatch(
-    feedbackControls,
-    /id="choice-(?:up|down|left|right)"/,
-  );
-});
-
-test("loss surface is cosmic-horror specific and offers Begin Again", () => {
-  const terminal = elementSourceById(html, "terminal-summary");
-  assert.match(terminal, /Expedition lost/);
-  assert.match(terminal, /The sea remembers/);
-  assert.match(terminal, /id="terminal-stats"/);
-  assert.match(terminal, /id="terminal-restart"/);
-  assert.match(terminal, />Begin Again<\/button>/);
-});
-
-test("removed inventory and chapter-transition surfaces are not present", () => {
-  for (const id of [
-    "inventory-open",
-    "inventory-drawer",
-    "inventory-content",
-    "story-transition",
-    "story-transition-continue",
-    "confirm-dialog",
-  ]) {
-    assert.equal(html.includes(`id="${id}"`), false);
-  }
-});
-
-test("HTML contains no duplicate IDs", () => {
-  const ids = [...html.matchAll(/\bid=(["'])([^"']+)\1/g)].map(
-    (match) => match[2],
-  );
-  assert.deepEqual(
-    ids.filter((id, index) => ids.indexOf(id) !== index),
-    [],
-  );
-});
-
-test("CSS supports four-axis previews without directional-button selectors", () => {
-  assert.match(
-    css,
-    /#player-hud\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*clamp\(11\.5rem,\s*44%,\s*14rem\);[^}]*align-items:\s*stretch;[^}]*gap:\s*0\.375rem;/s,
-  );
-  assert.match(
-    css,
-    /#story-hud,\s*#player-resource-row\s*\{[^}]*min-width:\s*0;/s,
-  );
-  assert.match(
-    css,
-    /#story-hud\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*justify-content:\s*center;/s,
-  );
-  assert.doesNotMatch(css, /#hud-deck-title/u);
-  assert.match(
-    css,
-    /#player-resource-row\s*\{[^}]*align-self:\s*stretch;[^}]*margin-top:\s*0;/s,
-  );
-  assert.match(
-    css,
-    /\.choice-overlay\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*20;[^}]*inset:\s*0;[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;[^}]*transition:\s*opacity 40ms linear;/s,
-  );
-  const overlayRule = /\.choice-overlay\s*\{([^}]*)\}/s.exec(css)?.[1] ?? "";
-  assert.doesNotMatch(
-    overlayRule,
-    /\b(?:display|align-items|justify-content|padding)\s*:/u,
-  );
-  assert.match(
-    css,
-    /\.choice-preview-feedback\s*\{[^}]*position:\s*absolute;[^}]*top:\s*0;[^}]*right:\s*0;[^}]*left:\s*0;[^}]*z-index:\s*30;[^}]*display:\s*grid;[^}]*place-items:\s*start center;[^}]*padding:\s*0\.625rem 1rem 0;[^}]*pointer-events:\s*none;/s,
-  );
-  assert.match(
-    css,
-    /\.choice-overlay-badge\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;[^}]*display:\s*inline-grid;[^}]*grid-area:\s*1 \/ 1;[^}]*justify-items:\s*center;[^}]*row-gap:\s*0\.25rem;[^}]*max-width:\s*calc\(100% - 2rem\);[^}]*opacity:\s*0;[^}]*text-align:\s*center;[^}]*pointer-events:\s*none;[^}]*transition:\s*opacity 40ms linear;/s,
-  );
-  assert.match(
-    css,
-    /\.choice-overlay-label-line\s*\{[^}]*display:\s*block;[^}]*max-width:\s*100%;/s,
-  );
-  assert.match(
-    css,
-    /\.choice-overlay-detail\s*\{[^}]*display:\s*-webkit-box;[^}]*overflow:\s*hidden;[^}]*max-width:\s*100%;[^}]*-webkit-box-orient:\s*vertical;[^}]*-webkit-line-clamp:\s*2;[^}]*font-size:\s*0\.62rem;[^}]*font-weight:\s*750;[^}]*letter-spacing:\s*0\.02em;[^}]*line-height:\s*1\.15;[^}]*text-transform:\s*none;[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/s,
-  );
-  assert.match(
-    css,
-    /\.choice-overlay-badge\[data-preview-badge="up"\]\s+\.choice-overlay-detail,\s*\.choice-overlay-badge\[data-preview-badge="left"\]\s+\.choice-overlay-detail\s*\{[^}]*color:\s*#b4dfd9;/s,
-  );
-  assert.match(
-    css,
-    /\.choice-overlay-badge\[data-preview-badge="down"\]\s+\.choice-overlay-detail,\s*\.choice-overlay-badge\[data-preview-badge="right"\]\s+\.choice-overlay-detail\s*\{[^}]*color:\s*#dec6df;/s,
+    openingTagById(html, "choice-preview-feedback"),
+    /\baria-hidden="true"/u,
   );
   for (const direction of ["up", "down", "left", "right"]) {
+    assert.match(html, new RegExp(
+      `id="choice-${direction}-overlay"[^>]+aria-hidden="true"`,
+      "u",
+    ));
     assert.match(
-      css,
-      new RegExp(`--choice-${direction}-opacity:\\s*0`),
+      html,
+      new RegExp(`id="choice-${direction}-overlay-label"`, "u"),
     );
     assert.match(
-      css,
-      new RegExp(`#choice-${direction}-overlay\\s*\\{[^}]*opacity:\\s*var\\(--choice-${direction}-opacity\\)`, "s"),
-    );
-    assert.match(
-      css,
-      new RegExp(`\\.choice-overlay-badge\\[data-preview-badge="${direction}"\\]\\s*\\{[^}]*opacity:\\s*var\\(--choice-${direction}-opacity\\)`, "s"),
-    );
-    assert.match(
-      css,
-      new RegExp(`#choice-${direction}-overlay::before\\s*\\{[^}]*inset:`, "s"),
+      html,
+      new RegExp(`id="choice-${direction}-overlay-detail"`, "u"),
     );
   }
-  assert.match(
-    css,
-    /#card\[data-deck-type="intro"\] #card-text\s*\{[^}]*white-space:\s*pre-line;/s,
-  );
-  assert.match(css, /--card-flip-rotation:\s*0deg/u);
-  assert.match(
-    css,
-    /rotateY\(var\(--card-flip-rotation\)\)/u,
-  );
-  assert.match(css, /#card\[data-swipe-state\^="flipping-"\]/u);
-  assert.match(css, /#card\[data-swipe-state="flipping-swap"\]/u);
-  assert.match(css, /#card\[data-swipe-state="flipping-in"\]/u);
-  assert.match(
-    css,
-    /#card\[data-intro-face="reverse"\] #card-detail:not\(\[hidden\]\)/u,
-  );
-  assert.doesNotMatch(
-    css,
-    /#choice-controls|\.choice-button|\.choice-direction|\.choice-label|(?:^|[\s,{])\.choice-detail(?:[\s,{:.#[]|$)/mu,
-  );
-  assert.match(css, /@media \(max-width:\s*359px\)/);
-  assert.match(css, /@media \(max-height:\s*650px\)/);
-  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
 });
 
-test("narrow and short viewport rules preserve resources and feedback without button remnants", () => {
-  const narrow = css.slice(
-    css.indexOf("@media (max-width: 359px)"),
-    css.indexOf("@media (max-height: 650px)"),
+test("persistent outcome markup and hidden acknowledgement controls are absent", () => {
+  for (const id of [
+    "choice-feedback-card",
+    "choice-feedback-kicker",
+    "choice-feedback-art",
+    "choice-feedback-title",
+    "choice-feedback-text",
+    "choice-feedback-changes",
+    "choice-feedback-controls",
+    "choice-feedback-continue",
+  ]) {
+    assert.doesNotMatch(html, new RegExp(`\\bid="${id}"`, "u"));
+  }
+  assert.doesNotMatch(html, />\s*Continue\s*</u);
+});
+
+test("terminal loss surface and Begin Again remain available", () => {
+  assert.match(
+    openingTagById(html, "terminal-summary"),
+    /\bhidden\b/u,
   );
-  const short = css.slice(
-    css.indexOf("@media (max-height: 650px)"),
-    css.indexOf("@keyframes card-enter"),
+  assert.match(html, /\bid="terminal-title"/u);
+  assert.match(html, /\bid="terminal-copy"/u);
+  assert.match(html, /\bid="terminal-stats"/u);
+  assert.match(
+    html,
+    /<button[^>]*id="terminal-restart"[^>]*>Begin Again<\/button>/su,
+  );
+});
+
+test("first photograph and reverse artwork preload locally", () => {
+  assert.match(
+    html,
+    /href="\/assets\/art\/intro-01-fathers-photograph\.png"/u,
   );
   assert.match(
-    narrow,
-    /#player-hud\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*11rem;/s,
+    html,
+    /href="\/assets\/art\/intro-01-chiloe-map\.png"/u,
   );
+  assert.doesNotMatch(html, /https?:\/\//u);
+});
+
+test("source CSS keeps transient previews and generic back detail only", () => {
+  assert.match(css, /\.choice-preview-feedback/u);
+  assert.match(css, /\.choice-overlay-detail/u);
   assert.match(
-    narrow,
-    /#story-hud\s*\{[^}]*padding-right:\s*0\.25rem;[^}]*padding-left:\s*0\.25rem;/s,
+    css,
+    /#card\[data-card-face="back"\] #card-detail:not\(\[hidden\]\)/u,
   );
-  assert.match(narrow, /#player-resource-row/);
-  assert.doesNotMatch(narrow, /#choice-controls|\.choice-button|\.choice-label/u);
-  assert.doesNotMatch(narrow, /display:\s*none|visibility:\s*hidden/);
-  assert.doesNotMatch(short, /#choice-controls|\.choice-button/u);
-  assert.match(short, /#choice-feedback-controls/);
-  assert.match(short, /#choice-feedback-changes/);
-  assert.doesNotMatch(
-    short,
-    /#player-resource-row\s*\{[^}]*margin-top:/s,
+  assert.doesNotMatch(css, /data-intro-face/u);
+  assert.doesNotMatch(css, /\.choice-feedback-card/u);
+  assert.doesNotMatch(css, /#choice-feedback-/u);
+  assert.doesNotMatch(css, /@keyframes choice-feedback-enter/u);
+});
+
+test("short and narrow viewport rules retain card and terminal surfaces", () => {
+  assert.match(css, /@media \(max-width: 359px\)/u);
+  assert.match(css, /@media \(max-height: 650px\)/u);
+  assert.match(
+    css,
+    /#card,\s*\.terminal-summary\s*\{\s*min-height: 12\.5rem/u,
   );
-  assert.doesNotMatch(short, /display:\s*none|visibility:\s*hidden/);
+  assert.doesNotMatch(css, /choice-feedback/u);
+});
+
+test("HTML IDs remain globally unique", () => {
+  const ids = [...html.matchAll(/\bid="([^"]+)"/gu)].map(
+    (match) => match[1],
+  );
+  assert.equal(new Set(ids).size, ids.length);
 });

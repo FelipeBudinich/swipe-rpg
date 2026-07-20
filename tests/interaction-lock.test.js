@@ -7,18 +7,18 @@ import {
   isNewInputBlocked,
 } from "../public/js/ui/interaction-lock.js";
 
-test("pending feedback and loss surfaces block every new directional input", () => {
-  assert.equal(hasBlockingSurface({ feedbackActive: true }), true);
+test("terminal and explicit confirmation surfaces block new input", () => {
   assert.equal(hasBlockingSurface({ terminalActive: true }), true);
-  assert.equal(isNewInputBlocked({ feedbackActive: true }), true);
+  assert.equal(hasBlockingSurface({ confirmationOpen: true }), true);
   assert.equal(isNewInputBlocked({ terminalActive: true }), true);
+  assert.equal(isNewInputBlocked({ confirmationOpen: true }), true);
+  assert.equal(hasBlockingSurface({ feedbackActive: true }), false);
 });
 
 test("an active controller commit blocks a second entry but not its own resolution", () => {
   const lock = {
     controllerCommitting: true,
     inputLocked: false,
-    feedbackActive: false,
     terminalActive: false,
   };
   assert.equal(isNewInputBlocked(lock), true);

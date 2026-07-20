@@ -8,6 +8,7 @@ import {
   drawFromDeck,
   normalizeDeckDrawState,
   normalizeDrawStateByDeck,
+  planDrawFromDeck,
 } from "../public/js/game/deck-draw.js";
 
 const cards = Object.freeze([
@@ -124,4 +125,61 @@ test("per-deck normalization preserves valid piles and supplies fresh missing de
     },
     "plot-two": createDeckDrawState(),
   });
+});
+
+test("pure draw planning matches commit without consuming inputs", () => {
+  const drawState = {
+    drawPile: [],
+    discardPile: ["card-a", "card-b", "card-c"],
+    lastResolvedCardId: "card-a",
+  };
+  const snapshot = structuredClone(drawState);
+  const first = planDrawFromDeck({
+    drawState,
+    cards,
+    rngState: 938,
+    avoidCardId: "card-a",
+  });
+  const second = planDrawFromDeck({
+    drawState,
+    cards,
+    rngState: 938,
+    avoidCardId: "card-a",
+  });
+  const committed = drawFromDeck(drawState, cards, 938, {
+    avoidCardId: "card-a",
+  });
+
+  assert.deepEqual(first, second);
+  assert.deepEqual(drawState, snapshot);
+  assert.equal(first.cardId, committed.cardId);
+  assert.deepEqual(first.nextDrawState, committed.drawState);
+  assert.equal(first.nextRngState, committed.rngState);
+  assert.notEqual(first.cardId, "card-a");
+});
+
+test("draw-state factories exclude locked IDs", () => {
+  const unlocked = {
+    "plot-one": ["card-a", "card-c"],
+    "plot-two": ["card-e"],
+  };
+  const normalized = normalizeDrawStateByDeck(
+    {
+      "plot-one": {
+        drawPile: ["card-a", "card-b", "card-c"],
+        discardPile: [],
+      },
+      "plot-two": {
+        drawPile: ["card-d", "card-e"],
+        discardPile: [],
+      },
+    },
+    decks,
+    unlocked,
+  );
+  assert.deepEqual(normalized["plot-one"].drawPile, [
+    "card-a",
+    "card-c",
+  ]);
+  assert.deepEqual(normalized["plot-two"].drawPile, ["card-e"]);
 });

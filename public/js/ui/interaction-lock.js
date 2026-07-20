@@ -1,9 +1,8 @@
 export function hasBlockingSurface({
   terminalActive = false,
-  feedbackActive = false,
   confirmationOpen = false,
 } = {}) {
-  return Boolean(terminalActive || feedbackActive || confirmationOpen);
+  return Boolean(terminalActive || confirmationOpen);
 }
 
 export function isNewInputBlocked(lockState = {}) {

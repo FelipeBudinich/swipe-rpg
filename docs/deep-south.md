@@ -1,23 +1,25 @@
 # Deep South domain contract
 
-`public/js/data/deep-south.js` is the sole ordered story definition. Its nine immutable deck objects determine display order, plot-step numbering, boundaries, and HUD copy.
+`public/js/data/deep-south.js` is the sole ordered story definition. Its nine
+immutable decks determine display order, plot-step numbering, boundaries, and
+HUD copy.
 
-## State
-
-The version-4 run state is serializable:
+## Version-5 state
 
 ```js
 {
-  saveVersion: 4,
+  saveVersion: 5,
   storyId: "deep-south",
   status: "playing",
+  terminalPending: false,
   currentDeckId: "it-begins-here",
   introCardIndex: 0,
   introSkipPending: false,
-  introCardFace: "front",
   discoveries: {
     fatherDiaryReverse: false
   },
+  revealedCardIds: [],
+  unlockedCardIdsByDeck,
   currentCardId: null,
   currentCardToken: null,
   lastResolvedToken: null,
@@ -29,93 +31,144 @@ The version-4 run state is serializable:
     eldritchLore: 0,
     crew: 0,
     sanity: 3
-  },
-  pendingFeedback: null
+  }
 }
 ```
 
-The ordered deck index is derived from the story definition and is not persisted.
+Unknown revealed IDs, unlock IDs, and discovery IDs are discarded. Synthetic
+control cards are never revealed. A new run clears all reveals, discoveries,
+dynamic unlocks, and draw state.
 
-## Navigation
+Version-4 saves migrate in place. A completed or reverse photograph maps to
+`revealedCardIds: ["intro-fathers-diary"]`; v4 plot cards remain unlocked; an
+old pending outcome is discarded without replaying its already-applied effect.
+The migration preserves compatible resources, deck, Intro index,
+skip-confirmation state, decisions, seed, RNG, and draw piles.
 
-Intro cards are read in sequence with up. A first down action shows the special skip-confirmation surface; a second down enters Castro. Up from that surface returns to the same Intro card and face.
+## Universal card contract
 
-The first Intro card is reversible. Left or right toggles its front and reverse without changing the Intro index or cards-left count. Its first reverse reveal records `discoveries.fatherDiaryReverse` and grants one Eldritch Lore exactly once; subsequent flips and reloads cannot repeat the reward. Cards 2–8 keep left and right present but disabled.
-
-For plot cards, the engine alone maps direction to destination:
-
-```text
-up    -> max(Chapter 1, current chapter - 1)
-down  -> min(Chapter 8, current chapter + 1)
-left  -> current chapter
-right -> current chapter
-```
-
-Cards provide labels, result prose, optional payable costs, and resource effects. They cannot override navigation. Up and down are required; left and right may be omitted when no meaningful local action exists.
-
-## Choice availability and costs
-
-One pure availability contract is shared by buttons, keyboard input, swipe
-input, and the engine resolver. Missing choices and choices whose declared
-Crew or Eldritch Lore costs cannot be paid are disabled without mutating the
-run.
-
-Payable costs use:
-
-```js
-costs: {
-  crew: 1,
-  eldritchLore: 0
-}
-```
-
-Costs are deducted exactly once before the authored effects are applied.
-Unexpected negative effects remain consequences and clamp normally. Sanity
-loss is always a consequence, never an affordability check.
-
-## Draw lifecycle
-
-Each chapter deck persists:
+Every authored Intro and plot card contains:
 
 ```js
 {
-  drawPile: [],
-  discardPile: [],
-  lastResolvedCardId: null
+  id,
+  deckId,
+  type,
+  initiallyAvailable,
+  faces: {
+    front: { title, text, artId, artAlt, artLabel? },
+    back: { title, text, artId, artAlt, artLabel?, effect }
+  },
+  entryEffect
 }
 ```
 
-Drawing is deterministic from the persisted random state. Resolution discards the source card before changing chapters. The destination card is not drawn until the outcome is acknowledged. Exhaustion reshuffles that deck's discard pile and avoids an immediate repeat when another card exists.
+`entryEffect` is explicit and either normalized or `null`. Authored cards do
+not contain direction-specific choices, costs, results, or tones. The skip
+confirmation is the sole synthetic Up/Down control and is not an authored
+story card.
 
-The HUD derives cards remaining directly from this state. For an active
-chapter it adds the draw-pile length to the currently displayed unresolved
-card. During persistent feedback it keeps the source chapter heading until
-Continue draws the destination card. Intro count is the Intro length minus its
-current sequential index.
+The generic face rule is:
 
-## Outcome lifecycle
+```text
+card.id absent from revealedCardIds -> front -> Left/Right may flip
+card.id present in revealedCardIds  -> back  -> only Up/Down
+```
 
-A plot decision:
+Both horizontal plans are synthesized from `faces.back.effect`. They share
+label, destination, mode, detail, affordability, affected resources, and
+execution. A successful flip keeps the card and deck active, keeps draw/RNG
+state unchanged, applies the effect atomically, records the reveal once, and
+issues a fresh back token.
 
-1. Applies and clamps resource effects.
-2. Discards the source card.
-3. Derives the destination from direction.
-4. Persists the destination and outcome payload with no current card.
-5. Blocks further directional input.
-6. Draws the destination card only after Continue.
+## Effects
 
-If Sanity reaches zero, `status` is already `lost`, but the outcome remains the primary surface. Continue clears the outcome and reveals the loss presentation. Begin Again creates a completely fresh Intro and fresh plot-deck state.
+The only executable effect fields are:
 
-## Content invariants
+```js
+{
+  resources?: {
+    eldritchLore?: integer,
+    crew?: integer,
+    sanity?: integer
+  },
+  addCards?: [{ deckId, cardIds }],
+  discoveries?: ["fatherDiaryReverse"]
+}
+```
 
-- Exactly one Intro deck and eight numbered plot decks exist.
-- Intro content has exactly eight sequential primary cards; the first card's reverse is a face, not a ninth card.
-- Every plot deck has at least five cards.
-- Card IDs are globally unique.
-- Every plot card defines up and down; left and right are optional.
-- Effects contain only Eldritch Lore, Crew, and Sanity integer deltas.
-- Costs contain only nonnegative Crew and Eldritch Lore integers.
-- No resource gate can remove every action.
-- Artwork is local, allowlisted, and script-free.
+The centralized normalizer ignores unknown fields and rejects malformed card
+additions atomically. No authored callbacks execute.
 
-These rules are enforced by `tests/deep-south-content.test.js` and the engine/domain suites.
+An ordinary plot back is exactly one of:
+
+- one resource at `+1` and a different resource at `-1`; or
+- one or more valid card additions with no resource deltas.
+
+The photograph is the explicit Intro exception: `+1 Eldritch Lore` plus the
+discovery. Other Intro backs may have a null effect.
+
+An entry effect may be null, one `+1` or `-1` resource delta, or valid card
+additions. Entry effects belong to destinations. They never gate navigation.
+Backs that spend Crew or Lore are blocked until affordable; Sanity loss never
+blocks a reveal.
+
+One formatter produces preview details, back details, and accessible effect
+copy. Null effects produce an empty string.
+
+## Canonical direction planning
+
+`planDirection(state, currentCard, direction, story)` is pure and is consumed
+by the engine, renderer, pointer availability, keyboard availability,
+preview labels, effect details, HUD highlighting, and accessibility copy.
+
+Horizontal plans:
+
+```text
+front Left/Right -> mode "flip", same destination card, back effect
+back Left/Right  -> unavailable, reason "card-already-revealed"
+```
+
+Vertical plans:
+
+```text
+Intro Up   -> next Intro, then Castro
+Intro Down -> skip confirmation
+Castro Up  -> unavailable
+Plot Up    -> next card in previous chapter
+Plot Down  -> next unresolved card in current draw cycle
+              or first card in the next chapter after exhaustion
+Final Down -> deterministic current-deck refill
+```
+
+The pure draw planner returns the exact destination ID, next draw state, and
+next RNG state without mutating inputs. Commit recomputes from unchanged state
+and enters the same card that was previewed.
+
+## Resolution and loss
+
+One successful plot swipe is one decision. A preview or blocked/stale call is
+zero decisions. Intro swipes preserve the existing zero-decision behavior.
+Tokens include decision count, deck, card, and face; a front token becomes
+stale after a flip.
+
+Vertical departure discards the source according to its deck lifecycle,
+commits the planned destination and RNG, applies the destination entry effect,
+and returns the destination card immediately.
+
+If a back or entry effect reduces Sanity to zero, that newly displayed back or
+destination remains visible with `terminalPending: true`. Only Up or Down may
+then expose the terminal summary. There is no outcome surface or Continue
+control. Begin Again creates a fresh version-5 run.
+
+## Unlocks and counts
+
+Locked cards are excluded from initial piles and HUD counts. Valid additions
+unlock authored IDs idempotently and append them to an initialized remaining
+draw pile in authored order. An untouched future deck remains lazily shuffled
+from its complete unlocked set. Duplicate pile IDs are normalized away.
+
+For a plot chapter, the HUD count is the unique IDs in its draw pile plus the
+active current card when it belongs to that chapter and is not already in the
+pile. A flip does not change the count. Navigation and unlocks update it
+immediately.

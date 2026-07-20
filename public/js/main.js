@@ -1,7 +1,7 @@
 import { DEEP_SOUTH_STORY } from "./data/deep-south.js";
 import * as Engine from "./game/engine.js";
 import { normalizeState } from "./game/state.js";
-import { getDirectionAvailability } from "./game/choice-availability.js";
+import { planDirection } from "./game/direction-plan.js";
 import { loadState, saveState } from "./storage.js";
 import {
   createFeedbackController,
@@ -13,10 +13,7 @@ import {
   isActiveCommitResolutionBlocked as activeCommitResolutionIsBlocked,
   isNewInputBlocked as newInputIsBlocked,
 } from "./ui/interaction-lock.js";
-import {
-  createRenderer,
-  FEEDBACK_ART_BY_TONE,
-} from "./ui/render.js";
+import { createRenderer } from "./ui/render.js";
 import { createSwipeController } from "./ui/swipe-controller.js";
 
 function randomSeed() {
@@ -32,15 +29,13 @@ function randomSeed() {
 const authoredArtIds = DEEP_SOUTH_STORY.decks.flatMap((deck) => [
   deck.artId,
   ...(deck.cards ?? []).flatMap((card) => [
-    card.artId,
     ...Object.values(card.faces ?? {}).map((face) => face.artId),
   ]),
 ]);
 const allowedArtIds = new Set(
-  [
-    ...authoredArtIds,
-    ...Object.values(FEEDBACK_ART_BY_TONE),
-  ].filter((artId) => typeof artId === "string" && artId),
+  authoredArtIds.filter(
+    (artId) => typeof artId === "string" && artId,
+  ),
 );
 const renderer = createRenderer({
   story: DEEP_SOUTH_STORY,
@@ -69,15 +64,13 @@ let prepared = Engine.getNextCard(state);
 state = prepared.state;
 let currentCard = prepared.card;
 let inputLocked = false;
-let feedbackDismissalActive = false;
 let swipeController;
 
 function interactionLockState() {
   return {
     inputLocked,
     controllerCommitting: swipeController?.isCommitting === true,
-    terminalActive: state.status === "lost" && !state.pendingFeedback,
-    feedbackActive: Boolean(state.pendingFeedback),
+    terminalActive: state.status === "lost" && !state.terminalPending,
   };
 }
 
@@ -90,11 +83,8 @@ function isActiveCommitResolutionBlocked() {
 }
 
 function updateControlLocks() {
-  elements.choiceFeedbackContinue.disabled = Boolean(
-    !state.pendingFeedback || inputLocked || feedbackDismissalActive,
-  );
   elements.terminalRestart.disabled = Boolean(
-    state.status !== "lost" || state.pendingFeedback || inputLocked,
+    state.status !== "lost" || state.terminalPending || inputLocked,
   );
 }
 
@@ -117,9 +107,9 @@ async function settleCardArt() {
 }
 
 function getCardCommitMode(direction) {
-  const horizontal = direction === "left" || direction === "right";
-  const canTurnPhotograph = currentCard?.introFace === "front";
-  return horizontal && canTurnPhotograph ? "flip" : "exit";
+  return planDirection(state, currentCard, direction).mode === "flip"
+    ? "flip"
+    : "exit";
 }
 
 async function commitChoice(direction, { mode = "exit" } = {}) {
@@ -146,7 +136,11 @@ async function commitChoice(direction, { mode = "exit" } = {}) {
       ...diffHud(beforeHud, hudSnapshot(state)),
       ...(resolution.changes ?? {}),
     };
-    if (state.pendingFeedback) feedback.pulseChanges(changes);
+    if (resolution.effectDetail) {
+      feedback.showTransient(resolution.effectDetail, changes);
+    } else {
+      feedback.pulseChanges(changes);
+    }
     await settleCardArt();
     return true;
   } catch (error) {
@@ -166,7 +160,7 @@ swipeController = createSwipeController({
   isInputLocked: isNewInputBlocked,
   getCommitMode: getCardCommitMode,
   canCommit: (direction) =>
-    getDirectionAvailability(state, currentCard, direction).available,
+    planDirection(state, currentCard, direction).available,
   onBlocked: announceUnavailableDirection,
   onPreview: (direction) => renderer.previewChoice(direction),
   onCommit: commitChoice,
@@ -188,7 +182,7 @@ function commitNewChoice(direction) {
 }
 
 function announceUnavailableDirection(direction) {
-  const availability = getDirectionAvailability(
+  const availability = planDirection(
     state,
     currentCard,
     direction,
@@ -206,7 +200,7 @@ const handleArrowKey = createArrowKeyHandler({
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement,
   isDirectionAvailable: (direction) =>
-    getDirectionAvailability(state, currentCard, direction).available,
+    planDirection(state, currentCard, direction).available,
   onChoose: commitNewChoice,
   onBlocked: announceUnavailableDirection,
 });
@@ -215,33 +209,8 @@ document.addEventListener("keydown", (event) => {
   handleArrowKey(event);
 });
 
-async function dismissCurrentFeedback() {
-  if (!state.pendingFeedback || feedbackDismissalActive || inputLocked) return;
-  const expectedFeedbackId = state.pendingFeedback.id;
-  feedbackDismissalActive = true;
-  inputLocked = true;
-  updateControlLocks();
-  try {
-    const dismissed = Engine.dismissChoiceFeedback(state, {
-      expectedFeedbackId,
-    });
-    if (dismissed.ignored) return;
-    state = dismissed.state;
-    currentCard = dismissed.card;
-    saveState(state);
-    swipeController.resetForNextCard();
-    renderAll();
-    await settleCardArt();
-  } finally {
-    inputLocked = false;
-    feedbackDismissalActive = false;
-    updateControlLocks();
-    renderer.focusPrimarySurface();
-  }
-}
-
 async function restartLostRun() {
-  if (inputLocked || state.status !== "lost" || state.pendingFeedback) return;
+  if (inputLocked || state.status !== "lost" || state.terminalPending) return;
   inputLocked = true;
   updateControlLocks();
   try {
@@ -261,9 +230,6 @@ async function restartLostRun() {
   }
 }
 
-elements.choiceFeedbackContinue.addEventListener("click", () => {
-  void dismissCurrentFeedback();
-});
 elements.terminalRestart.addEventListener("click", () => {
   void restartLostRun();
 });
