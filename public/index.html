@@ -142,6 +142,7 @@
             id="card"
             class="relative z-10 flex min-h-[clamp(18.25rem,47dvh,29rem)] w-full flex-col overflow-hidden rounded-[1.4rem] border border-[#567481] bg-[#e8e0cd] text-[#142630] shadow-[0_16px_45px_rgba(0,0,0,0.38)] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#79d4c5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07131d]"
             tabindex="0"
+            aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
             aria-labelledby="card-title"
             aria-describedby="card-text card-detail"
             aria-busy="true"
@@ -155,7 +156,7 @@
             <div id="choice-right-overlay" class="choice-overlay" aria-hidden="true"></div>
 
             <header class="shrink-0 border-b border-[#a9a087] bg-[#d8d1bd] px-4 py-2 text-center">
-              <p id="card-speaker" class="text-[0.63rem] font-black uppercase tracking-[0.2em] text-[#285b5a]">It begins here</p>
+              <p id="card-speaker" class="text-[0.65rem] font-black leading-tight tracking-[0.04em] text-[#285b5a]">It begins here - 8 cards left in deck</p>
               <h2 id="card-title" class="mt-0.5 text-lg font-black leading-tight text-[#142630]">My father’s photograph</h2>
             </header>
 
@@ -242,34 +243,6 @@
             </div>
           </article>
         </section>
-
-        <div
-          id="choice-controls"
-          class="mt-1 grid shrink-0 grid-cols-2 gap-1.5"
-          role="group"
-          aria-label="Story actions"
-        >
-          <button id="choice-up" type="button" class="choice-button" data-direction="up" aria-keyshortcuts="ArrowUp" aria-label="Up: Keep reading">
-            <span class="choice-direction">Up · ↑</span>
-            <span id="choice-up-label" class="choice-label">Keep reading</span>
-            <span id="choice-up-detail" class="choice-detail"></span>
-          </button>
-          <button id="choice-down" type="button" class="choice-button" data-direction="down" aria-keyshortcuts="ArrowDown" aria-label="Down: Skip toward Castro">
-            <span class="choice-direction">Down · ↓</span>
-            <span id="choice-down-label" class="choice-label">Skip toward Castro</span>
-            <span id="choice-down-detail" class="choice-detail"></span>
-          </button>
-          <button id="choice-left" type="button" class="choice-button" data-direction="left" aria-keyshortcuts="ArrowLeft" aria-label="Left: Turn the photograph over">
-            <span class="choice-direction">Left · ←</span>
-            <span id="choice-left-label" class="choice-label">Turn the photograph over</span>
-            <span id="choice-left-detail" class="choice-detail"></span>
-          </button>
-          <button id="choice-right" type="button" class="choice-button" data-direction="right" aria-keyshortcuts="ArrowRight" aria-label="Right: Turn the photograph over">
-            <span class="choice-direction">Right · →</span>
-            <span id="choice-right-label" class="choice-label">Turn the photograph over</span>
-            <span id="choice-right-detail" class="choice-detail"></span>
-          </button>
-        </div>
 
         <div id="choice-feedback-controls" class="mt-2 shrink-0" hidden>
           <button

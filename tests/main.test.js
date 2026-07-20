@@ -30,8 +30,9 @@ test("main wires one canonical Deep South engine without retired subsystems", ()
 test("keyboard input uses the tested canonical arrow-key adapter", () => {
   assert.match(
     source,
-    /import\s*\{[\s\S]*?createArrowKeyHandler,[\s\S]*?createChoiceClickHandler,[\s\S]*?\}\s*from "\.\/ui\/directional-input\.js";/u,
+    /import \{ createArrowKeyHandler \} from "\.\/ui\/directional-input\.js";/u,
   );
+  assert.doesNotMatch(source, /createChoiceClickHandler/u);
   assert.match(source, /const handleArrowKey = createArrowKeyHandler\(\{/u);
   assert.match(source, /isDirectionAvailable: \(direction\) =>/u);
   assert.match(source, /onChoose: commitNewChoice/u);
@@ -40,18 +41,18 @@ test("keyboard input uses the tested canonical arrow-key adapter", () => {
   assert.doesNotMatch(source, /key\.toLowerCase|["']a["']|["']d["']/u);
 });
 
-test("buttons, swipes, and arrow keys share canonical direction availability", () => {
+test("swipes and arrow keys share canonical direction availability", () => {
   assert.match(
     source,
     /import \{ getDirectionAvailability \} from "\.\/game\/choice-availability\.js";/u,
   );
   assert.match(
     source,
-    /button\.disabled = blocked \|\| !availability\.available/u,
+    /canCommit: \(direction\) =>\s*getDirectionAvailability\(state, currentCard, direction\)\.available/u,
   );
   assert.match(
     source,
-    /canCommit: \(direction\) =>\s*getDirectionAvailability\(state, currentCard, direction\)\.available/u,
+    /isDirectionAvailable: \(direction\) =>\s*getDirectionAvailability\(state, currentCard, direction\)\.available/u,
   );
   assert.doesNotMatch(source, /choice\.disabled|choiceForDirection/u);
 });
@@ -69,19 +70,13 @@ test("reversible face art joins the allowlist and horizontal Card 1 commits use 
   assert.match(source, /onCommitSettled: \(mode\) =>/u);
 });
 
-test("direction buttons use one guarded group handler rather than active handlers on unavailable slots", () => {
-  assert.match(
-    source,
-    /const handleChoiceClick = createChoiceClickHandler\(\{/u,
-  );
-  assert.match(
-    source,
-    /elements\.choiceControls\.addEventListener\("click", handleChoiceClick\)/u,
-  );
+test("main has no directional-button input or lock path", () => {
   assert.doesNotMatch(
     source,
-    /button\.addEventListener\("click"/u,
+    /createChoiceClickHandler|handleChoiceClick|elements\.choiceControls|elements\.choiceButtons|button\.disabled\s*=|button\[data-direction\]|addEventListener\("click",\s*handleChoice/u,
   );
+  assert.match(source, /elements\.choiceFeedbackContinue\.disabled/u);
+  assert.match(source, /elements\.terminalRestart\.disabled/u);
 });
 
 test("outcome Continue uses the narrow dismissal API and never commits a direction", () => {

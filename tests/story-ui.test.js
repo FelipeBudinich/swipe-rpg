@@ -110,6 +110,20 @@ test("document identity uses one visible Deep South h1 and a wrapping chapter h2
   assert.match(openingTagById(html, "player-hud"), /aria-label="Deep South expedition status"/);
 });
 
+test("card header starts with the canonical Intro count and restrained typography", () => {
+  const speaker = elementSourceById(html, "card-speaker");
+  const speakerTag = openingTagById(html, "card-speaker");
+  assert.equal(
+    speaker.replace(/<[^>]+>/g, "").trim(),
+    "It begins here - 8 cards left in deck",
+  );
+  assert.match(speakerTag, /text-\[0\.65rem\]/u);
+  assert.match(speakerTag, /\bfont-black\b/u);
+  assert.match(speakerTag, /\bleading-tight\b/u);
+  assert.match(speakerTag, /tracking-\[0\.04em\]/u);
+  assert.doesNotMatch(speakerTag, /\buppercase\b|\btruncate\b|\bwhitespace-nowrap\b/u);
+});
+
 test("HUD contains only the canonical deck label and three expedition resources", () => {
   const hud = elementSourceById(html, "player-hud");
   const row = elementSourceById(hud, "player-resource-row");
@@ -252,17 +266,6 @@ test("decision card separates full-card gradients from art-frame preview badges"
         `Expected #${id} exactly once`,
       );
     }
-    const button = elementSourceById(
-      elementSourceById(html, "choice-controls"),
-      `choice-${direction}`,
-    );
-    const buttonDetailId = `choice-${direction}-detail`;
-    assert.match(button, new RegExp(`id="${buttonDetailId}"`));
-    assert.equal(
-      (html.match(new RegExp(`id="${buttonDetailId}"`, "g")) ?? []).length,
-      1,
-      `Expected #${buttonDetailId} exactly once`,
-    );
   }
   assert.match(card, /id="card-title"/);
   assert.match(card, /id="card-text"/);
@@ -273,51 +276,25 @@ test("decision card separates full-card gradients from art-frame preview badges"
   assert.doesNotMatch(card, /reward|combat|enemy/i);
 });
 
-test("all four accessible directional buttons use their matching arrow shortcut", () => {
-  const controls = elementSourceById(html, "choice-controls");
-  assert.match(openingTagById(html, "choice-controls"), /role="group"/);
-  assert.match(openingTagById(html, "choice-controls"), /aria-label="Story actions"/);
-  const ids = [...controls.matchAll(/<button\b[^>]*\bid="(choice-(?:up|down|left|right))"/g)].map(
-    (match) => match[1],
+test("the focusable card owns all arrow shortcuts without directional buttons", () => {
+  const cardTag = openingTagById(html, "card");
+  assert.match(cardTag, /\btabindex="0"/u);
+  assert.match(
+    cardTag,
+    /\baria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"/u,
   );
-  assert.deepEqual(ids, [
-    "choice-up",
-    "choice-down",
-    "choice-left",
-    "choice-right",
-  ]);
-  for (const [direction, key] of [
-    ["up", "ArrowUp"],
-    ["down", "ArrowDown"],
-    ["left", "ArrowLeft"],
-    ["right", "ArrowRight"],
-  ]) {
-    const button = openingTagById(controls, `choice-${direction}`);
-    assert.match(button, new RegExp(`data-direction="${direction}"`));
-    assert.match(button, new RegExp(`aria-keyshortcuts="${key}"`));
-    assert.match(controls, new RegExp(`id="choice-${direction}-label"`));
-    assert.match(controls, new RegExp(`id="choice-${direction}-detail"`));
-  }
-  assert.equal(
-    (controls.match(/class="choice-detail"/g) ?? []).length,
-    4,
-    "Every direction reserves a detail slot",
-  );
-});
-
-test("the first Intro face starts with four stable accessible controls", () => {
+  assert.equal(html.includes('id="choice-controls"'), false);
+  assert.equal((html.match(/<button\b[^>]*\bdata-direction=/g) ?? []).length, 0);
   for (const direction of ["up", "down", "left", "right"]) {
-    const button = openingTagById(html, `choice-${direction}`);
-    assert.doesNotMatch(button, /\shidden(?:\s|>)/);
-    assert.doesNotMatch(button, /\sdisabled(?:\s|>)/);
+    for (const suffix of ["", "-label", "-detail"]) {
+      assert.equal(
+        html.includes(`id="choice-${direction}${suffix}"`),
+        false,
+      );
+    }
   }
-  assert.match(elementSourceById(html, "choice-down"), /Skip toward Castro/u);
-  for (const direction of ["left", "right"]) {
-    assert.match(
-      elementSourceById(html, `choice-${direction}`),
-      /Turn the photograph over/u,
-    );
-  }
+  assert.match(html, /id="choice-feedback-continue"/u);
+  assert.match(html, /id="terminal-restart"/u);
 });
 
 test("both first-card PNG faces are preloaded locally without scripts or remote URLs", () => {
@@ -392,7 +369,7 @@ test("HTML contains no duplicate IDs", () => {
   );
 });
 
-test("CSS supports four-axis previews and a responsive two-column action grid", () => {
+test("CSS supports four-axis previews without directional-button selectors", () => {
   assert.match(
     css,
     /#player-hud\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*clamp\(11\.5rem,\s*44%,\s*14rem\);[^}]*align-items:\s*stretch;[^}]*gap:\s*0\.375rem;/s,
@@ -462,18 +439,6 @@ test("CSS supports four-axis previews and a responsive two-column action grid", 
   }
   assert.match(
     css,
-    /\.choice-button\s*\{[^}]*display:\s*grid;[^}]*height:\s*4\.875rem;[^}]*min-height:\s*4\.875rem;[^}]*grid-template-rows:\s*auto 1\.8rem 1\.35rem;/s,
-  );
-  assert.match(
-    css,
-    /\.choice-label\s*\{[^}]*height:\s*1\.8rem;[^}]*min-height:\s*1\.8rem;/s,
-  );
-  assert.match(
-    css,
-    /\.choice-detail\s*\{[^}]*height:\s*1\.35rem;[^}]*min-height:\s*1\.35rem;/s,
-  );
-  assert.match(
-    css,
     /#card\[data-deck-type="intro"\] #card-text\s*\{[^}]*white-space:\s*pre-line;/s,
   );
   assert.match(css, /--card-flip-rotation:\s*0deg/u);
@@ -488,30 +453,16 @@ test("CSS supports four-axis previews and a responsive two-column action grid", 
     css,
     /#card\[data-intro-face="reverse"\] #card-detail:not\(\[hidden\]\)/u,
   );
-  assert.match(
-    openingTagById(html, "choice-controls"),
-    /\bgrid-cols-2\b/u,
-  );
-  assert.doesNotMatch(css, /#choice-controls\[data-layout="intro"\]/u);
-  assert.match(
+  assert.doesNotMatch(
     css,
-    /\.choice-button:disabled\s*\{[^}]*background:\s*#27333a;[^}]*opacity:\s*0\.72;/s,
-  );
-  assert.match(css, /\.choice-button\[data-direction\]:disabled:hover\s*\{/u);
-  assert.match(css, /\.choice-button:disabled:active\s*\{[^}]*transform:\s*none;/s);
-  assert.ok(
-    css.indexOf(".choice-button:disabled .choice-detail") >
-      css.indexOf(
-        '.choice-button[data-direction="right"] .choice-detail',
-      ),
-    "Disabled detail color must override direction-specific colors",
+    /#choice-controls|\.choice-button|\.choice-direction|\.choice-label|(?:^|[\s,{])\.choice-detail(?:[\s,{:.#[]|$)/mu,
   );
   assert.match(css, /@media \(max-width:\s*359px\)/);
   assert.match(css, /@media \(max-height:\s*650px\)/);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
 });
 
-test("narrow and short viewport rules preserve resources, choices, and feedback", () => {
+test("narrow and short viewport rules preserve resources and feedback without button remnants", () => {
   const narrow = css.slice(
     css.indexOf("@media (max-width: 359px)"),
     css.indexOf("@media (max-height: 650px)"),
@@ -521,13 +472,9 @@ test("narrow and short viewport rules preserve resources, choices, and feedback"
     css.indexOf("@keyframes card-enter"),
   );
   assert.match(narrow, /#player-resource-row/);
-  assert.match(narrow, /\.choice-button/);
+  assert.doesNotMatch(narrow, /#choice-controls|\.choice-button|\.choice-label/u);
   assert.doesNotMatch(narrow, /display:\s*none|visibility:\s*hidden/);
-  assert.match(short, /#choice-controls/);
-  assert.match(
-    short,
-    /\.choice-button\s*\{[^}]*height:\s*4\.5rem;[^}]*min-height:\s*4\.5rem;/s,
-  );
+  assert.doesNotMatch(short, /#choice-controls|\.choice-button/u);
   assert.match(short, /#choice-feedback-controls/);
   assert.match(short, /#choice-feedback-changes/);
   assert.doesNotMatch(

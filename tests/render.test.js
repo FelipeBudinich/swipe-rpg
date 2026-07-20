@@ -142,7 +142,6 @@ const RENDERER_ELEMENT_IDS = [
   "card-title",
   "card-text",
   "card-detail",
-  "choice-controls",
   "card-live",
   "choice-feedback-card",
   "choice-feedback-kicker",
@@ -158,9 +157,6 @@ const RENDERER_ELEMENT_IDS = [
   "terminal-stats",
   "terminal-restart",
   ...DIRECTIONS.flatMap((direction) => [
-    `choice-${direction}`,
-    `choice-${direction}-label`,
-    `choice-${direction}-detail`,
     `choice-${direction}-overlay`,
     `choice-${direction}-overlay-label`,
     `choice-${direction}-overlay-detail`,
@@ -232,20 +228,14 @@ function createTestRenderer() {
   });
 }
 
-function assertChoiceSurfaces(renderer, state, card, direction) {
+function assertChoicePreview(renderer, state, card, direction) {
   const presentation = deriveChoicePresentation(state, card, direction);
-  const buttonDetail = renderer.elements.choiceDetails[direction];
   const previewDetail = renderer.elements.choiceOverlayDetails[direction];
-  assert.equal(buttonDetail.textContent, presentation.detail);
   assert.equal(previewDetail.textContent, presentation.detail.trim());
   assert.equal(previewDetail.hidden, !presentation.detail.trim());
   assert.equal(
     renderer.elements.choiceOverlayLabels[direction].textContent,
     presentation.label,
-  );
-  assert.equal(
-    renderer.elements.choiceButtons[direction].getAttribute("aria-label"),
-    presentation.ariaLabel,
   );
 }
 
@@ -257,8 +247,8 @@ test("renderer requires every directional preview-detail element", (t) => {
   );
 });
 
-test("renderer gives every nonempty button detail to its matching preview", (t) => {
-  const elements = installRendererDocument(t);
+test("renderer gives every directional preview its nonempty detail", (t) => {
+  installRendererDocument(t);
   const renderer = createTestRenderer();
   const state = rendererState();
   const card = rendererCard({
@@ -281,23 +271,24 @@ test("renderer gives every nonempty button detail to its matching preview", (t) 
       effects: {},
     },
   });
+  card.speaker = "Authored speaker must not replace canonical context";
 
   renderer.render(state, card);
 
   for (const direction of DIRECTIONS) {
-    assertChoiceSurfaces(renderer, state, card, direction);
+    assertChoicePreview(renderer, state, card, direction);
     assert.equal(
       renderer.elements.choiceOverlayDetails[direction].hidden,
       false,
     );
-    assert.equal(
-      elements.get(`choice-${direction}-detail`),
-      renderer.elements.choiceDetails[direction],
-    );
   }
+  assert.equal(
+    renderer.elements.speaker.textContent,
+    "Chapter 1, Castro - 1 card left in deck",
+  );
 });
 
-test("rerender clears stale preview details without hiding button detail slots", (t) => {
+test("rerender clears stale directional preview details", (t) => {
   installRendererDocument(t);
   const renderer = createTestRenderer();
   const state = rendererState();
@@ -334,7 +325,7 @@ test("rerender clears stale preview details without hiding button detail slots",
 
   renderer.render(state, emptyCard);
   for (const direction of DIRECTIONS) {
-    assertChoiceSurfaces(renderer, state, emptyCard, direction);
+    assertChoicePreview(renderer, state, emptyCard, direction);
     assert.equal(
       renderer.elements.choiceOverlayDetails[direction].textContent,
       "",
@@ -343,7 +334,6 @@ test("rerender clears stale preview details without hiding button detail slots",
       renderer.elements.choiceOverlayDetails[direction].hidden,
       true,
     );
-    assert.equal(renderer.elements.choiceDetails[direction].hidden, false);
   }
 });
 
@@ -361,7 +351,7 @@ test("mixed preview details remain independent by direction", (t) => {
   renderer.render(state, card);
 
   for (const direction of DIRECTIONS) {
-    assertChoiceSurfaces(renderer, state, card, direction);
+    assertChoicePreview(renderer, state, card, direction);
   }
   assert.deepEqual(
     Object.fromEntries(
@@ -374,7 +364,7 @@ test("mixed preview details remain independent by direction", (t) => {
   );
 });
 
-test("state-dependent presentation refreshes button and preview details together", (t) => {
+test("state-dependent presentation refreshes directional preview details", (t) => {
   installRendererDocument(t);
   const renderer = createTestRenderer();
   const card = rendererCard({
@@ -399,14 +389,14 @@ test("state-dependent presentation refreshes button and preview details together
   });
 
   renderer.render(lockedState, card);
-  assertChoiceSurfaces(renderer, lockedState, card, "right");
+  assertChoicePreview(renderer, lockedState, card, "right");
   assert.equal(
     renderer.elements.choiceOverlayDetails.right.textContent,
     "Requires 1 Crew.",
   );
 
   renderer.render(availableState, card);
-  assertChoiceSurfaces(renderer, availableState, card, "right");
+  assertChoicePreview(renderer, availableState, card, "right");
   assert.equal(
     renderer.elements.choiceOverlayDetails.right.textContent,
     "Costs 1 Crew · +1 Eldritch Lore",
@@ -422,6 +412,10 @@ test("deck HUD derives Intro and all chapter headings from canonical state", () 
     story,
   );
   assert.equal(intro.deckLabel, "It begins here - 8 cards left in deck");
+  assert.equal(
+    intro.cardSpeakerLabel,
+    "It begins here - 8 cards left in deck",
+  );
   assert.equal(intro.chapterNumber, null);
   assert.equal(intro.cardsLeft, 8);
 
@@ -431,10 +425,27 @@ test("deck HUD derives Intro and all chapter headings from canonical state", () 
       hud.deckLabel,
       `${deck.title}, Chapter ${deck.plotStep} - ${deck.cards.length} cards left in deck`,
     );
+    assert.equal(
+      hud.cardSpeakerLabel,
+      `Chapter ${deck.plotStep}, ${deck.title} - ${deck.cards.length} cards left in deck`,
+    );
     assert.equal(hud.chapterNumber, deck.plotStep);
     assert.equal(hud.cardsLeft, deck.cards.length);
-    assert.doesNotMatch(hud.deckLabel, /Plot Step|Chapter 0/u);
+    assert.doesNotMatch(
+      `${hud.deckLabel} ${hud.cardSpeakerLabel}`,
+      /Plot Step|Chapter 0/u,
+    );
   }
+
+  const navigate = deriveDeckHud(stateForDeck("navigate", 5), story);
+  assert.equal(
+    navigate.deckLabel,
+    "Navigate, Chapter 4 - 5 cards left in deck",
+  );
+  assert.equal(
+    navigate.cardSpeakerLabel,
+    "Chapter 4, Navigate - 5 cards left in deck",
+  );
 });
 
 test("card counts include the current card, use singular grammar, and retain source count during feedback", () => {
@@ -442,6 +453,10 @@ test("card counts include the current card, use singular grammar, and retain sou
   assert.equal(
     deriveDeckHud(active, story).deckLabel,
     "Castro, Chapter 1 - 1 card left in deck",
+  );
+  assert.equal(
+    deriveDeckHud(active, story).cardSpeakerLabel,
+    "Chapter 1, Castro - 1 card left in deck",
   );
 
   const feedbackState = {
@@ -468,6 +483,51 @@ test("card counts include the current card, use singular grammar, and retain sou
       story,
     ).deckLabel,
     "It begins here - 6 cards left in deck",
+  );
+});
+
+test("card-speaker chapters honor future plotStep values and preserve fallback numbering", () => {
+  const futureStory = {
+    title: "Future South",
+    decks: [
+      {
+        id: "intro",
+        title: "Prologue",
+        type: "intro",
+        cards: ["intro-card"],
+      },
+      {
+        id: "legacy-plot",
+        title: "Legacy plot",
+        type: "plot",
+        cards: ["legacy-card"],
+      },
+      {
+        id: "future-plot",
+        title: "Future waters",
+        type: "plot",
+        plotStep: 9,
+        cards: ["future-card"],
+      },
+    ],
+  };
+  const stateFor = (deckId, cardId) => ({
+    currentDeckId: deckId,
+    currentCardId: cardId,
+    drawStateByDeck: {
+      [deckId]: { drawPile: [], discardPile: [] },
+    },
+  });
+
+  assert.equal(
+    deriveDeckHud(stateFor("future-plot", "future-card"), futureStory)
+      .cardSpeakerLabel,
+    "Chapter 9, Future waters - 1 card left in deck",
+  );
+  assert.equal(
+    deriveDeckHud(stateFor("legacy-plot", "legacy-card"), futureStory)
+      .cardSpeakerLabel,
+    "Chapter 1, Legacy plot - 1 card left in deck",
   );
 });
 
@@ -592,7 +652,7 @@ test("choice detail and preview detection use only Deep South resources", () => 
   );
 });
 
-test("choice presentation keeps missing and resource-locked slots visible but disabled", () => {
+test("choice presentation reports missing and resource-locked directions", () => {
   const card = {
     choices: {
       up: { label: "Climb", effects: { sanity: -1 } },
@@ -635,9 +695,16 @@ test("choice presentation keeps missing and resource-locked slots visible but di
   assert.equal(sanityLoss.detail, "-1 Sanity");
 });
 
-test("card announcements name every available direction and its actual effects", () => {
-  const announcement = cardAnnouncement({ currentDeckId: "castro" }, plotCard);
+test("card announcements lead with supplied chapter context and name every direction", () => {
+  const context = "Chapter 4, Navigate - 5 cards left in deck";
+  const announcement = cardAnnouncement(
+    { currentDeckId: "castro" },
+    plotCard,
+    context,
+  );
+  assert.ok(announcement.startsWith(`${context}. Bells in the fog.`));
   for (const phrase of [
+    context,
     "Bells in the fog",
     "Up: Return to the quay",
     "Down: Follow the sound. +1 Eldritch Lore · -1 Sanity",
@@ -647,6 +714,12 @@ test("card announcements name every available direction and its actual effects",
     assert.match(announcement, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.doesNotMatch(announcement, /\.\./u);
+
+  const fallbackAnnouncement = cardAnnouncement(
+    { currentDeckId: "castro" },
+    { ...plotCard, speaker: "Authored witness" },
+  );
+  assert.ok(fallbackAnnouncement.startsWith("Authored witness. Bells in the fog."));
 });
 
 test("reverse-face announcements include the coordinate and internal discovery annotation", () => {
@@ -805,44 +878,46 @@ test("renderer binds every directional slot to shared availability and previews 
     new URL("../public/js/ui/render.js", import.meta.url),
     "utf8",
   );
-  const setChoiceSource = source.slice(
-    source.indexOf("const setChoice ="),
-    source.indexOf("const renderCard =", source.indexOf("const setChoice =")),
+  const setChoicePreviewSource = source.slice(
+    source.indexOf("const setChoicePreview ="),
+    source.indexOf(
+      "const renderCard =",
+      source.indexOf("const setChoicePreview ="),
+    ),
   );
   const previewChoiceSource = source.slice(
     source.indexOf("previewChoice(direction)"),
   );
   assert.match(source, /for \(const direction of DIRECTIONS\)/);
-  assert.match(source, /byId\(`choice-\$\{direction\}`\)/);
   assert.match(source, /byId\(`choice-\$\{direction\}-overlay`\)/);
   assert.match(
     source,
     /byId\(\s*`choice-\$\{direction\}-overlay-detail`,?\s*\)/,
   );
   assert.match(source, /getDirectionAvailability\(state, card, direction\)/);
-  assert.match(setChoiceSource, /button\.hidden = false/);
-  assert.match(setChoiceSource, /button\.disabled = !presentation\.available/);
-  assert.match(setChoiceSource, /detail\.hidden = false/);
   assert.equal(
     (
-      setChoiceSource.match(
+      setChoicePreviewSource.match(
         /deriveChoicePresentation\(state, card, direction\)/g,
       ) ?? []
     ).length,
     1,
   );
   assert.match(
-    setChoiceSource,
+    setChoicePreviewSource,
     /const previewDetail = String\(presentation\.detail \?\? ""\)\.trim\(\)/,
   );
   assert.match(
-    setChoiceSource,
+    setChoicePreviewSource,
     /overlayDetail\.textContent = previewDetail/,
   );
-  assert.match(setChoiceSource, /overlayDetail\.hidden = !previewDetail/);
+  assert.match(
+    setChoicePreviewSource,
+    /overlayDetail\.hidden = !previewDetail/,
+  );
   assert.doesNotMatch(
-    setChoiceSource,
-    /choiceDetail\(|choice\.effects|choice\.costs|detail\.textContent\s*;/,
+    setChoicePreviewSource,
+    /choiceDetail\(|choice\.effects|choice\.costs/,
   );
   assert.match(source, /"No option"/);
   assert.match(source, /choiceForDirection\(currentState, activeCard, direction\)/);
@@ -851,8 +926,6 @@ test("renderer binds every directional slot to shared availability and previews 
     /getDirectionAvailability\(currentState, activeCard, direction\)\.available/,
   );
   assert.match(source, /resourceTargets\[resource\]\.dataset\.previewed = "true"/);
-  assert.doesNotMatch(setChoiceSource, /button\.hidden\s*=\s*!/);
-  assert.doesNotMatch(setChoiceSource, /detail\.hidden\s*=\s*!/);
   assert.doesNotMatch(
     previewChoiceSource,
     /choiceOverlayDetails|overlayDetail|textContent|\.hidden\s*=/,
@@ -860,6 +933,15 @@ test("renderer binds every directional slot to shared availability and previews 
   assert.doesNotMatch(
     source,
     /choiceOverlayDetails\.(?:up|down|left|right)/,
+  );
+  assert.doesNotMatch(
+    source,
+    /choiceControls|choiceButtons|choiceLabels|choiceDetails|byId\(`choice-\$\{direction\}`\)|button\.disabled|button\.hidden|disableChoices/,
+  );
+  assert.match(source, /elements\.speaker\.textContent = hud\.cardSpeakerLabel/u);
+  assert.match(
+    source,
+    /cardAnnouncement\(state, card, hud\.cardSpeakerLabel\)/u,
   );
   assert.doesNotMatch(source, /directionHint|Plot Step/);
   assert.doesNotMatch(source, /inventory|combat|rewardSummary|storyTransition/);

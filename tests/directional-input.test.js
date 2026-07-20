@@ -9,7 +9,6 @@ import { canChooseDirection } from "../public/js/game/choice-availability.js";
 import {
   ARROW_DIRECTION_BY_KEY,
   createArrowKeyHandler,
-  createChoiceClickHandler,
   directionForArrowKey,
 } from "../public/js/ui/directional-input.js";
 
@@ -133,84 +132,4 @@ test("blocked, repeated, editable, and unrelated key events are ignored", () => 
   );
   assert.equal(handler(keyboardEvent("Enter")), false);
   assert.equal(chosen, 0);
-});
-
-test("delegated disabled and stale button clicks cannot mutate the real game", () => {
-  const firstCard = createGame({ seed: 903 });
-  let game = resolveChoice(firstCard.state, "up", {
-    expectedToken: firstCard.card.resolutionToken,
-  });
-  assert.equal(game.state.introCardIndex, 1);
-  const blockedDirections = [];
-  let commitCount = 0;
-  const container = {
-    contains(button) {
-      return button?.inside === true;
-    },
-  };
-  const handler = createChoiceClickHandler({
-    container,
-    isDirectionAvailable: (direction) =>
-      canChooseDirection(game.state, game.card, direction),
-    onChoose(direction) {
-      const result = resolveChoice(game.state, direction, {
-        expectedToken: game.card?.resolutionToken,
-      });
-      assert.equal(result.ignored, false);
-      game = result;
-      commitCount += 1;
-    },
-    onBlocked(direction) {
-      blockedDirections.push(direction);
-    },
-  });
-  const click = (button) =>
-    handler({
-      target: {
-        closest() {
-          return button;
-        },
-      },
-    });
-
-  const before = JSON.parse(JSON.stringify(game.state));
-  assert.equal(
-    click({
-      disabled: true,
-      inside: true,
-      dataset: { direction: "left" },
-    }),
-    false,
-  );
-  assert.equal(
-    click({
-      disabled: false,
-      inside: false,
-      dataset: { direction: "down" },
-    }),
-    false,
-  );
-  assert.equal(
-    click({
-      disabled: false,
-      inside: true,
-      dataset: { direction: "left" },
-    }),
-    false,
-  );
-  assert.equal(commitCount, 0);
-  assert.deepEqual(blockedDirections, ["left"]);
-  assert.deepEqual(game.state, before);
-  assert.equal(game.state.pendingFeedback, null);
-
-  assert.equal(
-    click({
-      disabled: false,
-      inside: true,
-      dataset: { direction: "down" },
-    }),
-    true,
-  );
-  assert.equal(commitCount, 1);
-  assert.equal(game.state.introSkipPending, true);
 });

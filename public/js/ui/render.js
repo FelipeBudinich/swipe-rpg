@@ -109,10 +109,15 @@ export function deriveDeckHud(state, story) {
     deck.type === "intro"
       ? `${deck.title} - ${cardsLeftLabel}`
       : `${deck.title}, Chapter ${chapterNumber} - ${cardsLeftLabel}`;
+  const cardSpeakerLabel =
+    deck.type === "intro"
+      ? `${deck.title} - ${cardsLeftLabel}`
+      : `Chapter ${chapterNumber}, ${deck.title} - ${cardsLeftLabel}`;
   return {
     storyTitle: String(story?.title ?? "Deep South"),
     deck,
     deckLabel,
+    cardSpeakerLabel,
     isIntro: deck.type === "intro",
     chapterNumber: deck.type === "plot" ? chapterNumber : null,
     cardsLeft,
@@ -177,9 +182,11 @@ export function deriveChoicePresentation(state, card, direction) {
   };
 }
 
-export function cardAnnouncement(state, card) {
+export function cardAnnouncement(state, card, contextLabel = null) {
+  const speakerLabel =
+    contextLabel ?? (card?.speaker ? String(card.speaker) : "");
   const parts = [
-    card?.speaker ? String(card.speaker) : "",
+    speakerLabel,
     String(card?.title ?? "The southern sea"),
     String(card?.text ?? "The expedition waits."),
     card?.detail ? String(card.detail) : "",
@@ -290,7 +297,6 @@ export function createRenderer({
     title: byId("card-title"),
     text: byId("card-text"),
     detail: byId("card-detail"),
-    choiceControls: byId("choice-controls"),
     cardLive: byId("card-live"),
     choiceFeedbackCard: byId("choice-feedback-card"),
     choiceFeedbackKicker: byId("choice-feedback-kicker"),
@@ -305,18 +311,12 @@ export function createRenderer({
     terminalCopy: byId("terminal-copy"),
     terminalStats: byId("terminal-stats"),
     terminalRestart: byId("terminal-restart"),
-    choiceButtons: {},
-    choiceLabels: {},
-    choiceDetails: {},
     choiceOverlays: {},
     choiceOverlayLabels: {},
     choiceOverlayDetails: {},
   };
 
   for (const direction of DIRECTIONS) {
-    elements.choiceButtons[direction] = byId(`choice-${direction}`);
-    elements.choiceLabels[direction] = byId(`choice-${direction}-label`);
-    elements.choiceDetails[direction] = byId(`choice-${direction}-detail`);
     elements.choiceOverlays[direction] = byId(`choice-${direction}-overlay`);
     elements.choiceOverlayLabels[direction] = byId(
       `choice-${direction}-overlay-label`,
@@ -373,30 +373,14 @@ export function createRenderer({
     return hud;
   };
 
-  const setChoice = (state, card, direction) => {
-    const button = elements.choiceButtons[direction];
-    const label = elements.choiceLabels[direction];
-    const detail = elements.choiceDetails[direction];
+  const setChoicePreview = (state, card, direction) => {
     const overlayLabel = elements.choiceOverlayLabels[direction];
     const overlayDetail = elements.choiceOverlayDetails[direction];
     const presentation = deriveChoicePresentation(state, card, direction);
-    const choice = presentation.choice;
-    button.hidden = false;
-    button.disabled = !presentation.available;
-    button.dataset.availability = choice
-      ? presentation.available
-        ? "available"
-        : "locked"
-      : "missing";
-    label.textContent = presentation.label;
-    detail.textContent = presentation.detail;
-    detail.hidden = false;
     overlayLabel.textContent = presentation.label;
     const previewDetail = String(presentation.detail ?? "").trim();
     overlayDetail.textContent = previewDetail;
     overlayDetail.hidden = !previewDetail;
-    button.dataset.affects = presentation.affects.join(" ");
-    button.setAttribute("aria-label", presentation.ariaLabel);
   };
 
   const renderCard = (state, card) => {
@@ -410,7 +394,7 @@ export function createRenderer({
         ? card.introFace
         : null;
     const hud = deriveDeckHud(state, story);
-    elements.speaker.textContent = String(card?.speaker ?? hud.deck.title);
+    elements.speaker.textContent = hud.cardSpeakerLabel;
     elements.title.textContent = title;
     elements.text.textContent = text;
     elements.detail.textContent = detail;
@@ -429,9 +413,9 @@ export function createRenderer({
     if (introFace) elements.card.dataset.introFace = introFace;
     else delete elements.card.dataset.introFace;
     for (const direction of DIRECTIONS) {
-      setChoice(state, card, direction);
+      setChoicePreview(state, card, direction);
     }
-    const announcement = cardAnnouncement(state, card);
+    const announcement = cardAnnouncement(state, card, hud.cardSpeakerLabel);
     elements.card.setAttribute("aria-label", announcement);
     const announcementKey = `${String(state.currentCardToken ?? card?.id ?? "card")}:${
       state.introSkipPending ? "skip" : "normal"
@@ -445,7 +429,6 @@ export function createRenderer({
   const setInteractiveSurface = () => {
     elements.card.hidden = false;
     elements.cardBackdrop.hidden = false;
-    elements.choiceControls.hidden = false;
     elements.choiceFeedbackCard.hidden = true;
     elements.choiceFeedbackControls.hidden = true;
     elements.terminal.hidden = true;
@@ -457,25 +440,17 @@ export function createRenderer({
     lastSpecialAnnouncementKey = null;
   };
 
-  const disableChoices = () => {
-    for (const button of Object.values(elements.choiceButtons)) {
-      button.disabled = true;
-    }
-  };
-
   const setFeedbackSurface = () => {
     activeCard = null;
     lastAnnouncementKey = null;
     clearPreviewTargets();
     elements.card.hidden = true;
     elements.cardBackdrop.hidden = false;
-    elements.choiceControls.hidden = true;
     elements.choiceFeedbackCard.hidden = false;
     elements.choiceFeedbackControls.hidden = false;
     elements.terminal.hidden = true;
     elements.card.setAttribute("inert", "");
     elements.card.tabIndex = -1;
-    disableChoices();
     elements.choiceFeedbackContinue.disabled = false;
     elements.terminalRestart.disabled = true;
     elements.cardStack.setAttribute("aria-label", "Choice outcome");
@@ -487,13 +462,11 @@ export function createRenderer({
     clearPreviewTargets();
     elements.card.hidden = true;
     elements.cardBackdrop.hidden = true;
-    elements.choiceControls.hidden = true;
     elements.choiceFeedbackCard.hidden = true;
     elements.choiceFeedbackControls.hidden = true;
     elements.terminal.hidden = false;
     elements.card.setAttribute("inert", "");
     elements.card.tabIndex = -1;
-    disableChoices();
     elements.choiceFeedbackContinue.disabled = true;
     elements.terminalRestart.disabled = false;
     elements.cardStack.setAttribute("aria-label", "Expedition lost");

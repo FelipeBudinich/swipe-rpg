@@ -8,10 +8,7 @@ import {
   diffHud,
   hudSnapshot,
 } from "./ui/feedback.js";
-import {
-  createArrowKeyHandler,
-  createChoiceClickHandler,
-} from "./ui/directional-input.js";
+import { createArrowKeyHandler } from "./ui/directional-input.js";
 import {
   isActiveCommitResolutionBlocked as activeCommitResolutionIsBlocked,
   isNewInputBlocked as newInputIsBlocked,
@@ -93,15 +90,6 @@ function isActiveCommitResolutionBlocked() {
 }
 
 function updateControlLocks() {
-  const blocked = isNewInputBlocked();
-  for (const [direction, button] of Object.entries(elements.choiceButtons)) {
-    const availability = getDirectionAvailability(
-      state,
-      currentCard,
-      direction,
-    );
-    button.disabled = blocked || !availability.available;
-  }
   elements.choiceFeedbackContinue.disabled = Boolean(
     !state.pendingFeedback || inputLocked || feedbackDismissalActive,
   );
@@ -123,7 +111,8 @@ async function settleCardArt() {
       new Promise((resolve) => globalThis.setTimeout(resolve, 80)),
     ]);
   } catch {
-    // Card copy and controls remain usable when decorative art cannot decode.
+    // Story copy and drag/keyboard input remain usable when decorative art
+    // cannot decode.
   }
 }
 
@@ -222,16 +211,6 @@ const handleArrowKey = createArrowKeyHandler({
   onChoose: commitNewChoice,
   onBlocked: announceUnavailableDirection,
 });
-
-const handleChoiceClick = createChoiceClickHandler({
-  container: elements.choiceControls,
-  isInputBlocked: isNewInputBlocked,
-  isDirectionAvailable: (direction) =>
-    getDirectionAvailability(state, currentCard, direction).available,
-  onChoose: commitNewChoice,
-  onBlocked: announceUnavailableDirection,
-});
-elements.choiceControls.addEventListener("click", handleChoiceClick);
 
 document.addEventListener("keydown", (event) => {
   handleArrowKey(event);

@@ -15,9 +15,9 @@ The expedition begins with eight sequential pieces of testimony. After Castro, e
 - `public/js/game/effects.js` applies and clamps Eldritch Lore, Crew, and Sanity.
 - `public/js/game/choice-availability.js` is the shared affordability and direction-availability policy used by the engine and every input path.
 - `public/js/game/choice-feedback.js` creates and validates persistent outcome payloads.
-- `public/js/ui/render.js` renders the HUD, directional card controls, persistent outcome card, and loss surface.
+- `public/js/ui/render.js` renders the HUD, transient directional previews, persistent outcome card, and loss surface.
 - `public/js/ui/swipe-controller.js` implements four-axis Pointer Events gestures.
-- `public/js/ui/directional-input.js` adapts keyboard arrows and delegated button clicks to the shared direction policy.
+- `public/js/ui/directional-input.js` adapts keyboard arrows to the shared direction policy.
 - `public/js/main.js` coordinates persistence, input locking, rendering, and focus.
 - `server.js` serves `public/` with strict headers and path containment.
 
@@ -44,20 +44,20 @@ The Intro is sequential. Plot decks draw without replacement, retain their own d
 - Swipe or press **Arrow Up** to move toward Castro.
 - Swipe or press **Arrow Down** to move toward Gather Evidence.
 - Swipe or press **Arrow Left** or **Arrow Right** for an available local action.
-- Use the four visible buttons for the same accessible actions.
 - Select **Continue** to acknowledge a persistent choice outcome.
 
-During the Intro, up reads the next card. Down opens a persisted skip confirmation; down again enters Castro, while up cancels without advancing. The first card is reversible: left or right turns the photograph over, revealing a second coordinate and granting one Eldritch Lore exactly once per run. Cards 2–8 keep left and right visible but disabled.
+During the Intro, up reads the next card. Down opens a persisted skip confirmation; down again enters Castro, while up cancels without advancing. The first card is reversible: left or right turns the photograph over, revealing a second coordinate and granting one Eldritch Lore exactly once per run. Left and right are unavailable on Intro cards 2–8.
 
-The HUD derives its chapter heading and unresolved-card count from the
-canonical deck draw state. For example:
+The top HUD and card header derive their chapter headings and unresolved-card
+counts from the same canonical deck draw state. For example:
 
 ```text
-Castro, Chapter 1 - 5 cards left in deck
+Top HUD: Navigate, Chapter 4 - 5 cards left in deck
+Card header: Chapter 4, Navigate - 5 cards left in deck
 ```
 
-The currently displayed card is included in the count. A chapter's count
-changes only after an outcome is acknowledged and its next card is drawn.
+Both counts include the currently displayed card. A chapter's count changes
+only after an outcome is acknowledged and its next card is drawn.
 
 ## Resources and loss
 
