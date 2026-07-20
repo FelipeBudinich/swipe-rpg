@@ -149,18 +149,10 @@
             data-preview-direction="none"
             data-intro-face="front"
           >
-            <div id="choice-up-overlay" class="choice-overlay" aria-hidden="true">
-              <span class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg">↑ <span id="choice-up-overlay-label">Up</span></span>
-            </div>
-            <div id="choice-down-overlay" class="choice-overlay" aria-hidden="true">
-              <span class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#eadcff] shadow-lg">↓ <span id="choice-down-overlay-label">Down</span></span>
-            </div>
-            <div id="choice-left-overlay" class="choice-overlay" aria-hidden="true">
-              <span class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg">← <span id="choice-left-overlay-label">Left</span></span>
-            </div>
-            <div id="choice-right-overlay" class="choice-overlay" aria-hidden="true">
-              <span class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#ffd8cf] shadow-lg"><span id="choice-right-overlay-label">Right</span> →</span>
-            </div>
+            <div id="choice-up-overlay" class="choice-overlay" aria-hidden="true"></div>
+            <div id="choice-down-overlay" class="choice-overlay" aria-hidden="true"></div>
+            <div id="choice-left-overlay" class="choice-overlay" aria-hidden="true"></div>
+            <div id="choice-right-overlay" class="choice-overlay" aria-hidden="true"></div>
 
             <header class="shrink-0 border-b border-[#a9a087] bg-[#d8d1bd] px-4 py-2 text-center">
               <p id="card-speaker" class="text-[0.63rem] font-black uppercase tracking-[0.2em] text-[#285b5a]">It begins here</p>
@@ -168,6 +160,28 @@
             </header>
 
             <figure class="card-art-frame relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_45%,#dce4ce_0%,#91a99f_58%,#3d616a_100%)] px-4 py-2">
+              <div
+                id="choice-preview-feedback"
+                class="choice-preview-feedback"
+                aria-hidden="true"
+              >
+                <span
+                  class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg"
+                  data-preview-badge="up"
+                >↑ <span id="choice-up-overlay-label">Up</span></span>
+                <span
+                  class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#eadcff] shadow-lg"
+                  data-preview-badge="down"
+                >↓ <span id="choice-down-overlay-label">Down</span></span>
+                <span
+                  class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#baf3e9] shadow-lg"
+                  data-preview-badge="left"
+                >← <span id="choice-left-overlay-label">Left</span></span>
+                <span
+                  class="choice-overlay-badge rounded-lg bg-[#07131d]/90 px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-[#ffd8cf] shadow-lg"
+                  data-preview-badge="right"
+                ><span id="choice-right-overlay-label">Right</span> →</span>
+              </div>
               <img
                 id="card-art"
                 class="h-[clamp(6.5rem,17dvh,10rem)] w-full select-none object-contain drop-shadow-[0_8px_8px_rgba(7,19,29,0.32)]"

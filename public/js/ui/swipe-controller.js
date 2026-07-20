@@ -98,6 +98,8 @@ export function createSwipeController({
     const strength = direction
       ? Math.min(1, Math.abs(primaryDistance) / (primarySize * COMMIT_RATIO))
       : 0;
+    const previewOpacity =
+      previewDirection && strength > 0 ? Math.sqrt(strength) : 0;
     const renderedX = horizontal ? dx : Math.max(-20, Math.min(20, dx * 0.18));
     const renderedY = horizontal ? Math.max(-20, Math.min(20, dy * 0.18)) : dy;
     const rotation = horizontal
@@ -110,7 +112,7 @@ export function createSwipeController({
     for (const candidate of DIRECTIONS) {
       card.style.setProperty(
         `--choice-${candidate}-opacity`,
-        candidate === previewDirection ? String(strength) : "0",
+        candidate === previewDirection ? String(previewOpacity) : "0",
       );
     }
     card.dataset.previewDirection = previewDirection ?? "none";

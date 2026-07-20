@@ -6,7 +6,10 @@ import { createSwipeController } from "../public/js/ui/swipe-controller.js";
 class FakeCard extends EventTarget {
   constructor() {
     super();
-    this.dataset = {};
+    this.dataset = {
+      previewDirection: "none",
+      swipeState: "idle",
+    };
     this.offsetWidth = 320;
     this.offsetHeight = 360;
     this.values = new Map();
@@ -85,6 +88,117 @@ async function settle() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
+const DIRECTIONS = ["up", "down", "left", "right"];
+
+function opacity(card, direction) {
+  const value = card.style.getPropertyValue(`--choice-${direction}-opacity`);
+  return value === "" ? 0 : Number(value);
+}
+
+function drag(card, {
+  pointerId = 1,
+  fromX = 160,
+  fromY = 180,
+  toX = fromX,
+  toY = fromY,
+  startTime = 0,
+  moveTime = 200,
+} = {}) {
+  card.dispatchEvent(
+    pointerEvent("pointerdown", {
+      pointerId,
+      button: 0,
+      clientX: fromX,
+      clientY: fromY,
+      timeStamp: startTime,
+    }),
+  );
+  card.dispatchEvent(
+    pointerEvent("pointermove", {
+      pointerId,
+      clientX: toX,
+      clientY: toY,
+      timeStamp: moveTime,
+    }),
+  );
+}
+
+test("resting card has no transient direction feedback", (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  createSwipeController({
+    card,
+    onCommit: async () => true,
+  });
+
+  assert.equal(card.dataset.previewDirection, "none");
+  for (const direction of DIRECTIONS) {
+    assert.equal(
+      card.style.getPropertyValue(`--choice-${direction}-opacity`),
+      "",
+    );
+  }
+});
+
+test("small valid drag uses square-root opacity but reports linear strength", (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  const previews = [];
+  createSwipeController({
+    card,
+    onPreview: (direction, strength) => previews.push([direction, strength]),
+    onCommit: async () => true,
+  });
+  const distance = 9;
+  const linearStrength = distance / (card.offsetWidth * 0.28);
+
+  drag(card, { toX: 160 + distance });
+
+  assert.equal(card.dataset.previewDirection, "right");
+  assert.ok(opacity(card, "right") > linearStrength);
+  assert.ok(
+    Math.abs(opacity(card, "right") - Math.sqrt(linearStrength)) <
+      Number.EPSILON,
+  );
+  for (const direction of ["up", "down", "left"]) {
+    assert.equal(opacity(card, direction), 0);
+  }
+  assert.deepEqual(previews.at(-1), ["right", linearStrength]);
+});
+
+test("drag at the unchanged distance threshold reaches full visual opacity and commits", async (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  const commits = [];
+  createSwipeController({
+    card,
+    onCommit: async (direction) => {
+      commits.push(direction);
+      return true;
+    },
+  });
+  const commitDistance = card.offsetWidth * 0.28;
+
+  drag(card, {
+    fromX: 200,
+    toX: 200 - commitDistance,
+    moveTime: 300,
+  });
+
+  assert.equal(card.dataset.previewDirection, "left");
+  assert.equal(opacity(card, "left"), 1);
+  card.dispatchEvent(
+    pointerEvent("pointerup", {
+      pointerId: 1,
+      clientX: 200 - commitDistance,
+      clientY: 180,
+      timeStamp: 340,
+    }),
+  );
+  await settle();
+  assert.deepEqual(commits, ["left"]);
+});
+
 test("programmatic commits accept all four directions and animate along the matching axis", async (t) => {
   installBrowserStubs(t);
   const card = new FakeCard();
@@ -97,6 +211,9 @@ test("programmatic commits accept all four directions and animate along the matc
         x: card.style.getPropertyValue("--card-x"),
         y: card.style.getPropertyValue("--card-y"),
         preview: card.dataset.previewDirection,
+        opacity: card.style.getPropertyValue(
+          `--choice-${direction}-opacity`,
+        ),
       });
       return true;
     },
@@ -115,6 +232,12 @@ test("programmatic commits accept all four directions and animate along the matc
       ["right", "right"],
     ],
   );
+  assert.deepEqual(observed.map(({ opacity: value }) => value), [
+    "1",
+    "1",
+    "1",
+    "1",
+  ]);
   assert.equal(observed[0].x, "0px");
   assert.match(observed[0].y, /^-/);
   assert.equal(observed[1].x, "0px");
@@ -471,6 +594,72 @@ test("short slow drags return to center without committing", async (t) => {
   assert.equal(card.dataset.previewDirection, "none");
   assert.equal(card.style.getPropertyValue("--card-x"), "");
   assert.equal(card.style.getPropertyValue("--card-y"), "");
+  for (const direction of DIRECTIONS) {
+    assert.equal(
+      card.style.getPropertyValue(`--choice-${direction}-opacity`),
+      "",
+    );
+  }
+});
+
+test("pointer cancellation below threshold clears every preview variable", (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  createSwipeController({
+    card,
+    onCommit: async () => true,
+  });
+
+  drag(card, {
+    pointerId: 18,
+    fromX: 160,
+    fromY: 180,
+    toX: 168,
+    toY: 175,
+  });
+  assert.equal(card.dataset.previewDirection, "right");
+  assert.ok(opacity(card, "right") > 0);
+
+  card.dispatchEvent(
+    pointerEvent("pointercancel", {
+      pointerId: 18,
+      clientX: 168,
+      clientY: 175,
+      timeStamp: 220,
+    }),
+  );
+
+  assert.equal(card.dataset.previewDirection, "none");
+  assert.equal(card.dataset.swipeState, "idle");
+  for (const direction of DIRECTIONS) {
+    assert.equal(
+      card.style.getPropertyValue(`--choice-${direction}-opacity`),
+      "",
+    );
+  }
+});
+
+test("reset removes drag opacity so the next card inherits no stale feedback", (t) => {
+  installBrowserStubs(t);
+  const card = new FakeCard();
+  const controller = createSwipeController({
+    card,
+    onCommit: async () => true,
+  });
+
+  drag(card, { toY: 160 });
+  assert.equal(card.dataset.previewDirection, "up");
+  assert.ok(opacity(card, "up") > 0);
+
+  controller.resetForNextCard();
+
+  assert.equal(card.dataset.previewDirection, "none");
+  for (const direction of DIRECTIONS) {
+    assert.equal(
+      card.style.getPropertyValue(`--choice-${direction}-opacity`),
+      "",
+    );
+  }
 });
 
 test("blocked choices recenter and report their exact direction", async (t) => {
@@ -522,7 +711,9 @@ test("dragging toward an unavailable Intro direction shows no false preview", (t
   );
   assert.equal(card.dataset.previewDirection, "none");
   assert.deepEqual(previews.at(-1), [null, 0]);
-  assert.equal(card.style.getPropertyValue("--choice-left-opacity"), "0");
+  for (const direction of DIRECTIONS) {
+    assert.equal(opacity(card, direction), 0);
+  }
 });
 
 test("input locks prevent pointer starts and direct commits", async (t) => {

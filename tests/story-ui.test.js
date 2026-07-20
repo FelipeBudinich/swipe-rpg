@@ -37,6 +37,41 @@ function openingTagById(source, id) {
   return element.slice(0, element.indexOf(">") + 1);
 }
 
+function directChildIds(source) {
+  const voidElements = new Set([
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+  ]);
+  const ids = [];
+  let depth = 0;
+  for (const match of source.matchAll(/<\/?([a-z][\w-]*)\b[^>]*>/gi)) {
+    const token = match[0];
+    const tagName = match[1].toLowerCase();
+    if (token.startsWith("</")) {
+      depth -= 1;
+      continue;
+    }
+    if (depth === 1) {
+      const id = /\bid=(["'])([^"']+)\1/u.exec(token)?.[2];
+      if (id) ids.push(id);
+    }
+    if (!voidElements.has(tagName) && !token.endsWith("/>")) depth += 1;
+  }
+  return ids;
+}
+
 test("document identity uses one visible Deep South h1 and a wrapping chapter h2", () => {
   assert.match(html, /<title>Deep South<\/title>/);
   assert.match(
@@ -113,20 +148,72 @@ test("retired story and resource presentation is absent from production HTML", (
   }
 });
 
-test("decision card has four directional overlays and text-safe accessible copy targets", () => {
+test("decision card separates full-card gradients from art-frame preview badges", () => {
   const card = elementSourceById(html, "card");
+  const artFrameStart = card.indexOf('<figure class="card-art-frame ');
+  const artFrameEnd = card.indexOf("</figure>", artFrameStart);
+  const artFrame = card.slice(artFrameStart, artFrameEnd + "</figure>".length);
   assert.match(openingTagById(html, "card"), /aria-describedby="card-text card-detail"/);
   assert.match(openingTagById(html, "card"), /data-intro-face="front"/);
+  assert.deepEqual(
+    directChildIds(card).slice(0, 4),
+    [
+      "choice-up-overlay",
+      "choice-down-overlay",
+      "choice-left-overlay",
+      "choice-right-overlay",
+    ],
+  );
   for (const direction of ["up", "down", "left", "right"]) {
-    assert.match(card, new RegExp(`id="choice-${direction}-overlay"`));
-    assert.match(card, new RegExp(`id="choice-${direction}-overlay-label"`));
     const overlay = elementSourceById(card, `choice-${direction}-overlay`);
     assert.match(openingTagById(overlay, `choice-${direction}-overlay`), /class="choice-overlay"/);
     assert.match(openingTagById(overlay, `choice-${direction}-overlay`), /aria-hidden="true"/);
-    assert.match(overlay, /\bchoice-overlay-badge\b/u);
+    assert.doesNotMatch(overlay, /\bchoice-overlay-badge\b/u);
+    assert.doesNotMatch(artFrame, new RegExp(`id="choice-${direction}-overlay"`));
     assert.doesNotMatch(
       openingTagById(overlay, `choice-${direction}-overlay`),
       /\b(?:top-0|bottom-0|left-0|right-0|inset-[xy]-0|h-1\/2|w-1\/2|items-start|items-end|justify-start|justify-end|bg-gradient-to-[btlr])\b/u,
+    );
+    assert.equal(
+      (html.match(new RegExp(`id="choice-${direction}-overlay"`, "g")) ?? []).length,
+      1,
+    );
+    assert.equal(
+      (html.match(new RegExp(`id="choice-${direction}-overlay-label"`, "g")) ?? []).length,
+      1,
+    );
+  }
+  const previewFeedback = elementSourceById(
+    artFrame,
+    "choice-preview-feedback",
+  );
+  assert.match(
+    openingTagById(previewFeedback, "choice-preview-feedback"),
+    /class="choice-preview-feedback"/u,
+  );
+  assert.match(
+    openingTagById(previewFeedback, "choice-preview-feedback"),
+    /aria-hidden="true"/u,
+  );
+  assert.ok(
+    artFrame.indexOf('id="choice-preview-feedback"') <
+      artFrame.indexOf('id="card-art"'),
+    "Transient feedback must precede the artwork",
+  );
+  assert.deepEqual(directChildIds(artFrame).slice(0, 2), [
+    "choice-preview-feedback",
+    "card-art",
+  ]);
+  for (const direction of ["up", "down", "left", "right"]) {
+    assert.match(
+      previewFeedback,
+      new RegExp(
+        `class="choice-overlay-badge [^"]*"\\s+data-preview-badge="${direction}"`,
+      ),
+    );
+    assert.match(
+      previewFeedback,
+      new RegExp(`id="choice-${direction}-overlay-label"`),
     );
   }
   assert.match(card, /id="card-title"/);
@@ -276,11 +363,20 @@ test("CSS supports four-axis previews and a responsive two-column action grid", 
   );
   assert.match(
     css,
-    /\.choice-overlay\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;/s,
+    /\.choice-overlay\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*20;[^}]*inset:\s*0;[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;[^}]*transition:\s*opacity 40ms linear;/s,
+  );
+  const overlayRule = /\.choice-overlay\s*\{([^}]*)\}/s.exec(css)?.[1] ?? "";
+  assert.doesNotMatch(
+    overlayRule,
+    /\b(?:display|align-items|justify-content|padding)\s*:/u,
   );
   assert.match(
     css,
-    /\.choice-overlay-badge\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;[^}]*text-align:\s*center;/s,
+    /\.choice-preview-feedback\s*\{[^}]*position:\s*absolute;[^}]*top:\s*0;[^}]*right:\s*0;[^}]*left:\s*0;[^}]*z-index:\s*30;[^}]*display:\s*grid;[^}]*place-items:\s*start center;[^}]*padding:\s*0\.625rem 1rem 0;[^}]*pointer-events:\s*none;/s,
+  );
+  assert.match(
+    css,
+    /\.choice-overlay-badge\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;[^}]*grid-area:\s*1 \/ 1;[^}]*max-width:\s*calc\(100% - 2rem\);[^}]*opacity:\s*0;[^}]*text-align:\s*center;[^}]*pointer-events:\s*none;[^}]*transition:\s*opacity 40ms linear;/s,
   );
   for (const direction of ["up", "down", "left", "right"]) {
     assert.match(
@@ -290,6 +386,10 @@ test("CSS supports four-axis previews and a responsive two-column action grid", 
     assert.match(
       css,
       new RegExp(`#choice-${direction}-overlay\\s*\\{[^}]*opacity:\\s*var\\(--choice-${direction}-opacity\\)`, "s"),
+    );
+    assert.match(
+      css,
+      new RegExp(`\\.choice-overlay-badge\\[data-preview-badge="${direction}"\\]\\s*\\{[^}]*opacity:\\s*var\\(--choice-${direction}-opacity\\)`, "s"),
     );
     assert.match(
       css,
