@@ -63,18 +63,18 @@ They consume the same pure plan that the engine commits.
 | 7 | Chapter 7 | `explore-rlyeh` | Explore R'lyeh |
 | 8 | Chapter 8 | `gather-evidence` | Gather Evidence |
 
-The Intro is sequential. Up reads the next Intro card; Down opens the persisted
-skip confirmation. From that control, Up returns to the same Intro card and
-Down enters Castro. A revealed Intro card stays revealed if the confirmation
+The Intro is sequential. Down reads the next Intro card; Up opens the persisted
+skip confirmation. From that control, Down returns to the same Intro card and
+Up enters Castro. A revealed Intro card stays revealed if the confirmation
 is opened and cancelled.
 
 For plot cards:
 
-- Up draws from the previous chapter. Up is unavailable in Castro.
-- Down draws the next unresolved card in the current draw cycle.
-- When the current cycle is exhausted, Down advances to the next chapter.
-- Gather Evidence deterministically refills its own deck when exhausted and
-  avoids an immediate repeat when another card exists.
+- Down draws from the previous chapter. Down is unavailable in Castro.
+- Up draws the next unresolved card in the current draw cycle.
+- When the current cycle is exhausted, Up advances to the next chapter.
+- In Gather Evidence, Up deterministically refills the deck when exhausted
+  and avoids an immediate repeat when another card exists.
 
 Plot decks retain independent draw/discard piles. Pure planning previews the
 exact deterministic destination without consuming RNG or mutating a pile.
@@ -82,9 +82,10 @@ exact deterministic destination without consuming RNG or mutating a pile.
 ## Controls
 
 - Swipe or press **Arrow Left** or **Arrow Right** to turn a front card over.
-- Swipe or press **Arrow Up** to move toward the previous chapter.
-- Swipe or press **Arrow Down** to continue through the current chapter and
+- Swipe or press **Arrow Up** to continue through the current chapter and
   onward.
+- Swipe or press **Arrow Down** to return toward the previous chapter. Down is
+  unavailable in Castro.
 
 There are no visible directional buttons. Direction feedback appears
 transiently below the card header. On a front, both horizontal previews use the

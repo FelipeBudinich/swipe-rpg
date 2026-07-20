@@ -21,11 +21,11 @@ export const DEEP_SOUTH_INTRO_SKIP_CONFIRMATION = deepFreeze({
   id: "deep-south-intro-skip-confirmation",
   type: "intro-confirmation",
   title: "Skip the logbook?",
-  text: "Swipe down again to skip to Castro.\nSwipe up to keep reading.",
+  text: "Swipe up again to skip to Castro.\nSwipe down to keep reading.",
   artId: "deep-south-it-begins-here",
   choices: {
-    down: { label: "Skip to Castro" },
-    up: { label: "Keep reading" },
+    up: { label: "Skip to Castro" },
+    down: { label: "Keep reading" },
   },
 });
 

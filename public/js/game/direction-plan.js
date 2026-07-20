@@ -150,7 +150,7 @@ function planReveal(state, authoredCard, direction, story) {
 }
 
 function navigationLabel(direction, sourceDeck, destinationDeck, story) {
-  if (direction === "up") {
+  if (direction === "down") {
     return `Return to Chapter ${plotStep(destinationDeck, story)}, ${destinationDeck.title}`;
   }
   if (sourceDeck.id === destinationDeck.id) {
@@ -174,7 +174,7 @@ function planPlotNavigation(state, authoredCard, direction, story) {
       "This route has no valid source chapter.",
     );
   }
-  if (direction === "up" && sourceIndex === 0) {
+  if (direction === "down" && sourceIndex === 0) {
     return unavailable(
       direction,
       "no-previous-chapter",
@@ -193,9 +193,9 @@ function planPlotNavigation(state, authoredCard, direction, story) {
     sourceCards,
   );
   let destinationDeck;
-  if (direction === "up") {
+  if (direction === "down") {
     destinationDeck = orderedPlotDecks[sourceIndex - 1] ?? null;
-  } else if (sourceDrawState.drawPile.length > 0) {
+  } else if (direction === "up" && sourceDrawState.drawPile.length > 0) {
     destinationDeck = sourceDeck;
   } else {
     destinationDeck =
@@ -314,7 +314,7 @@ function introCardAt(state, story, offset = 0) {
 function planIntroNavigation(state, currentCard, direction, story) {
   const current = introCardAt(state, story);
   if (state?.introSkipPending) {
-    if (direction === "up") {
+    if (direction === "down") {
       return {
         available: true,
         reason: null,
@@ -335,7 +335,7 @@ function planIntroNavigation(state, currentCard, direction, story) {
     return planFirstPlotCard(state, direction, story);
   }
 
-  if (direction === "down") {
+  if (direction === "up") {
     return {
       available: true,
       reason: null,
@@ -355,7 +355,12 @@ function planIntroNavigation(state, currentCard, direction, story) {
   }
 
   const next = introCardAt(state, story, 1);
-  if (!next.card) return planFirstPlotCard(state, direction, story);
+  if (!next.card) {
+    return {
+      ...planFirstPlotCard(state, direction, story),
+      label: "Keep reading",
+    };
+  }
   const entry = plannedEffect(state, next.card.entryEffect, story);
   return {
     available: true,

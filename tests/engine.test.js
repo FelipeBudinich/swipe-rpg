@@ -24,7 +24,7 @@ function resolve(game, direction) {
 function enterCastro(seed = 1) {
   let game = createGame({ seed });
   for (let index = 0; index < 8; index += 1) {
-    game = resolve(game, "up");
+    game = resolve(game, "down");
     assert.equal(game.ignored, false);
   }
   assert.equal(game.state.currentDeckId, "castro");
@@ -176,22 +176,59 @@ test("revealed state is reload-safe and revisits keep the back", () => {
   );
 });
 
-test("Intro Up/Down remain immediate and skip cancellation preserves a back", () => {
+test("Intro Up opens skip, Down cancels, and Down continues from the preserved back", () => {
   let game = resolve(createGame({ seed: 14 }), "left");
-  game = resolve(game, "down");
+  game = resolve(game, "up");
   assert.equal(game.card.id, "deep-south-intro-skip-confirmation");
   assert.equal(game.state.introSkipPending, true);
   assert.equal(planDirection(game.state, game.card, "left").available, false);
 
-  game = resolve(game, "up");
+  game = resolve(game, "down");
   assert.equal(game.card.id, "intro-fathers-diary");
   assert.equal(game.card.cardFace, "back");
   assert.equal(game.state.resources.eldritchLore, 1);
 
-  game = resolve(game, "up");
+  game = resolve(game, "down");
   assert.equal(game.card.id, "intro-eldritch-lore");
   assert.equal(game.card.cardFace, "front");
   assert.equal(game.state.resources.eldritchLore, 1);
+});
+
+test("Intro Up confirms skipping into the exact planned Castro card", () => {
+  let game = createGame({ seed: 15 });
+  game = resolve(game, "up");
+  assert.equal(game.state.introSkipPending, true);
+  const plan = planDirection(game.state, game.card, "up");
+  assert.equal(plan.available, true);
+  assert.equal(plan.label, "Enter Castro");
+  assert.equal(plan.destinationDeckId, "castro");
+
+  game = resolve(game, "up");
+  assert.equal(game.ignored, false);
+  assert.equal(game.state.currentDeckId, "castro");
+  assert.equal(game.card.id, plan.destinationCardId);
+  assert.equal(game.state.introSkipPending, false);
+});
+
+test("final Intro keeps Up confirmation and uses Down for normal Castro entry", () => {
+  let game = createGame({ seed: 16 });
+  for (let index = 0; index < 7; index += 1) game = resolve(game, "down");
+  assert.equal(game.state.introCardIndex, 7);
+  game = resolve(game, "left");
+  assert.equal(game.card.cardFace, "back");
+
+  const up = planDirection(game.state, game.card, "up");
+  const down = planDirection(game.state, game.card, "down");
+  assert.equal(
+    up.destinationCardId,
+    "deep-south-intro-skip-confirmation",
+  );
+  assert.equal(up.label, "Skip toward Castro");
+  assert.equal(down.destinationDeckId, "castro");
+  assert.equal(down.label, "Keep reading");
+  const entered = resolve(game, "down");
+  assert.equal(entered.state.currentDeckId, "castro");
+  assert.equal(entered.card.id, down.destinationCardId);
 });
 
 test("plot flips count once, preserve draw state, and use face-aware tokens", () => {
@@ -276,8 +313,8 @@ test("vertical planning is pure and commit enters the exact previewed card", () 
     },
   );
   const snapshot = structuredClone(game.state);
-  const first = planDirection(game.state, game.card, "down");
-  const second = planDirection(game.state, game.card, "down");
+  const first = planDirection(game.state, game.card, "up");
+  const second = planDirection(game.state, game.card, "up");
   assert.deepEqual(first, second);
   assert.deepEqual(game.state, snapshot);
   assert.equal(first.mode, "navigate");
@@ -285,7 +322,7 @@ test("vertical planning is pure and commit enters the exact previewed card", () 
   assert.equal(first.detail, "+1 Crew");
   assert.deepEqual(first.affectedResources, ["crew"]);
 
-  const result = resolve(game, "down");
+  const result = resolve(game, "up");
   assert.equal(result.ignored, false);
   assert.equal(result.card.id, first.destinationCardId);
   assert.equal(result.card.cardFace, "front");
@@ -311,39 +348,47 @@ test("null entry effects keep routes available and render destinations immediate
       ],
     },
   );
-  const plan = planDirection(game.state, game.card, "down");
+  const plan = planDirection(game.state, game.card, "up");
   assert.equal(plan.available, true);
   assert.equal(plan.destinationCardId, "castro-marks-on-the-pilings");
   assert.equal(plan.effect, null);
   assert.equal(plan.detail, "");
   assert.deepEqual(plan.affectedResources, []);
 
-  const result = resolve(game, "down");
+  const result = resolve(game, "up");
   assert.equal(result.card.id, plan.destinationCardId);
   assert.deepEqual(result.changes, {});
   assert.deepEqual(result.addedCardsByDeck, {});
 });
 
-test("Up selects the previous chapter and Castro Up is unavailable", () => {
+test("Down selects the previous chapter and Castro Down is unavailable", () => {
   const castro = enterCastro(25);
-  const blocked = planDirection(castro.state, castro.card, "up");
+  const snapshot = structuredClone(castro.state);
+  const blocked = planDirection(castro.state, castro.card, "down");
   assert.equal(blocked.available, false);
   assert.equal(blocked.reason, "no-previous-chapter");
-  assert.equal(resolve(castro, "up").ignored, true);
+  assert.equal(
+    blocked.requirementText,
+    "Castro has no previous plot chapter.",
+  );
+  const ignored = resolve(castro, "down");
+  assert.equal(ignored.ignored, true);
+  assert.deepEqual(ignored.state, snapshot);
 
   const church = forceCard(
     castro,
     "investigate-church-hymn-below-hearing",
   );
-  const plan = planDirection(church.state, church.card, "up");
+  const plan = planDirection(church.state, church.card, "down");
   assert.equal(plan.available, true);
   assert.equal(plan.destinationDeckId, "castro");
-  const result = resolve(church, "up");
+  assert.match(plan.label, /^Return to Chapter 1, Castro$/u);
+  const result = resolve(church, "down");
   assert.equal(result.state.currentDeckId, "castro");
   assert.equal(result.card.id, plan.destinationCardId);
 });
 
-test("Down exhausts the current cycle before advancing chapters", () => {
+test("Up exhausts the current cycle before advancing chapters", () => {
   const game = forceCard(
     enterCastro(26),
     "castro-logbook-under-rain",
@@ -351,9 +396,10 @@ test("Down exhausts the current cycle before advancing chapters", () => {
       drawPile: ["castro-empty-berths"],
     },
   );
-  const inChapter = planDirection(game.state, game.card, "down");
+  const inChapter = planDirection(game.state, game.card, "up");
   assert.equal(inChapter.destinationDeckId, "castro");
-  const next = resolve(game, "down");
+  assert.match(inChapter.label, /^Continue in Chapter 1, Castro$/u);
+  const next = resolve(game, "up");
   assert.equal(next.state.currentDeckId, "castro");
 
   const exhausted = forceCard(next, "castro-empty-berths", {
@@ -362,15 +408,16 @@ test("Down exhausts the current cycle before advancing chapters", () => {
   const advance = planDirection(
     exhausted.state,
     exhausted.card,
-    "down",
+    "up",
   );
   assert.equal(advance.destinationDeckId, "investigate-church");
-  const advanced = resolve(exhausted, "down");
+  assert.match(advance.label, /^Continue to Chapter 2, Investigate Church$/u);
+  const advanced = resolve(exhausted, "up");
   assert.equal(advanced.state.currentDeckId, "investigate-church");
   assert.equal(advanced.card.id, advance.destinationCardId);
 });
 
-test("final-chapter Down refills deterministically without an immediate repeat", () => {
+test("final-chapter Up refills deterministically without an immediate repeat", () => {
   const currentId = "gather-evidence-crew-testimony";
   const alternativeId = "gather-evidence-warm-stone-sample";
   let game = forceCard(
@@ -389,13 +436,14 @@ test("final-chapter Down refills deterministically without an immediate repeat",
       },
     },
   });
-  const first = planDirection(game.state, game.card, "down");
-  const second = planDirection(game.state, game.card, "down");
+  const first = planDirection(game.state, game.card, "up");
+  const second = planDirection(game.state, game.card, "up");
   assert.deepEqual(first, second);
   assert.equal(first.destinationDeckId, "gather-evidence");
   assert.equal(first.destinationCardId, alternativeId);
   assert.notEqual(first.destinationCardId, currentId);
-  const result = resolve(game, "down");
+  assert.match(first.label, /^Continue through Chapter 8, Gather Evidence$/u);
+  const result = resolve(game, "up");
   assert.equal(result.card.id, first.destinationCardId);
 });
 
@@ -450,6 +498,10 @@ test("a lethal reveal shows its applied back before terminal", () => {
     planDirection(lethal.state, lethal.card, "up").mode,
     "terminal",
   );
+  assert.equal(
+    planDirection(lethal.state, lethal.card, "down").mode,
+    "terminal",
+  );
 
   const terminal = resolve(lethal, "up");
   assert.equal(terminal.ignored, false);
@@ -482,10 +534,10 @@ test("a lethal entry effect shows the planned destination before terminal", () =
       },
     },
   });
-  const plan = planDirection(game.state, game.card, "down");
+  const plan = planDirection(game.state, game.card, "up");
   assert.equal(plan.destinationCardId, destinationId);
   assert.equal(plan.detail, "-1 Sanity");
-  const lethal = resolve(game, "down");
+  const lethal = resolve(game, "up");
   assert.equal(lethal.state.status, "lost");
   assert.equal(lethal.state.terminalPending, true);
   assert.equal(lethal.card.id, destinationId);

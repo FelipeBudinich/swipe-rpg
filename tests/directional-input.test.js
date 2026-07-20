@@ -72,20 +72,67 @@ test("the keyboard adapter maps exactly the four arrow keys", () => {
   }
 });
 
-test("ArrowDown requests and confirms Intro skipping through the real resolver", () => {
+test("ArrowUp requests and confirms Intro skipping through the real resolver", () => {
   const input = gameBackedHandler(createGame({ seed: 901 }));
-  const first = keyboardEvent("ArrowDown");
+  const first = keyboardEvent("ArrowUp");
   assert.equal(input.handler(first), true);
   assert.equal(first.prevented, true);
   assert.equal(input.game.state.introSkipPending, true);
   assert.equal(input.game.card.id, "deep-south-intro-skip-confirmation");
 
-  const second = keyboardEvent("ArrowDown");
+  const second = keyboardEvent("ArrowUp");
   assert.equal(input.handler(second), true);
   assert.equal(second.prevented, true);
   assert.equal(input.game.state.currentDeckId, "castro");
   assert.equal(input.game.state.introSkipPending, false);
   assert.equal(input.commitCount, 2);
+});
+
+test("ArrowDown follows the ordinary Intro sequence", () => {
+  const input = gameBackedHandler(createGame({ seed: 903 }));
+  const event = keyboardEvent("ArrowDown");
+  assert.equal(input.handler(event), true);
+  assert.equal(event.prevented, true);
+  assert.equal(input.game.state.introCardIndex, 1);
+  assert.equal(input.game.card.id, "intro-eldritch-lore");
+  assert.equal(input.game.state.introSkipPending, false);
+  assert.equal(input.commitCount, 1);
+});
+
+test("ArrowDown cancels Intro skipping and restores the same revealed face", () => {
+  const front = createGame({ seed: 904 });
+  const back = resolveChoice(front.state, "left", {
+    expectedToken: front.card.resolutionToken,
+  });
+  const input = gameBackedHandler(back);
+
+  assert.equal(input.handler(keyboardEvent("ArrowUp")), true);
+  assert.equal(input.game.state.introSkipPending, true);
+  const cancel = keyboardEvent("ArrowDown");
+  assert.equal(input.handler(cancel), true);
+  assert.equal(cancel.prevented, true);
+  assert.equal(input.game.state.introSkipPending, false);
+  assert.equal(input.game.card.id, "intro-fathers-diary");
+  assert.equal(input.game.card.cardFace, "back");
+  assert.equal(input.commitCount, 2);
+});
+
+test("ArrowDown is blocked in Castro without scrolling or mutation", () => {
+  let game = createGame({ seed: 905 });
+  for (let index = 0; index < 8; index += 1) {
+    game = resolveChoice(game.state, "down", {
+      expectedToken: game.card.resolutionToken,
+    });
+  }
+  assert.equal(game.state.currentDeckId, "castro");
+  const input = gameBackedHandler(game);
+  const snapshot = structuredClone(input.game.state);
+  const event = keyboardEvent("ArrowDown");
+  assert.equal(input.handler(event), false);
+  assert.equal(event.prevented, true);
+  assert.equal(input.commitCount, 0);
+  assert.deepEqual(input.blockedDirections, ["down"]);
+  assert.deepEqual(input.game.state, snapshot);
 });
 
 test("horizontal arrows on a revealed Intro back are blocked without mutation", () => {

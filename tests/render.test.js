@@ -4,6 +4,7 @@ import test from "node:test";
 import { DEEP_SOUTH_STORY } from "../public/js/data/deep-south.js";
 import {
   createGame,
+  getNextCard,
   resolveChoice,
 } from "../public/js/game/engine.js";
 import {
@@ -135,6 +136,13 @@ function resolve(game, direction) {
   });
 }
 
+function enterCastro(seed) {
+  let game = createGame({ seed });
+  for (let index = 0; index < 8; index += 1) game = resolve(game, "down");
+  assert.equal(game.state.currentDeckId, "castro");
+  return game;
+}
+
 test("renderer requires all four transient preview-detail elements", (t) => {
   installRendererDocument(t, "choice-down-overlay-detail");
   assert.throws(
@@ -241,19 +249,121 @@ test("null destination entry effects use a compact one-line preview", (t) => {
   const renderer = createTestRenderer();
   const game = createGame({ seed: 604 });
   renderer.render(game.state, game.card);
-  const up = deriveChoicePresentation(game.state, game.card, "up");
-  assert.equal(up.available, true);
-  assert.equal(up.detail, "");
-  assert.deepEqual(up.affects, []);
   assert.equal(
-    renderer.elements.choiceOverlayDetails.up.textContent,
+    renderer.elements.choiceOverlayLabels.up.textContent,
+    "Skip toward Castro",
+  );
+  assert.equal(
+    renderer.elements.choiceOverlayLabels.down.textContent,
+    "Keep reading",
+  );
+  const down = deriveChoicePresentation(game.state, game.card, "down");
+  assert.equal(down.available, true);
+  assert.equal(down.label, "Keep reading");
+  assert.equal(down.detail, "");
+  assert.deepEqual(down.affects, []);
+  assert.equal(
+    renderer.elements.choiceOverlayDetails.down.textContent,
     "",
   );
   assert.equal(
-    renderer.elements.choiceOverlayDetails.up.hidden,
+    renderer.elements.choiceOverlayDetails.down.hidden,
     true,
   );
-  renderer.previewChoice("up");
+  renderer.previewChoice("down");
+  for (const resource of [
+    "eldritchLoreHud",
+    "crewHud",
+    "sanityHud",
+  ]) {
+    assert.equal(renderer.elements[resource].dataset.previewed, undefined);
+  }
+});
+
+test("Intro presentations expose inverted Up skip and Down reading semantics", () => {
+  let game = createGame({ seed: 6041 });
+  const up = deriveChoicePresentation(game.state, game.card, "up");
+  const down = deriveChoicePresentation(game.state, game.card, "down");
+  assert.equal(up.available, true);
+  assert.equal(up.label, "Skip toward Castro");
+  assert.equal(down.available, true);
+  assert.equal(down.label, "Keep reading");
+
+  game = resolve(game, "up");
+  const confirm = deriveChoicePresentation(game.state, game.card, "up");
+  const cancel = deriveChoicePresentation(game.state, game.card, "down");
+  assert.equal(confirm.label, "Enter Castro");
+  assert.equal(cancel.label, "Keep reading");
+});
+
+test("plot presentations use Up to continue and Down to return", () => {
+  const castro = enterCastro(6042);
+  const castroUp = deriveChoicePresentation(
+    castro.state,
+    castro.card,
+    "up",
+  );
+  const castroDown = deriveChoicePresentation(
+    castro.state,
+    castro.card,
+    "down",
+  );
+  assert.equal(castroUp.available, true);
+  assert.match(castroUp.label, /^Continue (?:in|to) Chapter/u);
+  assert.equal(castroDown.available, false);
+  assert.equal(castroDown.reason, "no-previous-chapter");
+
+  const churchDeck = DEEP_SOUTH_STORY.decks.find(
+    ({ id }) => id === "investigate-church",
+  );
+  const unlockedIds = castro.state.unlockedCardIdsByDeck[churchDeck.id];
+  const [sourceCardId, destinationCardId] = unlockedIds;
+  const church = getNextCard({
+    ...castro.state,
+    currentDeckId: churchDeck.id,
+    currentCardId: sourceCardId,
+    currentCardToken: null,
+    drawStateByDeck: {
+      ...castro.state.drawStateByDeck,
+      [churchDeck.id]: {
+        drawPile: [destinationCardId],
+        discardPile: [],
+        lastResolvedCardId: null,
+      },
+    },
+  });
+  const up = deriveChoicePresentation(church.state, church.card, "up");
+  const down = deriveChoicePresentation(church.state, church.card, "down");
+  assert.equal(up.available, true);
+  assert.match(up.label, /^Continue in Chapter 2, Investigate Church$/u);
+  assert.equal(down.available, true);
+  assert.match(down.label, /^Return to Chapter 1, Castro$/u);
+  const announcement = cardAnnouncement(
+    church.state,
+    church.card,
+    "Chapter 2, Investigate Church",
+  );
+  assert.match(announcement, /Up: Continue in Chapter 2/u);
+  assert.match(announcement, /Down: Return to Chapter 1/u);
+});
+
+test("Castro announces Down as blocked and cannot preview its resources", (t) => {
+  installRendererDocument(t);
+  const renderer = createTestRenderer();
+  const castro = enterCastro(6043);
+  renderer.render(castro.state, castro.card);
+  const announcement = cardAnnouncement(
+    castro.state,
+    castro.card,
+    "Chapter 1, Castro",
+  );
+  assert.match(announcement, /Up: Continue/u);
+  assert.match(
+    announcement,
+    /Down: No option\. Castro has no previous plot chapter/u,
+  );
+  assert.doesNotMatch(announcement, /Down: (?:Continue|Return)/u);
+  renderer.previewChoice("down");
   for (const resource of [
     "eldritchLoreHud",
     "crewHud",
@@ -276,6 +386,8 @@ test("accessible front and back announcements expose only available directions",
     2,
   );
   assert.match(front, /Discovery recorded · \+1 Eldritch Lore/u);
+  assert.match(front, /Up: Skip toward Castro/u);
+  assert.match(front, /Down: Keep reading/u);
 
   game = resolve(game, "right");
   const back = cardAnnouncement(
@@ -286,8 +398,8 @@ test("accessible front and back announcements expose only available directions",
   assert.match(back, /The map on the reverse/u);
   assert.match(back, /Discovery recorded · \+1 Eldritch Lore/u);
   assert.doesNotMatch(back, /Left:|Right:|Turn the photograph over/u);
-  assert.match(back, /Up:/u);
-  assert.match(back, /Down:/u);
+  assert.match(back, /Up: Skip toward Castro/u);
+  assert.match(back, /Down: Keep reading/u);
 });
 
 test("deck HUD counts active unlocked cards once and remains face-neutral", () => {

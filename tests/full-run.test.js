@@ -23,10 +23,10 @@ function resolve(game, direction) {
 test("a complete Intro reaches Castro with no acknowledgement surface", () => {
   let game = createGame({ seed: 501 });
   for (let index = 0; index < 8; index += 1) {
-    const plan = planDirection(game.state, game.card, "up");
+    const plan = planDirection(game.state, game.card, "down");
     assert.equal(plan.available, true);
     const destination = plan.destinationCardId;
-    game = resolve(game, "up");
+    game = resolve(game, "down");
     assert.equal(game.ignored, false);
     assert.equal(game.card.id, destination);
     assert.equal(Object.hasOwn(game.state, "pendingFeedback"), false);
@@ -37,7 +37,7 @@ test("a complete Intro reaches Castro with no acknowledgement surface", () => {
 
 test("successful horizontal then vertical plot swipes always return a card", () => {
   let game = createGame({ seed: 502 });
-  for (let index = 0; index < 8; index += 1) game = resolve(game, "up");
+  for (let index = 0; index < 8; index += 1) game = resolve(game, "down");
 
   const reveal = planDirection(game.state, game.card, "left");
   if (reveal.available) {
@@ -45,9 +45,9 @@ test("successful horizontal then vertical plot swipes always return a card", () 
     assert.equal(game.card.cardFace, "back");
     assert.equal(Object.hasOwn(game.state, "pendingFeedback"), false);
   }
-  const navigation = planDirection(game.state, game.card, "down");
+  const navigation = planDirection(game.state, game.card, "up");
   assert.equal(navigation.available, true);
-  game = resolve(game, "down");
+  game = resolve(game, "up");
   assert.equal(game.ignored, false);
   assert.ok(game.card);
   assert.equal(game.card.id, navigation.destinationCardId);

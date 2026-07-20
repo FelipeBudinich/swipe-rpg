@@ -132,13 +132,15 @@ back Left/Right  -> unavailable, reason "card-already-revealed"
 Vertical plans:
 
 ```text
-Intro Up   -> next Intro, then Castro
-Intro Down -> skip confirmation
-Castro Up  -> unavailable
-Plot Up    -> next card in previous chapter
-Plot Down  -> next unresolved card in current draw cycle
-              or first card in the next chapter after exhaustion
-Final Down -> deterministic current-deck refill
+Intro Up          -> skip confirmation
+Intro Down        -> next Intro, then Castro
+Confirmation Up   -> enter Castro
+Confirmation Down -> cancel and keep reading
+Castro Down       -> unavailable
+Plot Up           -> next unresolved card in current draw cycle
+                     or first card in the next chapter after exhaustion
+Final Up          -> deterministic current-deck refill
+Plot Down         -> next card in previous chapter
 ```
 
 The pure draw planner returns the exact destination ID, next draw state, and

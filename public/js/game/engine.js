@@ -325,7 +325,7 @@ function resolveIntroNavigation(state, card, plan, story) {
   const intro = getIntroDeck(story);
   const sourceToken = state.currentCardToken;
 
-  if (state.introSkipPending && plan.direction === "up") {
+  if (state.introSkipPending && plan.direction === "down") {
     const next = getNextCard(
       {
         ...state,
@@ -348,7 +348,7 @@ function resolveIntroNavigation(state, card, plan, story) {
     };
   }
 
-  if (!state.introSkipPending && plan.direction === "down") {
+  if (!state.introSkipPending && plan.direction === "up") {
     const next = getNextCard(
       {
         ...state,

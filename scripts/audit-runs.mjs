@@ -29,10 +29,10 @@ function selectDirection(state, card) {
   );
   if (deck?.type === "intro") {
     const reveal = planDirection(state, card, "left");
-    return reveal.available ? "left" : "up";
+    return reveal.available ? "left" : "down";
   }
 
-  if (card.cardFace === "back") return "down";
+  if (card.cardFace === "back") return "up";
 
   const left = planDirection(state, card, "left");
   if (
@@ -41,10 +41,10 @@ function selectDirection(state, card) {
   ) {
     return state.decisionCount % 2 === 0 ? "left" : "right";
   }
-  return planDirection(state, card, "down").available
-    ? "down"
-    : planDirection(state, card, "up").available
-      ? "up"
+  return planDirection(state, card, "up").available
+    ? "up"
+    : planDirection(state, card, "down").available
+      ? "down"
       : null;
 }
 

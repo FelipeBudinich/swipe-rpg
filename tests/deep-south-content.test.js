@@ -205,6 +205,22 @@ test("the skip confirmation remains a synthetic Up/Down control", () => {
     ["down", "up"],
   );
   assert.equal(
+    DEEP_SOUTH_INTRO_SKIP_CONFIRMATION.choices.up.label,
+    "Skip to Castro",
+  );
+  assert.equal(
+    DEEP_SOUTH_INTRO_SKIP_CONFIRMATION.choices.down.label,
+    "Keep reading",
+  );
+  assert.match(
+    DEEP_SOUTH_INTRO_SKIP_CONFIRMATION.text,
+    /Swipe up again to skip to Castro\./u,
+  );
+  assert.match(
+    DEEP_SOUTH_INTRO_SKIP_CONFIRMATION.text,
+    /Swipe down to keep reading\./u,
+  );
+  assert.equal(
     DEEP_SOUTH_CARDS.some(
       ({ id }) => id === DEEP_SOUTH_INTRO_SKIP_CONFIRMATION.id,
     ),
