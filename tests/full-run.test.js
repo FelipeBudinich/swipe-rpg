@@ -149,49 +149,49 @@ test("chapter card counts hold through feedback and survive leaving, returning, 
   game = commit(game, "down");
   game = commit(game, "down");
   assert.equal(
-    deriveDeckHud(game.state, DEEP_SOUTH_STORY).deckLabel,
-    "Castro, Chapter 1 - 5 cards left in deck",
+    deriveDeckHud(game.state, DEEP_SOUTH_STORY).cardSpeakerLabel,
+    "Chapter 1, Castro - 5 cards left in deck",
   );
 
   const southbound = commit(game, "down");
   assert.equal(southbound.state.currentDeckId, "investigate-church");
   assert.equal(southbound.state.currentCardId, null);
   assert.equal(
-    deriveDeckHud(southbound.state, DEEP_SOUTH_STORY).deckLabel,
-    "Castro, Chapter 1 - 5 cards left in deck",
+    deriveDeckHud(southbound.state, DEEP_SOUTH_STORY).cardSpeakerLabel,
+    "Chapter 1, Castro - 5 cards left in deck",
   );
   const reloadedFeedback = normalizeState(
     JSON.parse(JSON.stringify(southbound.state)),
     { decks: DEEP_SOUTH_STORY.decks },
   );
   assert.equal(
-    deriveDeckHud(reloadedFeedback, DEEP_SOUTH_STORY).deckLabel,
-    "Castro, Chapter 1 - 5 cards left in deck",
+    deriveDeckHud(reloadedFeedback, DEEP_SOUTH_STORY).cardSpeakerLabel,
+    "Chapter 1, Castro - 5 cards left in deck",
   );
 
   game = continueOutcome(southbound);
   assert.equal(
-    deriveDeckHud(game.state, DEEP_SOUTH_STORY).deckLabel,
-    "Investigate Church, Chapter 2 - 5 cards left in deck",
+    deriveDeckHud(game.state, DEEP_SOUTH_STORY).cardSpeakerLabel,
+    "Chapter 2, Investigate Church - 5 cards left in deck",
   );
 
   const northbound = commit(game, "up");
   assert.equal(
-    deriveDeckHud(northbound.state, DEEP_SOUTH_STORY).deckLabel,
-    "Investigate Church, Chapter 2 - 5 cards left in deck",
+    deriveDeckHud(northbound.state, DEEP_SOUTH_STORY).cardSpeakerLabel,
+    "Chapter 2, Investigate Church - 5 cards left in deck",
   );
   game = continueOutcome(northbound);
   assert.equal(
-    deriveDeckHud(game.state, DEEP_SOUTH_STORY).deckLabel,
-    "Castro, Chapter 1 - 4 cards left in deck",
+    deriveDeckHud(game.state, DEEP_SOUTH_STORY).cardSpeakerLabel,
+    "Chapter 1, Castro - 4 cards left in deck",
   );
 
   const reloaded = normalizeState(JSON.parse(JSON.stringify(game.state)), {
     decks: DEEP_SOUTH_STORY.decks,
   });
   assert.equal(
-    deriveDeckHud(reloaded, DEEP_SOUTH_STORY).deckLabel,
-    "Castro, Chapter 1 - 4 cards left in deck",
+    deriveDeckHud(reloaded, DEEP_SOUTH_STORY).cardSpeakerLabel,
+    "Chapter 1, Castro - 4 cards left in deck",
   );
 });
 
@@ -202,20 +202,23 @@ test("the final unresolved chapter card reports one before the next cycle resets
 
   for (let expected = 5; expected >= 1; expected -= 1) {
     const grammar = expected === 1 ? "card" : "cards";
-    const label = `Castro, Chapter 1 - ${expected} ${grammar} left in deck`;
-    assert.equal(deriveDeckHud(game.state, DEEP_SOUTH_STORY).deckLabel, label);
+    const label = `Chapter 1, Castro - ${expected} ${grammar} left in deck`;
+    assert.equal(
+      deriveDeckHud(game.state, DEEP_SOUTH_STORY).cardSpeakerLabel,
+      label,
+    );
 
     const result = commit(game, "up");
     assert.equal(
-      deriveDeckHud(result.state, DEEP_SOUTH_STORY).deckLabel,
+      deriveDeckHud(result.state, DEEP_SOUTH_STORY).cardSpeakerLabel,
       label,
     );
     game = continueOutcome(result);
   }
 
   assert.equal(
-    deriveDeckHud(game.state, DEEP_SOUTH_STORY).deckLabel,
-    "Castro, Chapter 1 - 5 cards left in deck",
+    deriveDeckHud(game.state, DEEP_SOUTH_STORY).cardSpeakerLabel,
+    "Chapter 1, Castro - 5 cards left in deck",
   );
 });
 

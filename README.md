@@ -48,16 +48,17 @@ The Intro is sequential. Plot decks draw without replacement, retain their own d
 
 During the Intro, up reads the next card. Down opens a persisted skip confirmation; down again enters Castro, while up cancels without advancing. The first card is reversible: left or right turns the photograph over, revealing a second coordinate and granting one Eldritch Lore exactly once per run. Left and right are unavailable on Intro cards 2–8.
 
-The top HUD and card header derive their chapter headings and unresolved-card
-counts from the same canonical deck draw state. For example:
+The top HUD shows the story title and expedition resources. The current card
+header shows the chapter, deck, and unresolved-card count:
 
 ```text
-Top HUD: Navigate, Chapter 4 - 5 cards left in deck
-Card header: Chapter 4, Navigate - 5 cards left in deck
+Chapter 4, Navigate - 5 cards left in deck
 ```
 
-Both counts include the currently displayed card. A chapter's count changes
-only after an outcome is acknowledged and its next card is drawn.
+The count includes the currently displayed card. Dynamic cards added to a
+chapter are included once they become available, while locked cards are
+excluded until unlocked. Merely turning the current card over does not change
+the count.
 
 ## Resources and loss
 
@@ -103,6 +104,10 @@ optionally contain left/right local outcomes:
   }
 }
 ```
+
+A card reached through up or down may declare `entryEffect: null`. That
+destination stays available, its directional preview shows only the navigation
+label, and it renders immediately without an outcome or Continue step.
 
 To add a card:
 

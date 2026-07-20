@@ -425,6 +425,24 @@ function resolvePlot(state, card, direction, story, unchangedState = state) {
       [sourceDeck.id]: sourceDrawState,
     },
   };
+
+  if (
+    (direction === "up" || direction === "down") &&
+    Object.keys(changes).length === 0
+  ) {
+    const destination = getNextCard(resolved, story);
+    if (destination.card?.entryEffect === null) {
+      return {
+        ...destination,
+        ignored: false,
+        reason: null,
+        resolvedCard: card,
+        resultText: "",
+        changes: {},
+      };
+    }
+  }
+
   const pendingFeedback = createPendingFeedback({
     sourceCardId: card.id,
     sourceCardToken: sourceToken,

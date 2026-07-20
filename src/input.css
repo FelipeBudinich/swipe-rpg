@@ -397,9 +397,13 @@
 }
 
 @media (max-width: 359px) {
+  #player-hud {
+    grid-template-columns: minmax(0, 1fr) 11rem;
+  }
+
   #story-hud {
-    padding-right: 0.5rem;
-    padding-left: 0.5rem;
+    padding-right: 0.25rem;
+    padding-left: 0.25rem;
   }
 
   #player-resource-row {

@@ -88,9 +88,13 @@ export function deriveDeckHud(state, story) {
       .map((card) => typeof card === "string" ? card : card?.id)
       .filter((id) => typeof id === "string"),
   );
-  const drawPile = Array.isArray(state?.drawStateByDeck?.[deck.id]?.drawPile)
-    ? state.drawStateByDeck[deck.id].drawPile
-    : [];
+  const drawPile = new Set(
+    (Array.isArray(state?.drawStateByDeck?.[deck.id]?.drawPile)
+      ? state.drawStateByDeck[deck.id].drawPile
+      : [])
+      .map((card) => typeof card === "string" ? card : card?.id)
+      .filter((id) => typeof id === "string" && id.trim()),
+  );
   const currentCardBelongsToDeck =
     !feedback &&
     state?.currentDeckId === deck.id &&
@@ -99,16 +103,17 @@ export function deriveDeckHud(state, story) {
     Boolean(feedback) &&
     feedback.sourceDeckId === deck.id &&
     cardIds.has(feedback.sourceCardId);
+  const activeCardId = currentCardBelongsToDeck
+    ? state.currentCardId
+    : feedbackSourceBelongsToDeck
+      ? feedback.sourceCardId
+      : null;
   const cardsLeft =
     deck.type === "intro"
       ? Math.max(0, deckCards.length - Math.max(0, Number(state?.introCardIndex) || 0))
-      : drawPile.length +
-        (currentCardBelongsToDeck || feedbackSourceBelongsToDeck ? 1 : 0);
+      : drawPile.size +
+        (activeCardId && !drawPile.has(activeCardId) ? 1 : 0);
   const cardsLeftLabel = `${cardsLeft} ${cardsLeft === 1 ? "card" : "cards"} left in deck`;
-  const deckLabel =
-    deck.type === "intro"
-      ? `${deck.title} - ${cardsLeftLabel}`
-      : `${deck.title}, Chapter ${chapterNumber} - ${cardsLeftLabel}`;
   const cardSpeakerLabel =
     deck.type === "intro"
       ? `${deck.title} - ${cardsLeftLabel}`
@@ -116,7 +121,6 @@ export function deriveDeckHud(state, story) {
   return {
     storyTitle: String(story?.title ?? "Deep South"),
     deck,
-    deckLabel,
     cardSpeakerLabel,
     isIntro: deck.type === "intro",
     chapterNumber: deck.type === "plot" ? chapterNumber : null,
@@ -280,7 +284,6 @@ export function createRenderer({
     app: byId("app"),
     playerHud: byId("player-hud"),
     storyTitle: byId("story-title"),
-    deckTitle: byId("hud-deck-title"),
     resourceRow: byId("player-resource-row"),
     eldritchLoreHud: byId("eldritch-lore-hud"),
     eldritchLore: byId("hud-eldritch-lore"),
@@ -352,7 +355,6 @@ export function createRenderer({
     const hud = deriveDeckHud(state, story);
     const resources = state.resources ?? {};
     elements.storyTitle.textContent = hud.storyTitle;
-    elements.deckTitle.textContent = hud.deckLabel;
     for (const resource of RESOURCE_FIELDS) {
       const value = finiteResourceValue(resources[resource]);
       resourceElements[resource].textContent = String(value);
@@ -368,7 +370,7 @@ export function createRenderer({
     elements.resourceRow.setAttribute("aria-label", `Expedition resources. ${values}.`);
     elements.playerHud.setAttribute(
       "aria-label",
-      `${hud.storyTitle}. ${hud.deckLabel}. ${values}.`,
+      `${hud.storyTitle}. Expedition resources. ${values}.`,
     );
     return hud;
   };

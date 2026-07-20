@@ -125,7 +125,6 @@ const RENDERER_ELEMENT_IDS = [
   "app",
   "player-hud",
   "story-title",
-  "hud-deck-title",
   "player-resource-row",
   "eldritch-lore-hud",
   "hud-eldritch-lore",
@@ -165,6 +164,7 @@ const RENDERER_ELEMENT_IDS = [
 
 function installRendererDocument(t, omittedId = null) {
   const priorDocument = globalThis.document;
+  const requestedIds = [];
   const elements = new Map(
     RENDERER_ELEMENT_IDS.filter((id) => id !== omittedId).map((id) => [
       id,
@@ -172,14 +172,17 @@ function installRendererDocument(t, omittedId = null) {
     ]),
   );
   globalThis.document = {
-    getElementById: (id) => elements.get(id) ?? null,
+    getElementById: (id) => {
+      requestedIds.push(id);
+      return elements.get(id) ?? null;
+    },
     createElement: () => new FakeElement(),
   };
   t.after(() => {
     if (priorDocument === undefined) delete globalThis.document;
     else globalThis.document = priorDocument;
   });
-  return elements;
+  return { elements, requestedIds };
 }
 
 const rendererStory = {
@@ -247,6 +250,14 @@ test("renderer requires every directional preview-detail element", (t) => {
   );
 });
 
+test("renderer initializes without requesting the removed top-HUD deck title", (t) => {
+  const { requestedIds } = installRendererDocument(t);
+  const renderer = createTestRenderer();
+  assert.ok(renderer);
+  assert.equal(requestedIds.includes("hud-deck-title"), false);
+  assert.equal(Object.hasOwn(renderer.elements, "deckTitle"), false);
+});
+
 test("renderer gives every directional preview its nonempty detail", (t) => {
   installRendererDocument(t);
   const renderer = createTestRenderer();
@@ -285,6 +296,18 @@ test("renderer gives every directional preview its nonempty detail", (t) => {
   assert.equal(
     renderer.elements.speaker.textContent,
     "Chapter 1, Castro - 1 card left in deck",
+  );
+  assert.equal(
+    renderer.elements.playerHud.getAttribute("aria-label"),
+    "Deep South. Expedition resources. Eldritch Lore 2. Crew 2. Sanity 3.",
+  );
+  assert.doesNotMatch(
+    renderer.elements.playerHud.getAttribute("aria-label"),
+    /Chapter 1|cards left in deck/u,
+  );
+  assert.match(
+    renderer.elements.card.getAttribute("aria-label"),
+    /^Chapter 1, Castro - 1 card left in deck\./u,
   );
 });
 
@@ -364,6 +387,32 @@ test("mixed preview details remain independent by direction", (t) => {
   );
 });
 
+test("a no-effect vertical entry preview shows only its navigation label", (t) => {
+  installRendererDocument(t);
+  const renderer = createTestRenderer();
+  const state = rendererState();
+  const card = rendererCard({
+    down: {
+      label: "Next chapter",
+      effects: {},
+    },
+  });
+
+  renderer.render(state, card);
+
+  const presentation = deriveChoicePresentation(state, card, "down");
+  assert.equal(presentation.available, true);
+  assert.equal(presentation.label, "Next chapter");
+  assert.equal(presentation.detail, "");
+  assert.doesNotMatch(presentation.ariaLabel, /No effect/u);
+  assert.equal(
+    renderer.elements.choiceOverlayLabels.down.textContent,
+    "Next chapter",
+  );
+  assert.equal(renderer.elements.choiceOverlayDetails.down.textContent, "");
+  assert.equal(renderer.elements.choiceOverlayDetails.down.hidden, true);
+});
+
 test("state-dependent presentation refreshes directional preview details", (t) => {
   installRendererDocument(t);
   const renderer = createTestRenderer();
@@ -403,7 +452,7 @@ test("state-dependent presentation refreshes directional preview details", (t) =
   );
 });
 
-test("deck HUD derives Intro and all chapter headings from canonical state", () => {
+test("card header derives Intro and all chapter headings from canonical state", () => {
   const intro = deriveDeckHud(
     {
       currentDeckId: "it-begins-here",
@@ -411,7 +460,6 @@ test("deck HUD derives Intro and all chapter headings from canonical state", () 
     },
     story,
   );
-  assert.equal(intro.deckLabel, "It begins here - 8 cards left in deck");
   assert.equal(
     intro.cardSpeakerLabel,
     "It begins here - 8 cards left in deck",
@@ -422,26 +470,19 @@ test("deck HUD derives Intro and all chapter headings from canonical state", () 
   for (const deck of story.decks.filter(({ type }) => type === "plot")) {
     const hud = deriveDeckHud(stateForDeck(deck.id, deck.cards.length), story);
     assert.equal(
-      hud.deckLabel,
-      `${deck.title}, Chapter ${deck.plotStep} - ${deck.cards.length} cards left in deck`,
-    );
-    assert.equal(
       hud.cardSpeakerLabel,
       `Chapter ${deck.plotStep}, ${deck.title} - ${deck.cards.length} cards left in deck`,
     );
     assert.equal(hud.chapterNumber, deck.plotStep);
     assert.equal(hud.cardsLeft, deck.cards.length);
     assert.doesNotMatch(
-      `${hud.deckLabel} ${hud.cardSpeakerLabel}`,
+      hud.cardSpeakerLabel,
       /Plot Step|Chapter 0/u,
     );
+    assert.equal(Object.hasOwn(hud, "deckLabel"), false);
   }
 
   const navigate = deriveDeckHud(stateForDeck("navigate", 5), story);
-  assert.equal(
-    navigate.deckLabel,
-    "Navigate, Chapter 4 - 5 cards left in deck",
-  );
   assert.equal(
     navigate.cardSpeakerLabel,
     "Chapter 4, Navigate - 5 cards left in deck",
@@ -450,10 +491,6 @@ test("deck HUD derives Intro and all chapter headings from canonical state", () 
 
 test("card counts include the current card, use singular grammar, and retain source count during feedback", () => {
   const active = stateForDeck("castro", 1);
-  assert.equal(
-    deriveDeckHud(active, story).deckLabel,
-    "Castro, Chapter 1 - 1 card left in deck",
-  );
   assert.equal(
     deriveDeckHud(active, story).cardSpeakerLabel,
     "Chapter 1, Castro - 1 card left in deck",
@@ -469,8 +506,8 @@ test("card counts include the current card, use singular grammar, and retain sou
     },
   };
   assert.equal(
-    deriveDeckHud(feedbackState, story).deckLabel,
-    "Castro, Chapter 1 - 1 card left in deck",
+    deriveDeckHud(feedbackState, story).cardSpeakerLabel,
+    "Chapter 1, Castro - 1 card left in deck",
   );
 
   assert.equal(
@@ -481,8 +518,31 @@ test("card counts include the current card, use singular grammar, and retain sou
         introSkipPending: true,
       },
       story,
-    ).deckLabel,
+    ).cardSpeakerLabel,
     "It begins here - 6 cards left in deck",
+  );
+});
+
+test("card counts deduplicate dynamic cards and exclude locked cards outside the available pool", () => {
+  const dynamicState = stateForDeck("castro", 1);
+  const lockedCardId = story.decks
+    .find(({ id }) => id === "castro")
+    .cards[1].id;
+  dynamicState.drawStateByDeck.castro.drawPile = [
+    "dynamic-witness",
+    "dynamic-witness",
+    dynamicState.currentCardId,
+  ];
+  assert.equal(
+    dynamicState.drawStateByDeck.castro.drawPile.includes(lockedCardId),
+    false,
+  );
+  const hud = deriveDeckHud(dynamicState, story);
+  assert.equal(hud.cardsLeft, 2);
+  assert.equal(hud.cardsLeftLabel, "2 cards left in deck");
+  assert.equal(
+    hud.cardSpeakerLabel,
+    "Chapter 1, Castro - 2 cards left in deck",
   );
 });
 
@@ -536,38 +596,38 @@ test("card count changes only after Continue and survives chapter navigation", (
   game = resolve(game, "down");
   game = resolve(game, "down");
   assert.equal(
-    deriveDeckHud(game.state, story).deckLabel,
-    "Castro, Chapter 1 - 5 cards left in deck",
+    deriveDeckHud(game.state, story).cardSpeakerLabel,
+    "Chapter 1, Castro - 5 cards left in deck",
   );
 
   game = resolve(game, "up");
   assert.ok(game.state.pendingFeedback);
   assert.equal(
-    deriveDeckHud(game.state, story).deckLabel,
-    "Castro, Chapter 1 - 5 cards left in deck",
+    deriveDeckHud(game.state, story).cardSpeakerLabel,
+    "Chapter 1, Castro - 5 cards left in deck",
   );
   game = continueFromFeedback(game);
   assert.equal(
-    deriveDeckHud(game.state, story).deckLabel,
-    "Castro, Chapter 1 - 4 cards left in deck",
+    deriveDeckHud(game.state, story).cardSpeakerLabel,
+    "Chapter 1, Castro - 4 cards left in deck",
   );
 
   game = resolve(game, "down");
   assert.equal(
-    deriveDeckHud(game.state, story).deckLabel,
-    "Castro, Chapter 1 - 4 cards left in deck",
+    deriveDeckHud(game.state, story).cardSpeakerLabel,
+    "Chapter 1, Castro - 4 cards left in deck",
   );
   game = continueFromFeedback(game);
   assert.equal(
-    deriveDeckHud(game.state, story).deckLabel,
-    "Investigate Church, Chapter 2 - 5 cards left in deck",
+    deriveDeckHud(game.state, story).cardSpeakerLabel,
+    "Chapter 2, Investigate Church - 5 cards left in deck",
   );
 
   game = resolve(game, "up");
   game = continueFromFeedback(game);
   assert.equal(
-    deriveDeckHud(game.state, story).deckLabel,
-    "Castro, Chapter 1 - 3 cards left in deck",
+    deriveDeckHud(game.state, story).cardSpeakerLabel,
+    "Chapter 1, Castro - 3 cards left in deck",
   );
 });
 
@@ -937,6 +997,10 @@ test("renderer binds every directional slot to shared availability and previews 
   assert.doesNotMatch(
     source,
     /choiceControls|choiceButtons|choiceLabels|choiceDetails|byId\(`choice-\$\{direction\}`\)|button\.disabled|button\.hidden|disableChoices/,
+  );
+  assert.doesNotMatch(
+    source,
+    /hud-deck-title|deckTitle|deckLabel|elements\.[A-Za-z]+\.textContent = hud\.(?:deck|chapter)/u,
   );
   assert.match(source, /elements\.speaker\.textContent = hud\.cardSpeakerLabel/u);
   assert.match(

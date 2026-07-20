@@ -92,20 +92,27 @@ function elementSourceByPreviewBadge(source, direction) {
   assert.fail(`Expected ${attribute} to have a closing </${tagName}>`);
 }
 
-test("document identity uses one visible Deep South h1 and a wrapping chapter h2", () => {
+test("document identity uses one visible Deep South h1 without a top-HUD deck title", () => {
   assert.match(html, /<title>Deep South<\/title>/);
   assert.match(
     html,
     /<meta name="description" content="Deep South, a swipe-driven maritime cosmic-horror story\.">/,
   );
   const storyTitle = elementSourceById(html, "story-title");
-  const deckTitle = elementSourceById(html, "hud-deck-title");
+  const storyHud = elementSourceById(html, "story-hud");
   assert.match(openingTagById(html, "story-title"), /^<h1\b/u);
   assert.equal(storyTitle.replace(/<[^>]+>/g, "").trim(), "Deep South");
   assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
-  assert.match(openingTagById(html, "hud-deck-title"), /^<h2\b/u);
-  assert.match(deckTitle, /It begins here - 8 cards left in deck/u);
-  assert.doesNotMatch(openingTagById(html, "hud-deck-title"), /\btruncate\b/u);
+  assert.deepEqual(directChildIds(storyHud), ["story-title"]);
+  assert.match(
+    openingTagById(html, "story-hud"),
+    /\baria-labelledby="story-title"/u,
+  );
+  assert.doesNotMatch(
+    openingTagById(html, "story-hud"),
+    /aria-labelledby="[^"]*\s+[^"]*"/u,
+  );
+  assert.doesNotMatch(html, /\bid="hud-deck-title"/u);
   assert.doesNotMatch(html, /Plot Step \d+ of \d+/u);
   assert.match(openingTagById(html, "player-hud"), /aria-label="Deep South expedition status"/);
 });
@@ -124,13 +131,16 @@ test("card header starts with the canonical Intro count and restrained typograph
   assert.doesNotMatch(speakerTag, /\buppercase\b|\btruncate\b|\bwhitespace-nowrap\b/u);
 });
 
-test("HUD contains only the canonical deck label and three expedition resources", () => {
+test("HUD contains only the story title and three expedition resources", () => {
   const hud = elementSourceById(html, "player-hud");
+  const storyHud = elementSourceById(hud, "story-hud");
   const row = elementSourceById(hud, "player-resource-row");
   assert.ok(
     hud.indexOf('id="story-hud"') < hud.indexOf('id="player-resource-row"'),
     "Story information must remain before expedition resources",
   );
+  assert.equal(storyHud.replace(/<[^>]+>/g, "").trim(), "Deep South");
+  assert.doesNotMatch(storyHud, /Chapter|card(?:s)? left in deck/u);
   assert.doesNotMatch(openingTagById(row, "player-resource-row"), /\bmt-/u);
   const sections = [...row.matchAll(/<section\b[^>]*\bid="([^"]+-hud)"/g)].map(
     (match) => match[1],
@@ -382,6 +392,7 @@ test("CSS supports four-axis previews without directional-button selectors", () 
     css,
     /#story-hud\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*justify-content:\s*center;/s,
   );
+  assert.doesNotMatch(css, /#hud-deck-title/u);
   assert.match(
     css,
     /#player-resource-row\s*\{[^}]*align-self:\s*stretch;[^}]*margin-top:\s*0;/s,
@@ -470,6 +481,14 @@ test("narrow and short viewport rules preserve resources and feedback without bu
   const short = css.slice(
     css.indexOf("@media (max-height: 650px)"),
     css.indexOf("@keyframes card-enter"),
+  );
+  assert.match(
+    narrow,
+    /#player-hud\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*11rem;/s,
+  );
+  assert.match(
+    narrow,
+    /#story-hud\s*\{[^}]*padding-right:\s*0\.25rem;[^}]*padding-left:\s*0\.25rem;/s,
   );
   assert.match(narrow, /#player-resource-row/);
   assert.doesNotMatch(narrow, /#choice-controls|\.choice-button|\.choice-label/u);

@@ -59,6 +59,58 @@ const COST_CONTRACT_STORY = {
   ),
 };
 
+const NO_EFFECT_SOURCE_CARD = {
+  id: "source-card",
+  deckId: "source",
+  type: "plot",
+  title: "Source",
+  text: "The route divides.",
+  choices: {
+    down: {
+      label: "Next chapter",
+      result: "This text must not become an outcome.",
+      effects: {},
+    },
+  },
+};
+
+const NO_EFFECT_DESTINATION_CARD = {
+  id: "destination-card",
+  deckId: "destination",
+  type: "plot",
+  title: "Immediate destination",
+  text: "The next card is ready.",
+  entryEffect: null,
+  choices: {
+    up: {
+      label: "Previous chapter",
+      result: "Return.",
+      effects: {},
+    },
+  },
+};
+
+const NO_EFFECT_ENTRY_STORY = {
+  id: "no-effect-entry",
+  title: "No Effect Entry",
+  decks: [
+    {
+      id: "source",
+      title: "Source",
+      type: "plot",
+      plotStep: 1,
+      cards: [NO_EFFECT_SOURCE_CARD],
+    },
+    {
+      id: "destination",
+      title: "Destination",
+      type: "plot",
+      plotStep: 2,
+      cards: [NO_EFFECT_DESTINATION_CARD],
+    },
+  ],
+};
+
 function resolve(state, card, direction, story = DEEP_SOUTH_STORY) {
   return resolveChoice(state, direction, {
     expectedToken: card?.resolutionToken,
@@ -554,6 +606,35 @@ test("down advances, up retreats, and left/right remain within the active chapte
     assert.equal(result.state.currentDeckId, "investigate-church");
     game = acknowledge(result);
   }
+});
+
+test("a vertical destination with entryEffect null renders immediately without feedback or mutations", () => {
+  const game = stateOnCard(
+    "source",
+    NO_EFFECT_SOURCE_CARD.id,
+    {},
+    NO_EFFECT_ENTRY_STORY,
+  );
+  game.state.unlockedCardIds = ["destination-card"];
+  const resourcesBefore = structuredClone(game.state.resources);
+  const unlockedBefore = structuredClone(game.state.unlockedCardIds);
+
+  const result = resolve(
+    game.state,
+    game.card,
+    "down",
+    NO_EFFECT_ENTRY_STORY,
+  );
+
+  assert.equal(result.ignored, false);
+  assert.equal(result.state.currentDeckId, "destination");
+  assert.equal(result.card.id, NO_EFFECT_DESTINATION_CARD.id);
+  assert.equal(result.card.entryEffect, null);
+  assert.equal(result.state.pendingFeedback, null);
+  assert.equal(result.resultText, "");
+  assert.deepEqual(result.changes, {});
+  assert.deepEqual(result.state.resources, resourcesBefore);
+  assert.deepEqual(result.state.unlockedCardIds, unlockedBefore);
 });
 
 test("resolution discards in the source deck and preserves destination draw state until Continue", () => {
