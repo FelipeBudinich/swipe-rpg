@@ -184,12 +184,49 @@
 .choice-overlay-badge {
   position: relative;
   z-index: 1;
+  display: inline-grid;
   grid-area: 1 / 1;
+  justify-items: center;
+  row-gap: 0.25rem;
   max-width: calc(100% - 2rem);
   opacity: 0;
   text-align: center;
   pointer-events: none;
   transition: opacity 40ms linear;
+}
+
+.choice-overlay-label-line {
+  display: block;
+  max-width: 100%;
+}
+
+.choice-overlay-detail {
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: 100%;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-transform: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.choice-overlay-badge[data-preview-badge="up"]
+  .choice-overlay-detail,
+.choice-overlay-badge[data-preview-badge="left"]
+  .choice-overlay-detail {
+  color: #b4dfd9;
+}
+
+.choice-overlay-badge[data-preview-badge="down"]
+  .choice-overlay-detail,
+.choice-overlay-badge[data-preview-badge="right"]
+  .choice-overlay-detail {
+  color: #dec6df;
 }
 
 .choice-overlay-badge[data-preview-badge="up"] {

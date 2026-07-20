@@ -310,6 +310,7 @@ export function createRenderer({
     choiceDetails: {},
     choiceOverlays: {},
     choiceOverlayLabels: {},
+    choiceOverlayDetails: {},
   };
 
   for (const direction of DIRECTIONS) {
@@ -319,6 +320,9 @@ export function createRenderer({
     elements.choiceOverlays[direction] = byId(`choice-${direction}-overlay`);
     elements.choiceOverlayLabels[direction] = byId(
       `choice-${direction}-overlay-label`,
+    );
+    elements.choiceOverlayDetails[direction] = byId(
+      `choice-${direction}-overlay-detail`,
     );
   }
 
@@ -374,6 +378,7 @@ export function createRenderer({
     const label = elements.choiceLabels[direction];
     const detail = elements.choiceDetails[direction];
     const overlayLabel = elements.choiceOverlayLabels[direction];
+    const overlayDetail = elements.choiceOverlayDetails[direction];
     const presentation = deriveChoicePresentation(state, card, direction);
     const choice = presentation.choice;
     button.hidden = false;
@@ -387,6 +392,9 @@ export function createRenderer({
     detail.textContent = presentation.detail;
     detail.hidden = false;
     overlayLabel.textContent = presentation.label;
+    const previewDetail = String(presentation.detail ?? "").trim();
+    overlayDetail.textContent = previewDetail;
+    overlayDetail.hidden = !previewDetail;
     button.dataset.affects = presentation.affects.join(" ");
     button.setAttribute("aria-label", presentation.ariaLabel);
   };

@@ -72,6 +72,26 @@ function directChildIds(source) {
   return ids;
 }
 
+function elementSourceByPreviewBadge(source, direction) {
+  const attribute = `data-preview-badge="${direction}"`;
+  const attributeIndex = source.indexOf(attribute);
+  assert.ok(attributeIndex >= 0, `Expected ${attribute} to exist`);
+  const tagStart = source.lastIndexOf("<", attributeIndex);
+  const tagMatch = /^<([a-z][\w-]*)\b/i.exec(source.slice(tagStart));
+  assert.ok(tagMatch, `Expected ${attribute} to belong to an element`);
+  const tagName = tagMatch[1];
+  const tagPattern = new RegExp(`<\\/?${tagName}\\b[^>]*>`, "gi");
+  let depth = 0;
+  for (const match of source.slice(tagStart).matchAll(tagPattern)) {
+    const tokenStart = tagStart + match.index;
+    const token = match[0];
+    if (token.startsWith("</")) depth -= 1;
+    else if (!token.endsWith("/>")) depth += 1;
+    if (depth === 0) return source.slice(tagStart, tokenStart + token.length);
+  }
+  assert.fail(`Expected ${attribute} to have a closing </${tagName}>`);
+}
+
 test("document identity uses one visible Deep South h1 and a wrapping chapter h2", () => {
   assert.match(html, /<title>Deep South<\/title>/);
   assert.match(
@@ -195,6 +215,10 @@ test("decision card separates full-card gradients from art-frame preview badges"
     openingTagById(previewFeedback, "choice-preview-feedback"),
     /aria-hidden="true"/u,
   );
+  assert.doesNotMatch(
+    openingTagById(previewFeedback, "choice-preview-feedback"),
+    /\b(?:aria-describedby|aria-live|role)=/u,
+  );
   assert.ok(
     artFrame.indexOf('id="choice-preview-feedback"') <
       artFrame.indexOf('id="card-art"'),
@@ -205,15 +229,39 @@ test("decision card separates full-card gradients from art-frame preview badges"
     "card-art",
   ]);
   for (const direction of ["up", "down", "left", "right"]) {
+    const badge = elementSourceByPreviewBadge(previewFeedback, direction);
+    const overlayLabelId = `choice-${direction}-overlay-label`;
+    const overlayDetailId = `choice-${direction}-overlay-detail`;
     assert.match(
-      previewFeedback,
-      new RegExp(
-        `class="choice-overlay-badge [^"]*"\\s+data-preview-badge="${direction}"`,
-      ),
+      openingTagById(badge, overlayDetailId),
+      /class="choice-overlay-detail"/u,
     );
     assert.match(
-      previewFeedback,
-      new RegExp(`id="choice-${direction}-overlay-label"`),
+      openingTagById(badge, overlayDetailId),
+      /\shidden(?:\s|>)/u,
+    );
+    assert.ok(
+      badge.indexOf(`id="${overlayLabelId}"`) <
+        badge.indexOf(`id="${overlayDetailId}"`),
+      `${overlayDetailId} must follow its label`,
+    );
+    for (const id of [overlayLabelId, overlayDetailId]) {
+      assert.equal(
+        (html.match(new RegExp(`id="${id}"`, "g")) ?? []).length,
+        1,
+        `Expected #${id} exactly once`,
+      );
+    }
+    const button = elementSourceById(
+      elementSourceById(html, "choice-controls"),
+      `choice-${direction}`,
+    );
+    const buttonDetailId = `choice-${direction}-detail`;
+    assert.match(button, new RegExp(`id="${buttonDetailId}"`));
+    assert.equal(
+      (html.match(new RegExp(`id="${buttonDetailId}"`, "g")) ?? []).length,
+      1,
+      `Expected #${buttonDetailId} exactly once`,
     );
   }
   assert.match(card, /id="card-title"/);
@@ -376,7 +424,23 @@ test("CSS supports four-axis previews and a responsive two-column action grid", 
   );
   assert.match(
     css,
-    /\.choice-overlay-badge\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;[^}]*grid-area:\s*1 \/ 1;[^}]*max-width:\s*calc\(100% - 2rem\);[^}]*opacity:\s*0;[^}]*text-align:\s*center;[^}]*pointer-events:\s*none;[^}]*transition:\s*opacity 40ms linear;/s,
+    /\.choice-overlay-badge\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;[^}]*display:\s*inline-grid;[^}]*grid-area:\s*1 \/ 1;[^}]*justify-items:\s*center;[^}]*row-gap:\s*0\.25rem;[^}]*max-width:\s*calc\(100% - 2rem\);[^}]*opacity:\s*0;[^}]*text-align:\s*center;[^}]*pointer-events:\s*none;[^}]*transition:\s*opacity 40ms linear;/s,
+  );
+  assert.match(
+    css,
+    /\.choice-overlay-label-line\s*\{[^}]*display:\s*block;[^}]*max-width:\s*100%;/s,
+  );
+  assert.match(
+    css,
+    /\.choice-overlay-detail\s*\{[^}]*display:\s*-webkit-box;[^}]*overflow:\s*hidden;[^}]*max-width:\s*100%;[^}]*-webkit-box-orient:\s*vertical;[^}]*-webkit-line-clamp:\s*2;[^}]*font-size:\s*0\.62rem;[^}]*font-weight:\s*750;[^}]*letter-spacing:\s*0\.02em;[^}]*line-height:\s*1\.15;[^}]*text-transform:\s*none;[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/s,
+  );
+  assert.match(
+    css,
+    /\.choice-overlay-badge\[data-preview-badge="up"\]\s+\.choice-overlay-detail,\s*\.choice-overlay-badge\[data-preview-badge="left"\]\s+\.choice-overlay-detail\s*\{[^}]*color:\s*#b4dfd9;/s,
+  );
+  assert.match(
+    css,
+    /\.choice-overlay-badge\[data-preview-badge="down"\]\s+\.choice-overlay-detail,\s*\.choice-overlay-badge\[data-preview-badge="right"\]\s+\.choice-overlay-detail\s*\{[^}]*color:\s*#dec6df;/s,
   );
   for (const direction of ["up", "down", "left", "right"]) {
     assert.match(

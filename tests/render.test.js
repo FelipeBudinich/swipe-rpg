@@ -15,6 +15,7 @@ import {
   cardAnnouncement,
   choiceDetail,
   choiceForDirection,
+  createRenderer,
   deriveChoicePresentation,
   deriveDeckHud,
   deriveFeedbackPresentation,
@@ -82,6 +83,335 @@ const plotCard = {
     },
   },
 };
+
+class FakeElement {
+  constructor(id = "") {
+    this.id = id;
+    this.textContent = "";
+    this.hidden = false;
+    this.disabled = false;
+    this.dataset = {};
+    this.attributes = new Map();
+    this.children = [];
+    this.tabIndex = 0;
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null;
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name);
+  }
+
+  replaceChildren(...children) {
+    this.children = children;
+  }
+
+  append(...children) {
+    this.children.push(...children);
+  }
+
+  focus() {
+    this.focused = true;
+  }
+}
+
+const RENDERER_ELEMENT_IDS = [
+  "app",
+  "player-hud",
+  "story-title",
+  "hud-deck-title",
+  "player-resource-row",
+  "eldritch-lore-hud",
+  "hud-eldritch-lore",
+  "crew-hud",
+  "hud-crew",
+  "sanity-hud",
+  "hud-sanity",
+  "card-stack",
+  "card-backdrop",
+  "card",
+  "card-art",
+  "card-art-label",
+  "card-speaker",
+  "card-title",
+  "card-text",
+  "card-detail",
+  "choice-controls",
+  "card-live",
+  "choice-feedback-card",
+  "choice-feedback-kicker",
+  "choice-feedback-title",
+  "choice-feedback-text",
+  "choice-feedback-art",
+  "choice-feedback-changes",
+  "choice-feedback-controls",
+  "choice-feedback-continue",
+  "terminal-summary",
+  "terminal-title",
+  "terminal-copy",
+  "terminal-stats",
+  "terminal-restart",
+  ...DIRECTIONS.flatMap((direction) => [
+    `choice-${direction}`,
+    `choice-${direction}-label`,
+    `choice-${direction}-detail`,
+    `choice-${direction}-overlay`,
+    `choice-${direction}-overlay-label`,
+    `choice-${direction}-overlay-detail`,
+  ]),
+];
+
+function installRendererDocument(t, omittedId = null) {
+  const priorDocument = globalThis.document;
+  const elements = new Map(
+    RENDERER_ELEMENT_IDS.filter((id) => id !== omittedId).map((id) => [
+      id,
+      new FakeElement(id),
+    ]),
+  );
+  globalThis.document = {
+    getElementById: (id) => elements.get(id) ?? null,
+    createElement: () => new FakeElement(),
+  };
+  t.after(() => {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  });
+  return elements;
+}
+
+const rendererStory = {
+  id: "deep-south",
+  title: "Deep South",
+  decks: [
+    {
+      id: "castro",
+      title: "Castro",
+      type: "plot",
+      plotStep: 1,
+      artId: "deep-south-castro",
+      cards: ["preview-card"],
+    },
+  ],
+};
+
+function rendererState(resources = { eldritchLore: 2, crew: 2, sanity: 3 }) {
+  return {
+    status: "playing",
+    currentDeckId: "castro",
+    currentCardId: "preview-card",
+    currentCardToken: "preview-token",
+    drawStateByDeck: {
+      castro: { drawPile: [], discardPile: [] },
+    },
+    resources,
+  };
+}
+
+function rendererCard(choices) {
+  return {
+    id: "preview-card",
+    title: "Preview card",
+    text: "The choice waits.",
+    artId: "deep-south-castro",
+    artAlt: "A preview.",
+    choices,
+  };
+}
+
+function createTestRenderer() {
+  return createRenderer({
+    story: rendererStory,
+    allowedArtIds: new Set(["deep-south-castro"]),
+  });
+}
+
+function assertChoiceSurfaces(renderer, state, card, direction) {
+  const presentation = deriveChoicePresentation(state, card, direction);
+  const buttonDetail = renderer.elements.choiceDetails[direction];
+  const previewDetail = renderer.elements.choiceOverlayDetails[direction];
+  assert.equal(buttonDetail.textContent, presentation.detail);
+  assert.equal(previewDetail.textContent, presentation.detail.trim());
+  assert.equal(previewDetail.hidden, !presentation.detail.trim());
+  assert.equal(
+    renderer.elements.choiceOverlayLabels[direction].textContent,
+    presentation.label,
+  );
+  assert.equal(
+    renderer.elements.choiceButtons[direction].getAttribute("aria-label"),
+    presentation.ariaLabel,
+  );
+}
+
+test("renderer requires every directional preview-detail element", (t) => {
+  installRendererDocument(t, "choice-down-overlay-detail");
+  assert.throws(
+    () => createTestRenderer(),
+    /Missing required element #choice-down-overlay-detail/u,
+  );
+});
+
+test("renderer gives every nonempty button detail to its matching preview", (t) => {
+  const elements = installRendererDocument(t);
+  const renderer = createTestRenderer();
+  const state = rendererState();
+  const card = rendererCard({
+    up: {
+      label: "Study the chart",
+      effects: { eldritchLore: 1 },
+    },
+    down: {
+      label: "Lower a sailor",
+      costs: { crew: 1 },
+      effects: { sanity: -1 },
+    },
+    left: {
+      label: "Recruit the witness",
+      effects: { crew: 1 },
+    },
+    right: {
+      label: "Consult the logbook",
+      costs: { eldritchLore: 1 },
+      effects: {},
+    },
+  });
+
+  renderer.render(state, card);
+
+  for (const direction of DIRECTIONS) {
+    assertChoiceSurfaces(renderer, state, card, direction);
+    assert.equal(
+      renderer.elements.choiceOverlayDetails[direction].hidden,
+      false,
+    );
+    assert.equal(
+      elements.get(`choice-${direction}-detail`),
+      renderer.elements.choiceDetails[direction],
+    );
+  }
+});
+
+test("rerender clears stale preview details without hiding button detail slots", (t) => {
+  installRendererDocument(t);
+  const renderer = createTestRenderer();
+  const state = rendererState();
+  const detailedCard = rendererCard(
+    Object.fromEntries(
+      DIRECTIONS.map((direction, index) => [
+        direction,
+        {
+          label: `Detailed ${direction}`,
+          effects: {
+            eldritchLore: index % 2 === 0 ? 1 : 0,
+            crew: index % 2 === 1 ? 1 : 0,
+          },
+        },
+      ]),
+    ),
+  );
+  const emptyCard = rendererCard(
+    Object.fromEntries(
+      DIRECTIONS.map((direction) => [
+        direction,
+        { label: `Plain ${direction}`, effects: {} },
+      ]),
+    ),
+  );
+
+  renderer.render(state, detailedCard);
+  for (const direction of DIRECTIONS) {
+    assert.notEqual(
+      renderer.elements.choiceOverlayDetails[direction].textContent,
+      "",
+    );
+  }
+
+  renderer.render(state, emptyCard);
+  for (const direction of DIRECTIONS) {
+    assertChoiceSurfaces(renderer, state, emptyCard, direction);
+    assert.equal(
+      renderer.elements.choiceOverlayDetails[direction].textContent,
+      "",
+    );
+    assert.equal(
+      renderer.elements.choiceOverlayDetails[direction].hidden,
+      true,
+    );
+    assert.equal(renderer.elements.choiceDetails[direction].hidden, false);
+  }
+});
+
+test("mixed preview details remain independent by direction", (t) => {
+  installRendererDocument(t);
+  const renderer = createTestRenderer();
+  const state = rendererState();
+  const card = rendererCard({
+    up: { label: "Read the inscription", effects: { eldritchLore: 1 } },
+    down: { label: "Wait for daylight", effects: {} },
+    left: { label: "Call the crew", effects: { crew: 1 } },
+    right: { label: "Close the hatch", effects: {} },
+  });
+
+  renderer.render(state, card);
+
+  for (const direction of DIRECTIONS) {
+    assertChoiceSurfaces(renderer, state, card, direction);
+  }
+  assert.deepEqual(
+    Object.fromEntries(
+      DIRECTIONS.map((direction) => [
+        direction,
+        renderer.elements.choiceOverlayDetails[direction].hidden,
+      ]),
+    ),
+    { up: false, down: true, left: false, right: true },
+  );
+});
+
+test("state-dependent presentation refreshes button and preview details together", (t) => {
+  installRendererDocument(t);
+  const renderer = createTestRenderer();
+  const card = rendererCard({
+    up: { label: "Wait", effects: {} },
+    down: { label: "Wait", effects: {} },
+    left: { label: "Wait", effects: {} },
+    right: {
+      label: "Send a sailor below",
+      costs: { crew: 1 },
+      effects: { eldritchLore: 1 },
+    },
+  });
+  const lockedState = rendererState({
+    eldritchLore: 0,
+    crew: 0,
+    sanity: 3,
+  });
+  const availableState = rendererState({
+    eldritchLore: 0,
+    crew: 1,
+    sanity: 3,
+  });
+
+  renderer.render(lockedState, card);
+  assertChoiceSurfaces(renderer, lockedState, card, "right");
+  assert.equal(
+    renderer.elements.choiceOverlayDetails.right.textContent,
+    "Requires 1 Crew.",
+  );
+
+  renderer.render(availableState, card);
+  assertChoiceSurfaces(renderer, availableState, card, "right");
+  assert.equal(
+    renderer.elements.choiceOverlayDetails.right.textContent,
+    "Costs 1 Crew · +1 Eldritch Lore",
+  );
+});
 
 test("deck HUD derives Intro and all chapter headings from canonical state", () => {
   const intro = deriveDeckHud(
@@ -479,13 +809,41 @@ test("renderer binds every directional slot to shared availability and previews 
     source.indexOf("const setChoice ="),
     source.indexOf("const renderCard =", source.indexOf("const setChoice =")),
   );
+  const previewChoiceSource = source.slice(
+    source.indexOf("previewChoice(direction)"),
+  );
   assert.match(source, /for \(const direction of DIRECTIONS\)/);
   assert.match(source, /byId\(`choice-\$\{direction\}`\)/);
   assert.match(source, /byId\(`choice-\$\{direction\}-overlay`\)/);
+  assert.match(
+    source,
+    /byId\(\s*`choice-\$\{direction\}-overlay-detail`,?\s*\)/,
+  );
   assert.match(source, /getDirectionAvailability\(state, card, direction\)/);
   assert.match(setChoiceSource, /button\.hidden = false/);
   assert.match(setChoiceSource, /button\.disabled = !presentation\.available/);
   assert.match(setChoiceSource, /detail\.hidden = false/);
+  assert.equal(
+    (
+      setChoiceSource.match(
+        /deriveChoicePresentation\(state, card, direction\)/g,
+      ) ?? []
+    ).length,
+    1,
+  );
+  assert.match(
+    setChoiceSource,
+    /const previewDetail = String\(presentation\.detail \?\? ""\)\.trim\(\)/,
+  );
+  assert.match(
+    setChoiceSource,
+    /overlayDetail\.textContent = previewDetail/,
+  );
+  assert.match(setChoiceSource, /overlayDetail\.hidden = !previewDetail/);
+  assert.doesNotMatch(
+    setChoiceSource,
+    /choiceDetail\(|choice\.effects|choice\.costs|detail\.textContent\s*;/,
+  );
   assert.match(source, /"No option"/);
   assert.match(source, /choiceForDirection\(currentState, activeCard, direction\)/);
   assert.match(
@@ -495,6 +853,14 @@ test("renderer binds every directional slot to shared availability and previews 
   assert.match(source, /resourceTargets\[resource\]\.dataset\.previewed = "true"/);
   assert.doesNotMatch(setChoiceSource, /button\.hidden\s*=\s*!/);
   assert.doesNotMatch(setChoiceSource, /detail\.hidden\s*=\s*!/);
+  assert.doesNotMatch(
+    previewChoiceSource,
+    /choiceOverlayDetails|overlayDetail|textContent|\.hidden\s*=/,
+  );
+  assert.doesNotMatch(
+    source,
+    /choiceOverlayDetails\.(?:up|down|left|right)/,
+  );
   assert.doesNotMatch(source, /directionHint|Plot Step/);
   assert.doesNotMatch(source, /inventory|combat|rewardSummary|storyTransition/);
 });
