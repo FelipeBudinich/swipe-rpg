@@ -74,10 +74,10 @@ is opened and cancelled.
 
 For plot cards:
 
-- Down draws from the previous chapter. Down is unavailable in Castro.
-- Up draws the next unresolved card in the current draw cycle.
-- When the current cycle is exhausted, Up advances to the next chapter.
-- In Gather Evidence, Up deterministically refills the deck when exhausted
+- Up draws from the previous chapter. Up is unavailable in Castro.
+- Down draws the next unresolved card in the current draw cycle.
+- When the current cycle is exhausted, Down advances to the next chapter.
+- In Gather Evidence, Down deterministically refills the deck when exhausted
   and avoids an immediate repeat when another card exists.
 
 Plot decks retain independent draw/discard piles. Pure planning previews the
@@ -86,9 +86,9 @@ exact deterministic destination without consuming RNG or mutating a pile.
 ## Controls
 
 - Swipe or press **Arrow Left** or **Arrow Right** to turn a front card over.
-- Swipe or press **Arrow Up** to continue through the current chapter and
+- Swipe or press **Arrow Down** to continue through the current chapter and
   onward.
-- Swipe or press **Arrow Down** to return toward the previous chapter. Down is
+- Swipe or press **Arrow Up** to return toward the previous chapter. Up is
   unavailable in Castro.
 
 The persistent bottom row has three equal-width views:

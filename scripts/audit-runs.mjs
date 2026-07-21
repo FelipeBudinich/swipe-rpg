@@ -33,7 +33,7 @@ function selectDirection(state, card) {
     return reveal.available ? "left" : "down";
   }
 
-  if (card.cardFace === "back") return "up";
+  if (card.cardFace === "back") return "down";
 
   const left = planDirection(state, card, "left");
   if (
@@ -42,10 +42,10 @@ function selectDirection(state, card) {
   ) {
     return state.decisionCount % 2 === 0 ? "left" : "right";
   }
-  return planDirection(state, card, "up").available
-    ? "up"
-    : planDirection(state, card, "down").available
-      ? "down"
+  return planDirection(state, card, "down").available
+    ? "down"
+    : planDirection(state, card, "up").available
+      ? "up"
       : null;
 }
 

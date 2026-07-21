@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   createGame,
+  planDirection,
   resolveChoice,
 } from "../public/js/game/engine.js";
 import { canChooseDirection } from "../public/js/game/choice-availability.js";
@@ -117,7 +118,7 @@ test("ArrowDown cancels Intro skipping and restores the same revealed face", () 
   assert.equal(input.commitCount, 2);
 });
 
-test("ArrowDown is blocked in Castro without scrolling or mutation", () => {
+test("ArrowUp is blocked in Castro without scrolling or mutation", () => {
   let game = createGame({ seed: 905 });
   for (let index = 0; index < 8; index += 1) {
     game = resolveChoice(game.state, "down", {
@@ -127,12 +128,32 @@ test("ArrowDown is blocked in Castro without scrolling or mutation", () => {
   assert.equal(game.state.currentDeckId, "castro");
   const input = gameBackedHandler(game);
   const snapshot = structuredClone(input.game.state);
-  const event = keyboardEvent("ArrowDown");
+  const event = keyboardEvent("ArrowUp");
   assert.equal(input.handler(event), false);
   assert.equal(event.prevented, true);
   assert.equal(input.commitCount, 0);
-  assert.deepEqual(input.blockedDirections, ["down"]);
+  assert.deepEqual(input.blockedDirections, ["up"]);
   assert.deepEqual(input.game.state, snapshot);
+});
+
+test("ArrowDown enters the exact planned Castro destination once", () => {
+  let game = createGame({ seed: 906 });
+  for (let index = 0; index < 8; index += 1) {
+    game = resolveChoice(game.state, "down", {
+      expectedToken: game.card.resolutionToken,
+    });
+  }
+  assert.equal(game.state.currentDeckId, "castro");
+  const plan = planDirection(game.state, game.card, "down");
+  assert.equal(plan.available, true);
+
+  const input = gameBackedHandler(game);
+  const event = keyboardEvent("ArrowDown");
+  assert.equal(input.handler(event), true);
+  assert.equal(event.prevented, true);
+  assert.equal(input.commitCount, 1);
+  assert.equal(input.game.card.id, plan.destinationCardId);
+  assert.deepEqual(input.game.changes, plan.effect?.resources ?? {});
 });
 
 test("horizontal arrows on a revealed Intro back are blocked without mutation", () => {

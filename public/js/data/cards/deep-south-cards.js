@@ -188,7 +188,7 @@ export const DEEP_SOUTH_INTRO_CARDS = deepFreeze([
     "Paths through the dark",
     "To proceed, I must let fate guide my steps. I may investigate where I stand, press forward into the unknown, or retreat toward familiar ground.",
     "Every route has a destination",
-    "Down retreats toward a previous chapter. Up exhausts the current chapter before pressing farther south. The exact destination is chosen before the preview appears.",
+    "Up retreats toward a previous chapter. Down exhausts the current chapter before pressing farther south. The exact destination is chosen before the preview appears.",
     "intro-05-paths",
     "A nautical chart presents paths toward local investigation, unknown southern waters, and a distant safe shore.",
   ),

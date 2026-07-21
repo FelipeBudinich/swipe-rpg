@@ -150,7 +150,7 @@ function planReveal(state, authoredCard, direction, story) {
 }
 
 function navigationLabel(direction, sourceDeck, destinationDeck, story) {
-  if (direction === "down") {
+  if (direction === "up") {
     return `Return to Chapter ${plotStep(destinationDeck, story)}, ${destinationDeck.title}`;
   }
   if (sourceDeck.id === destinationDeck.id) {
@@ -174,7 +174,7 @@ function planPlotNavigation(state, authoredCard, direction, story) {
       "This route has no valid source chapter.",
     );
   }
-  if (direction === "down" && sourceIndex === 0) {
+  if (direction === "up" && sourceIndex === 0) {
     return unavailable(
       direction,
       "no-previous-chapter",
@@ -193,15 +193,21 @@ function planPlotNavigation(state, authoredCard, direction, story) {
     sourceCards,
   );
   let destinationDeck;
-  if (direction === "down") {
+  if (direction === "up") {
     destinationDeck = orderedPlotDecks[sourceIndex - 1] ?? null;
-  } else if (direction === "up" && sourceDrawState.drawPile.length > 0) {
+  } else if (direction === "down" && sourceDrawState.drawPile.length > 0) {
     destinationDeck = sourceDeck;
-  } else {
+  } else if (direction === "down") {
     destinationDeck =
       orderedPlotDecks[sourceIndex + 1] ??
       orderedPlotDecks[sourceIndex] ??
       null;
+  } else {
+    return unavailable(
+      direction,
+      "invalid-direction",
+      "That direction cannot navigate this chapter.",
+    );
   }
   if (!destinationDeck) {
     return unavailable(

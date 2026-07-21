@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DEEP_SOUTH_STORY } from "../public/js/data/deep-south.js";
+import {
+  DEEP_SOUTH_CARD_BY_ID,
+  DEEP_SOUTH_STORY,
+} from "../public/js/data/deep-south.js";
+import { formatCardEffect } from "../public/js/game/card-effects.js";
 import {
   createGame,
   getNextCard,
@@ -307,7 +311,7 @@ test("Intro presentations expose inverted Up skip and Down reading semantics", (
   assert.equal(cancel.label, "Keep reading");
 });
 
-test("plot presentations use Up to continue and Down to return", () => {
+test("plot presentations use Down to continue and Up to return", () => {
   const castro = enterCastro(6042);
   const castroUp = deriveChoicePresentation(
     castro.state,
@@ -319,10 +323,10 @@ test("plot presentations use Up to continue and Down to return", () => {
     castro.card,
     "down",
   );
-  assert.equal(castroUp.available, true);
-  assert.match(castroUp.label, /^Continue (?:in|to) Chapter/u);
-  assert.equal(castroDown.available, false);
-  assert.equal(castroDown.reason, "no-previous-chapter");
+  assert.equal(castroDown.available, true);
+  assert.match(castroDown.label, /^Continue (?:in|to) Chapter/u);
+  assert.equal(castroUp.available, false);
+  assert.equal(castroUp.reason, "no-previous-chapter");
 
   const churchDeck = DEEP_SOUTH_STORY.decks.find(
     ({ id }) => id === "investigate-church",
@@ -345,20 +349,34 @@ test("plot presentations use Up to continue and Down to return", () => {
   });
   const up = deriveChoicePresentation(church.state, church.card, "up");
   const down = deriveChoicePresentation(church.state, church.card, "down");
-  assert.equal(up.available, true);
-  assert.match(up.label, /^Continue in Chapter 2, Investigate Church$/u);
   assert.equal(down.available, true);
-  assert.match(down.label, /^Return to Chapter 1, Castro$/u);
+  assert.match(down.label, /^Continue in Chapter 2, Investigate Church$/u);
+  assert.equal(
+    down.detail,
+    formatCardEffect(
+      DEEP_SOUTH_CARD_BY_ID[down.destinationCardId].entryEffect,
+      DEEP_SOUTH_STORY,
+    ),
+  );
+  assert.equal(up.available, true);
+  assert.match(up.label, /^Return to Chapter 1, Castro$/u);
+  assert.equal(
+    up.detail,
+    formatCardEffect(
+      DEEP_SOUTH_CARD_BY_ID[up.destinationCardId].entryEffect,
+      DEEP_SOUTH_STORY,
+    ),
+  );
   const announcement = cardAnnouncement(
     church.state,
     church.card,
     "Chapter 2, Investigate Church",
   );
-  assert.match(announcement, /Up: Continue in Chapter 2/u);
-  assert.match(announcement, /Down: Return to Chapter 1/u);
+  assert.match(announcement, /Down: Continue in Chapter 2/u);
+  assert.match(announcement, /Up: Return to Chapter 1/u);
 });
 
-test("Castro announces Down as blocked and cannot preview its resources", (t) => {
+test("Castro announces Up as blocked and cannot preview its resources", (t) => {
   installRendererDocument(t);
   const renderer = createTestRenderer();
   const castro = enterCastro(6043);
@@ -368,13 +386,13 @@ test("Castro announces Down as blocked and cannot preview its resources", (t) =>
     castro.card,
     "Chapter 1, Castro",
   );
-  assert.match(announcement, /Up: Continue/u);
+  assert.match(announcement, /Down: Continue/u);
   assert.match(
     announcement,
-    /Down: No option\. Castro has no previous plot chapter/u,
+    /Up: No option\. Castro has no previous plot chapter/u,
   );
-  assert.doesNotMatch(announcement, /Down: (?:Continue|Return)/u);
-  renderer.previewChoice("down");
+  assert.doesNotMatch(announcement, /Up: (?:Continue|Return)/u);
+  renderer.previewChoice("up");
   for (const resource of [
     "eldritchLoreHud",
     "crewHud",

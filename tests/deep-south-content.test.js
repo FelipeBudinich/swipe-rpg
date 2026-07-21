@@ -163,6 +163,14 @@ test("the photograph is the explicit Intro effect exception", () => {
   }
 });
 
+test("the Intro tutorial describes Down as plot progression", () => {
+  const paths = DEEP_SOUTH_INTRO_CARDS.find(({ id }) => id === "intro-paths");
+  assert.equal(
+    paths.faces.back.text,
+    "Up retreats toward a previous chapter. Down exhausts the current chapter before pressing farther south. The exact destination is chosen before the preview appears.",
+  );
+});
+
 test("every locked production card has a reachable authored unlock path", () => {
   const initial = createInitialUnlockedCardIdsByDeck(DEEP_SOUTH_STORY);
   const locked = new Set(

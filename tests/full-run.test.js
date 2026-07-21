@@ -47,9 +47,9 @@ test("successful horizontal then vertical plot swipes always return a card", () 
     assert.equal(game.card.cardFace, "back");
     assert.equal(Object.hasOwn(game.state, "pendingFeedback"), false);
   }
-  const navigation = planDirection(game.state, game.card, "up");
+  const navigation = planDirection(game.state, game.card, "down");
   assert.equal(navigation.available, true);
-  game = resolve(game, "up");
+  game = resolve(game, "down");
   assert.equal(game.ignored, false);
   assert.ok(game.card);
   assert.equal(game.card.id, navigation.destinationCardId);
